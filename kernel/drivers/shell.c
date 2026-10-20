@@ -14,12 +14,43 @@ static char line_buf[LINE_MAX];
 static size_t line_len = 0;
 static enum nova_profile current_profile = PROFILE_GENERAL;
 
-static const char* profile_names[] = {
+static const char* profile_names[PROFILE_COUNT] = {
     "General",
     "Estudiante",
-    "Desarrollador",
-    "Hardware/IoT"
+    "Frontend",
+    "Backend",
+    "Fullstack",
+    "Disenador",
+    "Hardware-IoT",
+    "DataScientist",
+    "Ciberseguridad",
+    "Oficina",
+    "Gamer-Streamer"
 };
+
+static const char* profile_descriptions[PROFILE_COUNT] = {
+    "Uso basico diario, exploracion y utilidades generales",
+    "Ofimatica (Office), lector PDF academico y tarjetas de estudio",
+    "Diseno UI con Figma, VS Code, entorno Node.js y navegador de desarrollo",
+    "Contenedores Docker, cliente PostgreSQL, probador de APIs y Git",
+    "Entorno integral con SDKs C/Rust, Node.js, Docker y terminal avanzada",
+    "Herramientas de dibujo vectorial, retoque fotografico y tipografias",
+    "Arduino IDE, analizador logico de puertos serie y actuadores",
+    "Cuadernos Jupyter y bibliotecas graficas de analisis de datos",
+    "Escaner de puertos de red, auditorias y analizador de paquetes",
+    "Planillas de calculo con formulas y sistema de facturacion",
+    "Lanzador optimizado para juegos y software de captura/streaming OBS"
+};
+
+const char* profile_get_name(enum nova_profile prof) {
+    if (prof < PROFILE_COUNT) return profile_names[prof];
+    return "Desconocido";
+}
+
+const char* profile_get_description(enum nova_profile prof) {
+    if (prof < PROFILE_COUNT) return profile_descriptions[prof];
+    return "";
+}
 
 void shell_init(void) {
     line_len = 0;
@@ -28,30 +59,41 @@ void shell_init(void) {
     kprintf("nova [%s]# ", profile_names[current_profile]);
 }
 
+static void show_profiles_list(void) {
+    vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
+    kprintf("Perfiles de Usuario configurados en NOVA OS (0 a 10):\n");
+    for (int i = 0; i < PROFILE_COUNT; i++) {
+        const char* mark = (i == (int)current_profile) ? "[ACTIVO]" : "        ";
+        kprintf("  %s %2d. %-15s - %s\n", mark, i, profile_names[i], profile_descriptions[i]);
+    }
+    kprintf("\nUsa 'profile <numero>' para cambiar y auto-aprovisionar las apps del perfil.\n");
+}
+
 void shell_execute(const char* cmd) {
     if (k_strcmp(cmd, "help") == 0) {
         vga_set_color(vga_entry_color(VGA_COLOR_YELLOW, VGA_COLOR_BLACK));
         kprintf("Comandos disponibles en NOVA OS:\n");
-        kprintf("  help             - Muestra este menu de ayuda\n");
-        kprintf("  clear            - Limpia la pantalla de la consola\n");
-        kprintf("  info             - Informacion y version del sistema operativo\n");
-        kprintf("  mem              - Muestra el estado y uso del Heap del Kernel\n");
-        kprintf("  ls               - Lista los archivos almacenados en RAMFS\n");
-        kprintf("  cat <archivo>    - Muestra el contenido de un archivo de texto\n");
-        kprintf("  store search     - Muestra el catalogo completo de NOVA Store\n");
-        kprintf("  store list       - Muestra las aplicaciones instaladas\n");
-        kprintf("  store rec        - Recomienda aplicaciones segun tu perfil activo\n");
-        kprintf("  store install <id> - Instala una aplicacion del catalogo\n");
-        kprintf("  store remove <id>  - Desinstala una aplicacion del sistema\n");
-        kprintf("  rules            - Lista las reglas de automatizacion activas\n");
-        kprintf("  profile [0-3]    - Cambia el perfil activo del usuario\n");
-        kprintf("  arduino ping     - Comprueba conectividad con la placa\n");
-        kprintf("  arduino led on   - Enciende el LED de la placa\n");
-        kprintf("  arduino led off  - Apaga el LED de la placa\n");
-        kprintf("  arduino temp     - Lee la temperatura actual del sensor\n");
-        kprintf("  arduino auto     - Evalua reglas de automatizacion segun sensor\n");
-        kprintf("  arduino log      - Registra la lectura actual en RAMFS (telemetria.log)\n");
-        kprintf("  arduino status   - Muestra estadisticas de paquetes y errores\n");
+        kprintf("  help                 - Muestra este menu de ayuda\n");
+        kprintf("  clear                - Limpia la pantalla de la consola\n");
+        kprintf("  info                 - Informacion y version del sistema operativo\n");
+        kprintf("  mem                  - Muestra el estado y uso del Heap del Kernel\n");
+        kprintf("  ls                   - Lista los archivos almacenados en RAMFS\n");
+        kprintf("  cat <archivo>        - Muestra el contenido de un archivo de texto\n");
+        kprintf("  profiles             - Lista los 11 perfiles de usuario disponibles\n");
+        kprintf("  profile <0-10>       - Activa un perfil y auto-descarga sus herramientas\n");
+        kprintf("  store search         - Muestra el catalogo completo de NOVA Store\n");
+        kprintf("  store list           - Muestra las aplicaciones instaladas\n");
+        kprintf("  store rec            - Recomienda aplicaciones segun tu perfil activo\n");
+        kprintf("  store install <id>   - Instala una aplicacion del catalogo\n");
+        kprintf("  store remove <id>    - Desinstala una aplicacion del sistema\n");
+        kprintf("  rules                - Lista las reglas de automatizacion activas\n");
+        kprintf("  arduino ping         - Comprueba conectividad con la placa\n");
+        kprintf("  arduino led on       - Enciende el LED de la placa\n");
+        kprintf("  arduino led off      - Apaga el LED de la placa\n");
+        kprintf("  arduino temp         - Lee la temperatura actual del sensor\n");
+        kprintf("  arduino auto         - Evalua reglas de automatizacion segun sensor\n");
+        kprintf("  arduino log          - Registra la lectura actual en RAMFS (telemetria.log)\n");
+        kprintf("  arduino status       - Muestra estadisticas de paquetes y errores\n");
     } else if (k_strcmp(cmd, "clear") == 0) {
         vga_clear();
     } else if (k_strcmp(cmd, "info") == 0) {
@@ -59,7 +101,7 @@ void shell_execute(const char* cmd) {
         kprintf("NOVA OS v0.1 (Experimental Academic Edition - Octubre 2026)\n");
         kprintf("Arquitectura: x86_32 Modo Protegido (Ring 0 / Ring 3)\n");
         kprintf("Syscalls: Int 0x80 | FS: RAMFS | Store: NOVA Store | IoT: NOVA-Link\n");
-        kprintf("Perfil activo: %s\n", profile_names[current_profile]);
+        kprintf("Perfil activo actual: %s (#%u)\n", profile_names[current_profile], (uint32_t)current_profile);
     } else if (k_strcmp(cmd, "mem") == 0) {
         vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
         kprintf("Estado del Kernel Heap:\n");
@@ -67,6 +109,37 @@ void shell_execute(const char* cmd) {
         kprintf("  Memoria libre:  %u bytes\n", kheap_get_free());
     } else if (k_strcmp(cmd, "ls") == 0) {
         ramfs_list();
+    } else if (k_strcmp(cmd, "profiles") == 0) {
+        show_profiles_list();
+    } else if (k_strncmp(cmd, "profile", 7) == 0) {
+        if (cmd[7] == ' ') {
+            int num = -1;
+            if (cmd[8] >= '0' && cmd[8] <= '9') {
+                if (cmd[9] >= '0' && cmd[9] <= '9') {
+                    num = (cmd[8] - '0') * 10 + (cmd[9] - '0');
+                } else {
+                    num = cmd[8] - '0';
+                }
+            }
+
+            if (num >= 0 && num < PROFILE_COUNT) {
+                current_profile = (enum nova_profile)num;
+                vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
+                kprintf("\n[PERFIL CAMBIADO] Ahora estas en el perfil: %s\n", profile_names[current_profile]);
+                kprintf("Descripcion: %s\n\n", profile_descriptions[current_profile]);
+
+                // Auto-aprovisionamiento de paquetes para el nuevo perfil
+                vga_set_color(vga_entry_color(VGA_COLOR_YELLOW, VGA_COLOR_BLACK));
+                kprintf("[*] Iniciando aprovisionamiento automatico de aplicaciones...\n");
+                int installed = pkg_provision_profile(current_profile);
+                vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
+                kprintf("[*] Aprovisionamiento completado (%u nuevas aplicaciones preparadas en RAMFS).\n\n", installed);
+            } else {
+                show_profiles_list();
+            }
+        } else {
+            show_profiles_list();
+        }
     } else if (k_strncmp(cmd, "store ", 6) == 0) {
         const char* sub = cmd + 6;
         if (k_strcmp(sub, "search") == 0) {
@@ -115,16 +188,6 @@ void shell_execute(const char* cmd) {
         } else {
             vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK));
             kprintf("Archivo no encontrado: '%s'\n", filename);
-        }
-    } else if (k_strncmp(cmd, "profile", 7) == 0) {
-        if (cmd[7] == ' ' && cmd[8] >= '0' && cmd[8] <= '3') {
-            current_profile = (enum nova_profile)(cmd[8] - '0');
-            vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
-            kprintf("Perfil cambiado con exito a: %s\n", profile_names[current_profile]);
-            pkg_recommend(current_profile);
-        } else {
-            vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
-            kprintf("Uso: profile <0:General, 1:Estudiante, 2:Desarrollador, 3:IoT>\n");
         }
     } else if (k_strncmp(cmd, "arduino", 7) == 0) {
         if (k_strcmp(cmd, "arduino ping") == 0) {

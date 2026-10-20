@@ -37,28 +37,64 @@ void pkg_init(void) {
     catalog_count = 0;
     k_memset(catalog, 0, sizeof(catalog));
 
-    // Paquetes para perfil Estudiante
-    register_pkg("notas", "NOVA Notes", "1.0", "Editor de notas de estudio y tareas", PROFILE_STUDENT, 512);
-    register_pkg("cal", "NOVA Calendar", "1.0", "Agenda y calendario de entregas", PROFILE_STUDENT, 768);
+    // 1. Perfil Estudiante (Ofimática, apuntes, lecturas)
+    register_pkg("office", "NOVA Office Suite", "2.1", "Procesador de textos, calculo y diapositivas", PROFILE_STUDENT, 4096);
+    register_pkg("pdf-reader", "PDF Scholar", "1.4", "Lector de documentos academicos y anotaciones", PROFILE_STUDENT, 1024);
+    register_pkg("flashcards", "AnkiNova Cards", "1.0", "Tarjetas mnemotecnicas de estudio espaciado", PROFILE_STUDENT, 512);
 
-    // Paquetes para perfil Desarrollador
-    register_pkg("hexview", "Hex Viewer", "1.2", "Visor binario e inspeccion de memoria", PROFILE_DEVELOPER, 1024);
-    register_pkg("asm-dbg", "ASM Debugger", "0.9", "Desensamblador y depurador basico", PROFILE_DEVELOPER, 2048);
+    // 2. Perfil Desarrollador Front-end (Figma, VS Code, Node, Browser)
+    register_pkg("vscode", "VS Code Core", "1.85", "Editor de codigo extensible con resaltado", PROFILE_FRONTEND, 3072);
+    register_pkg("figma", "Figma Desktop", "2.0", "Editor de interfaces UI/UX y prototipado", PROFILE_FRONTEND, 2048);
+    register_pkg("nodejs", "Node.js Runtime", "20.1", "Entorno JavaScript/TypeScript y gestor npm", PROFILE_FRONTEND, 2560);
+    register_pkg("dev-browser", "NOVA Web Browser", "1.0", "Navegador con inspector de elementos y consola", PROFILE_FRONTEND, 4096);
 
-    // Paquetes para perfil Hardware / IoT
-    register_pkg("telemetry", "Sensor Plotter", "1.1", "Panel de metricas y graficos de Arduino", PROFILE_IOT_HARDWARE, 1536);
-    register_pkg("relay-ctl", "Relay Controller", "1.0", "Control de salidas y actuadores de potencia", PROFILE_IOT_HARDWARE, 896);
+    // 3. Perfil Desarrollador Back-end (Docker, DBs, Postman, Go/Python)
+    register_pkg("docker", "Docker Engine", "24.0", "Gestor de contenedores y microservicios", PROFILE_BACKEND, 4096);
+    register_pkg("postgres", "PostgreSQL Client", "16.0", "Cliente SQL y visor relacional de bases de datos", PROFILE_BACKEND, 2048);
+    register_pkg("api-postman", "NOVA API Client", "1.2", "Probador de endpoints REST/GraphQL", PROFILE_BACKEND, 1536);
+    register_pkg("git-cli", "Git Version Control", "2.42", "Control de versiones distribuido", PROFILE_BACKEND, 1024);
 
-    // Paquetes de perfil General
-    register_pkg("calc", "NOVA Calc", "1.0", "Calculadora cientifica basica", PROFILE_GENERAL, 384);
+    // 4. Perfil Desarrollador Full-Stack (Integración completa)
+    register_pkg("fullstack-sdk", "FullStack SDK Suite", "1.0", "Compiladores C/Rust, Node.js y Docker integrados", PROFILE_FULLSTACK, 5120);
+    register_pkg("terminal-pro", "NOVA Terminal Pro", "2.0", "Multiplexor de terminales con pestañas", PROFILE_FULLSTACK, 1024);
+
+    // 5. Perfil Diseñador / Creativo (Edición visual, vectores, paletas)
+    register_pkg("vector-draw", "Vector Master", "1.5", "Ilustracion vectorial y diseno de logos", PROFILE_DESIGNER, 3584);
+    register_pkg("photo-editor", "PixelForge Editor", "1.1", "Retoque fotografico y mapas de bits", PROFILE_DESIGNER, 4096);
+    register_pkg("font-manager", "TypeVault Fonts", "1.0", "Organizador y previsualizador de fuentes", PROFILE_DESIGNER, 768);
+
+    // 6. Perfil Hardware / IoT (Herramientas Arduino, Serie, Osciloscopio)
+    register_pkg("arduino-ide", "Arduino NOVA Studio", "2.2", "Entorno de compilacion y flasheo de placas", PROFILE_IOT_HARDWARE, 3072);
+    register_pkg("serial-mon", "UART Logic Analyzer", "1.3", "Monitor de puertos COM con graficos de senales", PROFILE_IOT_HARDWARE, 1536);
+    register_pkg("relay-ctl", "Power Actuator Hub", "1.0", "Control de reles y conmutacion digital", PROFILE_IOT_HARDWARE, 896);
+
+    // 7. Perfil Científico de Datos / IA (Jupyter, Python, Visualización)
+    register_pkg("jupyter-nb", "NOVA Notebooks", "3.0", "Cuadernos interactivos para analisis de datos", PROFILE_DATA_SCIENTIST, 3584);
+    register_pkg("stats-plot", "DataPlot Lib", "1.2", "Generador de diagramas y graficos estadisticos", PROFILE_DATA_SCIENTIST, 1792);
+
+    // 8. Perfil Ciberseguridad / Pentesting (Wireshark, Scanner de puertos)
+    register_pkg("net-scanner", "PortScan & Auditing", "2.0", "Analizador de puertos, servicios y sockets", PROFILE_CYBERSECURITY, 1536);
+    register_pkg("pkt-analyzer", "Packet Sniffer", "1.4", "Captura e inspeccion de paquetes de red", PROFILE_CYBERSECURITY, 2048);
+
+    // 9. Perfil Ofimática / Administración (Hojas de cálculo, Contabilidad)
+    register_pkg("calc-pro", "NOVA Spreadsheets", "2.0", "Planillas de calculo con tablas dinamicas", PROFILE_OFFICE_ADMIN, 2048);
+    register_pkg("invoice-mgr", "Billing & Invoices", "1.0", "Gestion de facturacion y contabilidad local", PROFILE_OFFICE_ADMIN, 1024);
+
+    // 10. Perfil Gamer / Streamer (Grabador, Overlay, Optimizador de FPS)
+    register_pkg("game-launcher", "GameHub NOVA", "1.0", "Lanzador de juegos y optimizador de rendimiento", PROFILE_GAMER_STREAMER, 2048);
+    register_pkg("stream-obs", "OBS NOVA Streamer", "1.2", "Captura de pantalla, audio y streaming en vivo", PROFILE_GAMER_STREAMER, 4096);
+
+    // Perfil General / Usuario Diario
+    register_pkg("media-player", "NOVA Media Player", "1.1", "Reproductor de audio y video multiformato", PROFILE_GENERAL, 1024);
+    register_pkg("calc", "NOVA Basic Calc", "1.0", "Calculadora basica de escritorio", PROFILE_GENERAL, 384);
 }
 
 void pkg_list_catalog(void) {
     vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
-    kprintf("Catalogo de Aplicaciones NOVA Store:\n");
+    kprintf("Catalogo de Aplicaciones NOVA Store (%u disponibles):\n", catalog_count);
     for (size_t i = 0; i < catalog_count; i++) {
         const char* status = catalog[i].installed ? "[INSTALADO]" : "[DISPONIBLE]";
-        kprintf("  - %s (%s, v%s, %u bytes) %s\n    %s\n",
+        kprintf("  - %s (%s, v%s, %u B) %s\n    %s\n",
                 catalog[i].id, catalog[i].name, catalog[i].version, 
                 catalog[i].size_bytes, status, catalog[i].description);
     }
@@ -70,7 +106,7 @@ void pkg_list_installed(void) {
     int count = 0;
     for (size_t i = 0; i < catalog_count; i++) {
         if (catalog[i].installed) {
-            kprintf("  * %s (%s, v%s)\n", catalog[i].id, catalog[i].name, catalog[i].version);
+            kprintf("  * %s (%s, v%s, %u bytes)\n", catalog[i].id, catalog[i].name, catalog[i].version, catalog[i].size_bytes);
             count++;
         }
     }
@@ -85,8 +121,8 @@ void pkg_recommend(enum nova_profile profile) {
     int count = 0;
     for (size_t i = 0; i < catalog_count; i++) {
         if (catalog[i].target_profile == profile && !catalog[i].installed) {
-            kprintf("  -> %s: %s (v%s, %u bytes)\n",
-                    catalog[i].id, catalog[i].name, catalog[i].version, catalog[i].size_bytes);
+            kprintf("  -> %s: %s (v%s, %u bytes)\n     %s\n",
+                    catalog[i].id, catalog[i].name, catalog[i].version, catalog[i].size_bytes, catalog[i].description);
             count++;
         }
     }
@@ -147,4 +183,23 @@ int pkg_uninstall(const char* pkg_id) {
         }
     }
     return -1; // No encontrado
+}
+
+int pkg_provision_profile(enum nova_profile profile) {
+    int installed_count = 0;
+    for (size_t i = 0; i < catalog_count; i++) {
+        if (catalog[i].target_profile == profile && !catalog[i].installed) {
+            vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
+            kprintf("  [Aprovisionando] Descargando e instalando %s (%s)... ", catalog[i].id, catalog[i].name);
+            if (pkg_install(catalog[i].id) == 0) {
+                vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
+                kprintf("[LISTO]\n");
+                installed_count++;
+            } else {
+                vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK));
+                kprintf("[ERROR]\n");
+            }
+        }
+    }
+    return installed_count;
 }

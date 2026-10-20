@@ -8,6 +8,7 @@
 #include "ramfs.h"
 #include "rules_engine.h"
 #include "pkg_manager.h"
+#include "shell.h"
 #include "nova_link.h"
 #include "nova_iot.h"
 
@@ -121,33 +122,60 @@ void test_ramfs(void) {
     TEST_ASSERT(bytes < 0, "Archivo borrado ya no puede ser leido");
 }
 
-/* Test 4: Gestor de Paquetes y Tienda (NOVA Store) */
+/* Test 4: Validación de los 11 Perfiles y Auto-Aprovisionamiento */
+void test_profile_provisioning(void) {
+    printf("[*] Ejecutando: test_profile_provisioning...\n");
+    pkg_init();
+
+    // Comprobar que existen al menos 11 perfiles
+    TEST_ASSERT(PROFILE_COUNT >= 11, "Existen al menos 11 perfiles de usuario definidos");
+
+    // Probar auto-aprovisionamiento para Estudiante (debe instalar office, pdf-reader, flashcards)
+    int student_installed = pkg_provision_profile(PROFILE_STUDENT);
+    TEST_ASSERT(student_installed == 3, "Perfil Estudiante aprovisiona 3 apps de estudio");
+    uint8_t buf[64];
+    TEST_ASSERT(ramfs_read("app_office", buf, sizeof(buf)) > 0, "App 'office' presente en RAMFS tras seleccion de perfil Estudiante");
+
+    // Probar auto-aprovisionamiento para Front-end Developer (debe instalar vscode, figma, nodejs, dev-browser)
+    int fe_installed = pkg_provision_profile(PROFILE_FRONTEND);
+    TEST_ASSERT(fe_installed == 4, "Perfil Frontend aprovisiona 4 herramientas (figma, vscode, nodejs, browser)");
+    TEST_ASSERT(ramfs_read("app_figma", buf, sizeof(buf)) > 0, "App 'figma' presente en RAMFS");
+    TEST_ASSERT(ramfs_read("app_vscode", buf, sizeof(buf)) > 0, "App 'vscode' presente en RAMFS");
+
+    // Probar auto-aprovisionamiento para Back-end Developer (docker, postgres, etc.)
+    int be_installed = pkg_provision_profile(PROFILE_BACKEND);
+    TEST_ASSERT(be_installed == 4, "Perfil Backend aprovisiona 4 herramientas (docker, postgres, api-postman, git)");
+    TEST_ASSERT(ramfs_read("app_docker", buf, sizeof(buf)) > 0, "App 'docker' presente en RAMFS");
+
+    // Probar auto-aprovisionamiento para Gamer/Streamer (game-launcher, stream-obs)
+    int gamer_installed = pkg_provision_profile(PROFILE_GAMER_STREAMER);
+    TEST_ASSERT(gamer_installed == 2, "Perfil Gamer aprovisiona suite de juegos y OBS");
+    TEST_ASSERT(ramfs_read("app_stream-obs", buf, sizeof(buf)) > 0, "App 'stream-obs' presente en RAMFS");
+}
+
+/* Test 5: Gestor de Paquetes y Tienda (NOVA Store) */
 void test_package_manager(void) {
     printf("[*] Ejecutando: test_package_manager...\n");
     pkg_init();
 
-    // Instalación de un paquete existente
-    int res = pkg_install("telemetry");
-    TEST_ASSERT(res == 0, "Instalacion exitosa de paquete 'telemetry'");
+    int res = pkg_install("arduino-ide");
+    TEST_ASSERT(res == 0, "Instalacion exitosa de paquete 'arduino-ide'");
 
-    // Verificar que se registró en RAMFS como ejecutable/metadata
     uint8_t meta_buf[64];
     k_memset(meta_buf, 0, sizeof(meta_buf));
-    int bytes = ramfs_read("app_telemetry", meta_buf, sizeof(meta_buf) - 1);
-    TEST_ASSERT(bytes > 0, "Paquete instalado crea entrada binaria en RAMFS (app_telemetry)");
+    int bytes = ramfs_read("app_arduino-ide", meta_buf, sizeof(meta_buf) - 1);
+    TEST_ASSERT(bytes > 0, "Paquete instalado crea entrada binaria en RAMFS (app_arduino-ide)");
 
-    // Intentar instalar paquete duplicado
-    int dup = pkg_install("telemetry");
+    int dup = pkg_install("arduino-ide");
     TEST_ASSERT(dup == 1, "Deteccion de aplicacion ya instalada");
 
-    // Desinstalación
-    int uninst = pkg_uninstall("telemetry");
+    int uninst = pkg_uninstall("arduino-ide");
     TEST_ASSERT(uninst == 0, "Desinstalacion exitosa de paquete");
-    bytes = ramfs_read("app_telemetry", meta_buf, sizeof(meta_buf) - 1);
+    bytes = ramfs_read("app_arduino-ide", meta_buf, sizeof(meta_buf) - 1);
     TEST_ASSERT(bytes < 0, "Entrada de app retirada de RAMFS tras desinstalacion");
 }
 
-/* Test 5: Motor de Reglas y Automatización SI-ENTONCES */
+/* Test 6: Motor de Reglas y Automatización SI-ENTONCES */
 void test_rules_engine(void) {
     printf("[*] Ejecutando: test_rules_engine...\n");
     rules_engine_init();
@@ -165,7 +193,7 @@ void test_rules_engine(void) {
     TEST_ASSERT(b > 0, "Registro de alerta guardado en RAMFS (alertas.log)");
 }
 
-/* Test 6: Simulación de conversación bidireccional NOVA-Link */
+/* Test 7: Simulación de conversación bidireccional NOVA-Link */
 void test_bidirectional_simulation(void) {
     printf("[*] Ejecutando: test_bidirectional_simulation...\n");
 
@@ -182,7 +210,7 @@ void test_bidirectional_simulation(void) {
     TEST_ASSERT(corrupted_frame[3] != corrupted_calc, "Deteccion y rechazo exitoso de trama corrompida");
 }
 
-/* Test 7: Validación de estructuras de protección de CPU x86 */
+/* Test 8: Validación de estructuras de protección de CPU x86 */
 void test_x86_structures(void) {
     printf("[*] Ejecutando: test_x86_structures...\n");
     struct gdt_mock {
@@ -213,6 +241,7 @@ int main(void) {
     test_klib_strings();
     test_kheap_allocator();
     test_ramfs();
+    test_profile_provisioning();
     test_package_manager();
     test_rules_engine();
     test_bidirectional_simulation();

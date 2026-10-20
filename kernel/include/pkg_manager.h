@@ -4,7 +4,7 @@
 #include "ktypes.h"
 #include "shell.h"
 
-#define MAX_PACKAGES 12
+#define MAX_PACKAGES 40
 
 struct package_info {
     char id[16];
@@ -22,5 +22,8 @@ void pkg_list_installed(void);
 void pkg_recommend(enum nova_profile profile);
 int pkg_install(const char* pkg_id);
 int pkg_uninstall(const char* pkg_id);
+
+/* Aprovisiona e instala automáticamente el lote de apps del perfil seleccionado */
+int pkg_provision_profile(enum nova_profile profile);
 
 #endif
