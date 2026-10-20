@@ -5,15 +5,23 @@
 #include "ktypes.h"
 #include "klib.h"
 #include "kheap.h"
+#include "ramfs.h"
 #include "nova_link.h"
 #include "nova_iot.h"
 
-// Variables requeridas por klib.c
+// Variables requeridas por drivers en host
 void vga_putc(char c) {
     (void)c;
 }
 void vga_writestring(const char* s) {
     (void)s;
+}
+void vga_set_color(uint8_t color) {
+    (void)color;
+}
+uint8_t vga_entry_color(int fg, int bg) {
+    (void)fg; (void)bg;
+    return 0x07;
 }
 
 static int tests_passed = 0;
@@ -53,7 +61,7 @@ void test_klib_strings(void) {
     TEST_ASSERT(k_strcmp(buf, "dead") == 0, "uitoa base 16 hexadecimal correcta");
 }
 
-/* Test 2: Gestor de memoria dinámica kheap (kmalloc y kfree) */
+/* Test 2: Gestor de memoria dinámica kheap */
 void test_kheap_allocator(void) {
     printf("[*] Ejecutando: test_kheap_allocator...\n");
     static uint8_t memory_pool[8192] __attribute__((aligned(16)));
@@ -76,27 +84,55 @@ void test_kheap_allocator(void) {
     TEST_ASSERT(kheap_get_free() == initial_free, "Coalescencia de bloques contiguos restaura el espacio original");
 }
 
-/* Test 3: Simulación de conversación bidireccional NOVA-Link */
+/* Test 3: Sistema de Archivos en Memoria (RAMFS) */
+void test_ramfs(void) {
+    printf("[*] Ejecutando: test_ramfs...\n");
+    ramfs_init();
+
+    // Comprobar archivo por defecto creado en ramfs_init
+    uint8_t read_buf[256];
+    k_memset(read_buf, 0, sizeof(read_buf));
+    int bytes = ramfs_read("bienvenida.txt", read_buf, sizeof(read_buf) - 1);
+    TEST_ASSERT(bytes > 0, "Archivo bienvenida.txt existe y tiene contenido");
+
+    // Crear y escribir un archivo de prueba
+    int res = ramfs_create("sensor_test.dat");
+    TEST_ASSERT(res == 0, "Creacion de nuevo archivo sensor_test.dat");
+
+    const char* data_to_write = "TEMP: 26.5 C\nSTATUS: OK\n";
+    int written = ramfs_write("sensor_test.dat", (const uint8_t*)data_to_write, k_strlen(data_to_write));
+    TEST_ASSERT(written == (int)k_strlen(data_to_write), "Escritura completa de datos de sensor");
+
+    k_memset(read_buf, 0, sizeof(read_buf));
+    bytes = ramfs_read("sensor_test.dat", read_buf, sizeof(read_buf) - 1);
+    TEST_ASSERT(bytes == (int)k_strlen(data_to_write), "Lectura de contenido de archivo coincide con lo escrito");
+    TEST_ASSERT(k_strcmp((const char*)read_buf, data_to_write) == 0, "Integridad de los datos leidos comprobada");
+
+    // Borrado de archivo
+    int del = ramfs_delete("sensor_test.dat");
+    TEST_ASSERT(del == 0, "Borrado de archivo exitoso");
+    bytes = ramfs_read("sensor_test.dat", read_buf, sizeof(read_buf) - 1);
+    TEST_ASSERT(bytes < 0, "Archivo borrado ya no puede ser leido");
+}
+
+/* Test 4: Simulación de conversación bidireccional NOVA-Link */
 void test_bidirectional_simulation(void) {
     printf("[*] Ejecutando: test_bidirectional_simulation...\n");
 
-    // Simular envío de comando LED_ON
     uint8_t tx_frame[4] = { NOVA_LINK_MAGIC, CMD_LED_ON, 0x00, (uint8_t)(CMD_LED_ON ^ 0x00) };
     TEST_ASSERT(tx_frame[0] == 0xAA, "Trama enviada inicia con MAGIC");
     TEST_ASSERT(tx_frame[1] == 0x10, "Comando enviado es LED_ON");
 
-    // Simular recepción de respuesta exitosa de Arduino (RESP_OK)
     uint8_t rx_frame[4] = { NOVA_LINK_MAGIC, RESP_OK, 0x00, (uint8_t)(RESP_OK ^ 0x00) };
     uint8_t rx_cksum = rx_frame[1] ^ rx_frame[2];
     TEST_ASSERT(rx_frame[3] == rx_cksum, "Integridad de trama de respuesta de Arduino confirmada");
 
-    // Simular recepción con error de Checksum corrompido en el canal físico
     uint8_t corrupted_frame[4] = { NOVA_LINK_MAGIC, RESP_OK, 0x00, 0xFF };
     uint8_t corrupted_calc = corrupted_frame[1] ^ corrupted_frame[2];
     TEST_ASSERT(corrupted_frame[3] != corrupted_calc, "Deteccion y rechazo exitoso de trama corrompida");
 }
 
-/* Test 4: Validación de estructuras de protección de CPU x86 */
+/* Test 5: Validación de estructuras de protección de CPU x86 */
 void test_x86_structures(void) {
     printf("[*] Ejecutando: test_x86_structures...\n");
     struct gdt_mock {
@@ -126,6 +162,7 @@ int main(void) {
 
     test_klib_strings();
     test_kheap_allocator();
+    test_ramfs();
     test_bidirectional_simulation();
     test_x86_structures();
 

@@ -4,8 +4,10 @@
 #include "serial.h"
 #include "gdt.h"
 #include "idt.h"
+#include "pit.h"
 #include "syscall.h"
 #include "kheap.h"
+#include "ramfs.h"
 #include "keyboard.h"
 #include "nova_iot.h"
 #include "shell.h"
@@ -21,7 +23,6 @@ struct multiboot_info {
     uint32_t mods_addr;
 };
 
-// Ubicación del heap en memoria física: a partir de los 4MB (4 * 1024 * 1024)
 #define KHEAP_START 0x00400000
 #define KHEAP_SIZE  (2 * 1024 * 1024) // 2 MiB de Heap inicial
 
@@ -50,33 +51,47 @@ void kernel_main(uint32_t magic, struct multiboot_info* mbi) {
     vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
     kprintf("[OK]\n");
 
-    // 5. Inicializar despachador seguro de llamadas al sistema (Syscalls Int 0x80)
+    // 5. Inicializar temporizador PIT (100 Hz / IRQ0)
+    vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
+    kprintf("[*] Configurando Timer PIT (100 Hz / IRQ0)... ");
+    pit_init(100);
+    vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
+    kprintf("[OK]\n");
+
+    // 6. Inicializar despachador seguro de llamadas al sistema (Syscalls Int 0x80)
     vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
     kprintf("[*] Configurando Syscalls (Int 0x80)... ");
     syscall_init();
     vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
     kprintf("[OK]\n");
 
-    // 6. Inicializar gestor de memoria dinámica (Heap 2MB)
+    // 7. Inicializar gestor de memoria dinámica (Heap 2MB)
     vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
     kprintf("[*] Inicializando Kernel Heap en 0x%x (2 MiB)... ", KHEAP_START);
     kheap_init((void*)KHEAP_START, KHEAP_SIZE);
     vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
     kprintf("[OK]\n");
 
-    // 7. Inicializar driver serial (COM1) para log de depuración
+    // 8. Inicializar sistema de archivos en memoria (RAMFS)
+    vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
+    kprintf("[*] Montando sistema de archivos RAMFS... ");
+    ramfs_init();
+    vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
+    kprintf("[OK]\n");
+
+    // 9. Inicializar driver serial (COM1) para log de depuración
     vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
     kprintf("[*] Inicializando puerto serie COM1 (UART 16550A)... ");
     if (serial_init() == 0) {
         vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
         kprintf("[OK]\n");
-        serial_write_string("\r\n[NOVA OS SERIAL LOG] Kernel iniciado con GDT, IDT, Syscalls y Heap.\r\n");
+        serial_write_string("\r\n[NOVA OS SERIAL LOG] Kernel iniciado con GDT, IDT, PIT, Syscalls, Heap y RAMFS.\r\n");
     } else {
         vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK));
         kprintf("[FALLO O SIN HARDWARE]\n");
     }
 
-    // 8. Verificar firma mágica de arranque Multiboot (0x2BADB002)
+    // 10. Verificar firma mágica de arranque Multiboot (0x2BADB002)
     vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
     kprintf("[*] Verificando arranque Multiboot... ");
     if (magic == 0x2BADB002) {
@@ -87,24 +102,27 @@ void kernel_main(uint32_t magic, struct multiboot_info* mbi) {
         kprintf("[ADVERTENCIA] Bootloader no estandar (0x%x)\n", magic);
     }
 
-    // 9. Diagnóstico de memoria si está disponible en Multiboot
+    // 11. Diagnóstico de memoria si está disponible en Multiboot
     if (mbi && (mbi->flags & 1)) {
         vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREY, VGA_COLOR_BLACK));
         kprintf("[*] Memoria convencional baja: %u KiB | Alta: %u KiB (~%u MiB)\n", 
                 mbi->mem_lower, mbi->mem_upper, mbi->mem_upper / 1024);
     }
 
-    // 10. Inicializar periféricos y subsistemas de usuario
+    // 12. Inicializar periféricos y subsistemas de usuario
     keyboard_init();
     nova_iot_init();
+
+    // Habilitar interrupciones de hardware en la CPU
+    __asm__ volatile ("sti");
 
     vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
     kprintf("\n[>] Sistema operativo preparado. Iniciando NOVA Shell.\n\n");
 
-    // 11. Iniciar shell interactivo
+    // 13. Iniciar shell interactivo
     shell_init();
 
-    // 12. Bucle principal del sistema
+    // 14. Bucle principal del sistema
     while (1) {
         shell_step();
     }
