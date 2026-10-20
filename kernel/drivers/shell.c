@@ -6,6 +6,7 @@
 #include "nova_iot.h"
 #include "ramfs.h"
 #include "rules_engine.h"
+#include "pkg_manager.h"
 
 #define LINE_MAX 80
 
@@ -37,6 +38,11 @@ void shell_execute(const char* cmd) {
         kprintf("  mem              - Muestra el estado y uso del Heap del Kernel\n");
         kprintf("  ls               - Lista los archivos almacenados en RAMFS\n");
         kprintf("  cat <archivo>    - Muestra el contenido de un archivo de texto\n");
+        kprintf("  store search     - Muestra el catalogo completo de NOVA Store\n");
+        kprintf("  store list       - Muestra las aplicaciones instaladas\n");
+        kprintf("  store rec        - Recomienda aplicaciones segun tu perfil activo\n");
+        kprintf("  store install <id> - Instala una aplicacion del catalogo\n");
+        kprintf("  store remove <id>  - Desinstala una aplicacion del sistema\n");
         kprintf("  rules            - Lista las reglas de automatizacion activas\n");
         kprintf("  profile [0-3]    - Cambia el perfil activo del usuario\n");
         kprintf("  arduino ping     - Comprueba conectividad con la placa\n");
@@ -52,7 +58,7 @@ void shell_execute(const char* cmd) {
         vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
         kprintf("NOVA OS v0.1 (Experimental Academic Edition - Octubre 2026)\n");
         kprintf("Arquitectura: x86_32 Modo Protegido (Ring 0 / Ring 3)\n");
-        kprintf("Syscalls: Int 0x80 | FS: RAMFS | Motor: Reglas IoT\n");
+        kprintf("Syscalls: Int 0x80 | FS: RAMFS | Store: NOVA Store | IoT: NOVA-Link\n");
         kprintf("Perfil activo: %s\n", profile_names[current_profile]);
     } else if (k_strcmp(cmd, "mem") == 0) {
         vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
@@ -61,6 +67,41 @@ void shell_execute(const char* cmd) {
         kprintf("  Memoria libre:  %u bytes\n", kheap_get_free());
     } else if (k_strcmp(cmd, "ls") == 0) {
         ramfs_list();
+    } else if (k_strncmp(cmd, "store ", 6) == 0) {
+        const char* sub = cmd + 6;
+        if (k_strcmp(sub, "search") == 0) {
+            pkg_list_catalog();
+        } else if (k_strcmp(sub, "list") == 0) {
+            pkg_list_installed();
+        } else if (k_strcmp(sub, "rec") == 0) {
+            pkg_recommend(current_profile);
+        } else if (k_strncmp(sub, "install ", 8) == 0) {
+            const char* id = sub + 8;
+            int r = pkg_install(id);
+            if (r == 0) {
+                vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
+                kprintf("[OK] Aplicacion '%s' instalada correctamente.\n", id);
+            } else if (r == 1) {
+                vga_set_color(vga_entry_color(VGA_COLOR_YELLOW, VGA_COLOR_BLACK));
+                kprintf("[INFO] La aplicacion '%s' ya se encuentra instalada.\n", id);
+            } else {
+                vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK));
+                kprintf("[ERROR] No se encontro el paquete '%s' en el catalogo.\n", id);
+            }
+        } else if (k_strncmp(sub, "remove ", 7) == 0) {
+            const char* id = sub + 7;
+            int r = pkg_uninstall(id);
+            if (r == 0) {
+                vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
+                kprintf("[OK] Aplicacion '%s' desinstalada del sistema.\n", id);
+            } else {
+                vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK));
+                kprintf("[ERROR] La aplicacion '%s' no esta instalada.\n", id);
+            }
+        } else {
+            vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK));
+            kprintf("Uso: store <search | list | rec | install <id> | remove <id>>\n");
+        }
     } else if (k_strcmp(cmd, "rules") == 0) {
         rules_engine_list();
     } else if (k_strncmp(cmd, "cat ", 4) == 0) {
@@ -80,6 +121,7 @@ void shell_execute(const char* cmd) {
             current_profile = (enum nova_profile)(cmd[8] - '0');
             vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
             kprintf("Perfil cambiado con exito a: %s\n", profile_names[current_profile]);
+            pkg_recommend(current_profile);
         } else {
             vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
             kprintf("Uso: profile <0:General, 1:Estudiante, 2:Desarrollador, 3:IoT>\n");

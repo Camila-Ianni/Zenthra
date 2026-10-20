@@ -17,14 +17,17 @@ Este documento consolida el estado técnico del sistema operativo experimental *
 - **Kernel Heap (`kmalloc`/`kfree`)**: En [`kernel/lib/kheap.c`](file:///Users/cami/Desktop/NOVA/kernel/lib/kheap.c), asignador dinámico de memoria *First-Fit* con coalescencia de bloques liberados contiguos, ubicado a partir de los 4MB de memoria física.
 
 ### 2.2 Almacenamiento y Sistema de Archivos
-- **RAMFS (In-Memory Filesystem)**: En [`kernel/drivers/ramfs.c`](file:///Users/cami/Desktop/NOVA/kernel/drivers/ramfs.c), estructura para almacenar y consultar archivos en memoria RAM (`ramfs_create`, `ramfs_write`, `ramfs_read`, `ramfs_delete`, `ramfs_list`). Permite el registro y persistencia en sesión de telemetría de Arduino (`telemetria.log`).
+- **RAMFS (In-Memory Filesystem)**: En [`kernel/drivers/ramfs.c`](file:///Users/cami/Desktop/NOVA/kernel/drivers/ramfs.c), estructura para almacenar y consultar archivos en memoria RAM (`ramfs_create`, `ramfs_write`, `ramfs_read`, `ramfs_delete`, `ramfs_list`). Permite el registro y persistencia en sesión de telemetría de Arduino (`telemetria.log`) y alertas del sistema (`alertas.log`).
 
-### 2.3 Controladores y Entrada/Salida
+### 2.3 Automatización y Motor de Reglas
+- **Rules Engine (Motor SI-ENTONCES)**: En [`kernel/drivers/rules_engine.c`](file:///Users/cami/Desktop/NOVA/kernel/drivers/rules_engine.c) y [`kernel/include/rules_engine.h`](file:///Users/cami/Desktop/NOVA/kernel/include/rules_engine.h). Permite evaluar en tiempo real condiciones de umbral de sensores y disparar acciones automáticas sobre actuadores (como encendido/apagado de LED/ventilador) y registro de incidencias, cubriendo el requerimiento de automatización de la propuesta.
+
+### 2.4 Controladores y Entrada/Salida
 - **VGA Text Mode Driver**: En [`kernel/drivers/vga.c`](file:///Users/cami/Desktop/NOVA/kernel/drivers/vga.c), gestión directa del buffer en `0xB8000`, scrolling vertical automático y actualización del cursor físico mediante puertos `0x3D4` y `0x3D5`.
 - **Serial Driver (UART 16550A)**: En [`kernel/drivers/serial.c`](file:///Users/cami/Desktop/NOVA/kernel/drivers/serial.c), configuración en `COM1 (0x3F8)` a 38400 baudios, 8N1, con verificación previa por loopback.
 - **Keyboard Driver (PS/2)**: En [`kernel/drivers/keyboard.c`](file:///Users/cami/Desktop/NOVA/kernel/drivers/keyboard.c), decodificación de scan codes a ASCII con modo no bloqueante.
 
-### 2.4 Interfaz de Usuario y Perfiles
+### 2.5 Interfaz de Usuario y Perfiles
 - **NOVA Shell**: En [`kernel/drivers/shell.c`](file:///Users/cami/Desktop/NOVA/kernel/drivers/shell.c), intérprete de comandos con soporte para:
   - `help`: Lista de comandos disponibles.
   - `info`: Información de arquitectura y versión.
@@ -32,10 +35,11 @@ Este documento consolida el estado técnico del sistema operativo experimental *
   - `mem`: Monitoreo en vivo de memoria usada y libre en el Heap.
   - `ls`: Listado de archivos en RAMFS.
   - `cat <archivo>`: Visualización de archivos en consola.
+  - `rules`: Listado de reglas de automatización y su contador de activaciones.
   - `profile <0..3>`: Conmutación en tiempo real entre perfiles (`General`, `Estudiante`, `Desarrollador`, `Hardware/IoT`).
-  - `arduino ping | led on | led off | temp | log | status`: Interacción, diagnóstico y registro de telemetría con la placa.
+  - `arduino ping | led on | led off | temp | auto | log | status`: Interacción, control, automatización y telemetría con la placa.
 
-### 2.5 Integración Física con Arduino
+### 2.6 Integración Física con Arduino
 - **Protocolo NOVA-Link**: En [`kernel/include/nova_link.h`](file:///Users/cami/Desktop/NOVA/kernel/include/nova_link.h). Formato de paquete: `[MAGIC (0xAA)] [CMD] [LEN] [PAYLOAD...] [CHECKSUM XOR]`.
 - **Servicio `nova_iot`**: En [`kernel/drivers/nova_iot.c`](file:///Users/cami/Desktop/NOVA/kernel/drivers/nova_iot.c), centraliza la validación, empaquetado, recepción con timeout y conteo de errores de integridad.
 - **Firmware Receptor**: En [`arduino/nova_link/nova_firmware.ino`](file:///Users/cami/Desktop/NOVA/arduino/nova_link/nova_firmware.ino), compatible con Arduino Uno/Nano/Mega para actuar sobre el pin digital 13 y leer sensores analógicos en `A0`.
@@ -75,6 +79,10 @@ Se ejecutó la suite de pruebas unitarias y de simulación mediante `make test`:
   [PASS] Integridad de los datos leidos comprobada
   [PASS] Borrado de archivo exitoso
   [PASS] Archivo borrado ya no puede ser leido
+[*] Ejecutando: test_rules_engine...
+  [PASS] Temperatura normal (25.0 C) no activa alarma
+  [PASS] Temperatura critica (32.5 C) activa actuador LED por automatizacion
+  [PASS] Registro de alerta guardado en RAMFS (alertas.log)
 [*] Ejecutando: test_bidirectional_simulation...
   [PASS] Trama enviada inicia con MAGIC
   [PASS] Comando enviado es LED_ON
@@ -85,7 +93,7 @@ Se ejecutó la suite de pruebas unitarias y de simulación mediante `make test`:
   [PASS] Descriptor IDT tiene tamano estandar x86 (8 bytes)
 
 ----------------------------------------------------
-Resultados: 27 Aprobados | 0 Fallidos
+Resultados: 30 Aprobados | 0 Fallidos
 ----------------------------------------------------
 [+] Todas las pruebas pasaron satisfactoriamente.
 ```

@@ -9,6 +9,7 @@
 #include "kheap.h"
 #include "ramfs.h"
 #include "rules_engine.h"
+#include "pkg_manager.h"
 #include "keyboard.h"
 #include "nova_iot.h"
 #include "shell.h"
@@ -80,26 +81,33 @@ void kernel_main(uint32_t magic, struct multiboot_info* mbi) {
     vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
     kprintf("[OK]\n");
 
-    // 9. Inicializar motor de automatización y reglas IoT
+    // 9. Inicializar catálogo y tienda de aplicaciones (NOVA Store)
+    vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
+    kprintf("[*] Inicializando catalogo NOVA Store... ");
+    pkg_init();
+    vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
+    kprintf("[OK]\n");
+
+    // 10. Inicializar motor de automatización y reglas IoT
     vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
     kprintf("[*] Cargando motor de reglas IoT... ");
     rules_engine_init();
     vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
     kprintf("[OK]\n");
 
-    // 10. Inicializar driver serial (COM1) para log de depuración
+    // 11. Inicializar driver serial (COM1) para log de depuración
     vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
     kprintf("[*] Inicializando puerto serie COM1 (UART 16550A)... ");
     if (serial_init() == 0) {
         vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
         kprintf("[OK]\n");
-        serial_write_string("\r\n[NOVA OS SERIAL LOG] Kernel iniciado con GDT, IDT, PIT, Syscalls, Heap, RAMFS y Rules Engine.\r\n");
+        serial_write_string("\r\n[NOVA OS SERIAL LOG] Kernel iniciado con GDT, IDT, PIT, Syscalls, Heap, RAMFS, Store y Rules Engine.\r\n");
     } else {
         vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK));
         kprintf("[FALLO O SIN HARDWARE]\n");
     }
 
-    // 11. Verificar firma mágica de arranque Multiboot (0x2BADB002)
+    // 12. Verificar firma mágica de arranque Multiboot (0x2BADB002)
     vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
     kprintf("[*] Verificando arranque Multiboot... ");
     if (magic == 0x2BADB002) {
@@ -110,14 +118,14 @@ void kernel_main(uint32_t magic, struct multiboot_info* mbi) {
         kprintf("[ADVERTENCIA] Bootloader no estandar (0x%x)\n", magic);
     }
 
-    // 12. Diagnóstico de memoria si está disponible en Multiboot
+    // 13. Diagnóstico de memoria si está disponible en Multiboot
     if (mbi && (mbi->flags & 1)) {
         vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREY, VGA_COLOR_BLACK));
         kprintf("[*] Memoria convencional baja: %u KiB | Alta: %u KiB (~%u MiB)\n", 
                 mbi->mem_lower, mbi->mem_upper, mbi->mem_upper / 1024);
     }
 
-    // 13. Inicializar periféricos y subsistemas de usuario
+    // 14. Inicializar periféricos y subsistemas de usuario
     keyboard_init();
     nova_iot_init();
 
@@ -127,10 +135,10 @@ void kernel_main(uint32_t magic, struct multiboot_info* mbi) {
     vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
     kprintf("\n[>] Sistema operativo preparado. Iniciando NOVA Shell.\n\n");
 
-    // 14. Iniciar shell interactivo
+    // 15. Iniciar shell interactivo
     shell_init();
 
-    // 15. Bucle principal del sistema
+    // 16. Bucle principal del sistema
     while (1) {
         shell_step();
     }

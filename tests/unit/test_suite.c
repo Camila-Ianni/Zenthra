@@ -7,6 +7,7 @@
 #include "kheap.h"
 #include "ramfs.h"
 #include "rules_engine.h"
+#include "pkg_manager.h"
 #include "nova_link.h"
 #include "nova_iot.h"
 
@@ -120,28 +121,51 @@ void test_ramfs(void) {
     TEST_ASSERT(bytes < 0, "Archivo borrado ya no puede ser leido");
 }
 
-/* Test 4: Motor de Reglas y Automatización SI-ENTONCES */
+/* Test 4: Gestor de Paquetes y Tienda (NOVA Store) */
+void test_package_manager(void) {
+    printf("[*] Ejecutando: test_package_manager...\n");
+    pkg_init();
+
+    // Instalación de un paquete existente
+    int res = pkg_install("telemetry");
+    TEST_ASSERT(res == 0, "Instalacion exitosa de paquete 'telemetry'");
+
+    // Verificar que se registró en RAMFS como ejecutable/metadata
+    uint8_t meta_buf[64];
+    k_memset(meta_buf, 0, sizeof(meta_buf));
+    int bytes = ramfs_read("app_telemetry", meta_buf, sizeof(meta_buf) - 1);
+    TEST_ASSERT(bytes > 0, "Paquete instalado crea entrada binaria en RAMFS (app_telemetry)");
+
+    // Intentar instalar paquete duplicado
+    int dup = pkg_install("telemetry");
+    TEST_ASSERT(dup == 1, "Deteccion de aplicacion ya instalada");
+
+    // Desinstalación
+    int uninst = pkg_uninstall("telemetry");
+    TEST_ASSERT(uninst == 0, "Desinstalacion exitosa de paquete");
+    bytes = ramfs_read("app_telemetry", meta_buf, sizeof(meta_buf) - 1);
+    TEST_ASSERT(bytes < 0, "Entrada de app retirada de RAMFS tras desinstalacion");
+}
+
+/* Test 5: Motor de Reglas y Automatización SI-ENTONCES */
 void test_rules_engine(void) {
     printf("[*] Ejecutando: test_rules_engine...\n");
-    rules_engine_init(); // Contiene regla: Si Temp > 30.0 C (300 decicelsius) -> LED ON
+    rules_engine_init();
 
-    // Caso A: Temperatura normal (25.0 C = 250) -> No debe disparar la regla
     mock_led_value = false;
     rules_engine_evaluate(250);
     TEST_ASSERT(mock_led_value == false, "Temperatura normal (25.0 C) no activa alarma");
 
-    // Caso B: Temperatura umbral excedida (32.5 C = 325) -> Debe disparar la regla
     rules_engine_evaluate(325);
     TEST_ASSERT(mock_led_value == true, "Temperatura critica (32.5 C) activa actuador LED por automatizacion");
 
-    // Comprobar que la regla generó un registro de alerta en RAMFS
     uint8_t alert_log[128];
     k_memset(alert_log, 0, sizeof(alert_log));
     int b = ramfs_read("alertas.log", alert_log, sizeof(alert_log) - 1);
     TEST_ASSERT(b > 0, "Registro de alerta guardado en RAMFS (alertas.log)");
 }
 
-/* Test 5: Simulación de conversación bidireccional NOVA-Link */
+/* Test 6: Simulación de conversación bidireccional NOVA-Link */
 void test_bidirectional_simulation(void) {
     printf("[*] Ejecutando: test_bidirectional_simulation...\n");
 
@@ -158,7 +182,7 @@ void test_bidirectional_simulation(void) {
     TEST_ASSERT(corrupted_frame[3] != corrupted_calc, "Deteccion y rechazo exitoso de trama corrompida");
 }
 
-/* Test 6: Validación de estructuras de protección de CPU x86 */
+/* Test 7: Validación de estructuras de protección de CPU x86 */
 void test_x86_structures(void) {
     printf("[*] Ejecutando: test_x86_structures...\n");
     struct gdt_mock {
@@ -189,6 +213,7 @@ int main(void) {
     test_klib_strings();
     test_kheap_allocator();
     test_ramfs();
+    test_package_manager();
     test_rules_engine();
     test_bidirectional_simulation();
     test_x86_structures();
