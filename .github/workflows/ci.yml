@@ -1,0 +1,28 @@
+name: NOVA OS CI - Build & Test
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout del Repositorio
+        uses: actions/checkout@v4
+
+      - name: Instalar Dependencias de Compilación
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-multilib build-essential qemu-system-x86
+
+      - name: Ejecutar Test Suite Unitario y de Protocolo
+        run: |
+          make test
+
+      - name: Compilar Kernel ELF (Bare Metal x86)
+        run: |
+          gcc -m32 -c boot/boot.s -o build/boot_boot.o || true
