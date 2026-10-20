@@ -5,6 +5,7 @@
 #include "keyboard.h"
 #include "nova_iot.h"
 #include "ramfs.h"
+#include "rules_engine.h"
 
 #define LINE_MAX 80
 
@@ -36,11 +37,13 @@ void shell_execute(const char* cmd) {
         kprintf("  mem              - Muestra el estado y uso del Heap del Kernel\n");
         kprintf("  ls               - Lista los archivos almacenados en RAMFS\n");
         kprintf("  cat <archivo>    - Muestra el contenido de un archivo de texto\n");
+        kprintf("  rules            - Lista las reglas de automatizacion activas\n");
         kprintf("  profile [0-3]    - Cambia el perfil activo del usuario\n");
         kprintf("  arduino ping     - Comprueba conectividad con la placa\n");
         kprintf("  arduino led on   - Enciende el LED de la placa\n");
         kprintf("  arduino led off  - Apaga el LED de la placa\n");
         kprintf("  arduino temp     - Lee la temperatura actual del sensor\n");
+        kprintf("  arduino auto     - Evalua reglas de automatizacion segun sensor\n");
         kprintf("  arduino log      - Registra la lectura actual en RAMFS (telemetria.log)\n");
         kprintf("  arduino status   - Muestra estadisticas de paquetes y errores\n");
     } else if (k_strcmp(cmd, "clear") == 0) {
@@ -49,7 +52,7 @@ void shell_execute(const char* cmd) {
         vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
         kprintf("NOVA OS v0.1 (Experimental Academic Edition - Octubre 2026)\n");
         kprintf("Arquitectura: x86_32 Modo Protegido (Ring 0 / Ring 3)\n");
-        kprintf("Syscalls: Int 0x80 habilitada | FS: RAMFS Integrado\n");
+        kprintf("Syscalls: Int 0x80 | FS: RAMFS | Motor: Reglas IoT\n");
         kprintf("Perfil activo: %s\n", profile_names[current_profile]);
     } else if (k_strcmp(cmd, "mem") == 0) {
         vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
@@ -58,6 +61,8 @@ void shell_execute(const char* cmd) {
         kprintf("  Memoria libre:  %u bytes\n", kheap_get_free());
     } else if (k_strcmp(cmd, "ls") == 0) {
         ramfs_list();
+    } else if (k_strcmp(cmd, "rules") == 0) {
+        rules_engine_list();
     } else if (k_strncmp(cmd, "cat ", 4) == 0) {
         const char* filename = cmd + 4;
         uint8_t buffer[512];
@@ -117,6 +122,17 @@ void shell_execute(const char* cmd) {
                 vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK));
                 kprintf("[ERROR AL LEER SENSOR]\n");
             }
+        } else if (k_strcmp(cmd, "arduino auto") == 0) {
+            uint16_t temp = 0;
+            kprintf("[*] Leyendo sensor y evaluando reglas de automatizacion... ");
+            if (nova_iot_get_temp(&temp)) {
+                rules_engine_evaluate(temp);
+                vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
+                kprintf("[OK: %u.%u C procesados]\n", temp / 10, temp % 10);
+            } else {
+                vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK));
+                kprintf("[ERROR AL LEER SENSOR]\n");
+            }
         } else if (k_strcmp(cmd, "arduino log") == 0) {
             uint16_t temp = 0;
             if (nova_iot_get_temp(&temp)) {
@@ -126,7 +142,6 @@ void shell_execute(const char* cmd) {
                 uitoa(temp / 10, num1, 10);
                 uitoa(temp % 10, num2, 10);
                 
-                // Formatear: "Sensor Temp: X.Y C\n"
                 size_t idx = 0;
                 const char* prefix = "Sensor Temp: ";
                 for (size_t i = 0; prefix[i]; i++) log_entry[idx++] = prefix[i];

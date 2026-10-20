@@ -34,6 +34,7 @@ SRCS_C = kernel/kernel.c \
          kernel/drivers/serial.c \
          kernel/drivers/pit.c \
          kernel/drivers/ramfs.c \
+         kernel/drivers/rules_engine.c \
          kernel/drivers/keyboard.c \
          kernel/drivers/nova_iot.c \
          kernel/drivers/shell.c \
@@ -69,7 +70,7 @@ clean:
 # Ejecutar suite de pruebas lógicas y unitarias nativas
 test:
 	@echo "=== Compilando y ejecutando Test Suite de NOVA OS ==="
-	clang -Wall -Wextra -Ikernel/include tests/mocks/mock_hw.c kernel/lib/klib.c kernel/lib/kheap.c kernel/drivers/ramfs.c tests/unit/test_suite.c -o bin_test
+	clang -Wall -Wextra -Ikernel/include tests/mocks/mock_hw.c kernel/lib/klib.c kernel/lib/kheap.c kernel/drivers/ramfs.c kernel/drivers/rules_engine.c tests/unit/test_suite.c -o bin_test
 	./bin_test
 
 # Regla de prueba con emulador QEMU

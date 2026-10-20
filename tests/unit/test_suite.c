@@ -6,6 +6,7 @@
 #include "klib.h"
 #include "kheap.h"
 #include "ramfs.h"
+#include "rules_engine.h"
 #include "nova_link.h"
 #include "nova_iot.h"
 
@@ -22,6 +23,13 @@ void vga_set_color(uint8_t color) {
 uint8_t vga_entry_color(int fg, int bg) {
     (void)fg; (void)bg;
     return 0x07;
+}
+
+// Mock de nova_iot_set_led para pruebas del motor de reglas
+static bool mock_led_value = false;
+bool nova_iot_set_led(bool state) {
+    mock_led_value = state;
+    return true;
 }
 
 static int tests_passed = 0;
@@ -89,13 +97,11 @@ void test_ramfs(void) {
     printf("[*] Ejecutando: test_ramfs...\n");
     ramfs_init();
 
-    // Comprobar archivo por defecto creado en ramfs_init
     uint8_t read_buf[256];
     k_memset(read_buf, 0, sizeof(read_buf));
     int bytes = ramfs_read("bienvenida.txt", read_buf, sizeof(read_buf) - 1);
     TEST_ASSERT(bytes > 0, "Archivo bienvenida.txt existe y tiene contenido");
 
-    // Crear y escribir un archivo de prueba
     int res = ramfs_create("sensor_test.dat");
     TEST_ASSERT(res == 0, "Creacion de nuevo archivo sensor_test.dat");
 
@@ -108,14 +114,34 @@ void test_ramfs(void) {
     TEST_ASSERT(bytes == (int)k_strlen(data_to_write), "Lectura de contenido de archivo coincide con lo escrito");
     TEST_ASSERT(k_strcmp((const char*)read_buf, data_to_write) == 0, "Integridad de los datos leidos comprobada");
 
-    // Borrado de archivo
     int del = ramfs_delete("sensor_test.dat");
     TEST_ASSERT(del == 0, "Borrado de archivo exitoso");
     bytes = ramfs_read("sensor_test.dat", read_buf, sizeof(read_buf) - 1);
     TEST_ASSERT(bytes < 0, "Archivo borrado ya no puede ser leido");
 }
 
-/* Test 4: Simulación de conversación bidireccional NOVA-Link */
+/* Test 4: Motor de Reglas y Automatización SI-ENTONCES */
+void test_rules_engine(void) {
+    printf("[*] Ejecutando: test_rules_engine...\n");
+    rules_engine_init(); // Contiene regla: Si Temp > 30.0 C (300 decicelsius) -> LED ON
+
+    // Caso A: Temperatura normal (25.0 C = 250) -> No debe disparar la regla
+    mock_led_value = false;
+    rules_engine_evaluate(250);
+    TEST_ASSERT(mock_led_value == false, "Temperatura normal (25.0 C) no activa alarma");
+
+    // Caso B: Temperatura umbral excedida (32.5 C = 325) -> Debe disparar la regla
+    rules_engine_evaluate(325);
+    TEST_ASSERT(mock_led_value == true, "Temperatura critica (32.5 C) activa actuador LED por automatizacion");
+
+    // Comprobar que la regla generó un registro de alerta en RAMFS
+    uint8_t alert_log[128];
+    k_memset(alert_log, 0, sizeof(alert_log));
+    int b = ramfs_read("alertas.log", alert_log, sizeof(alert_log) - 1);
+    TEST_ASSERT(b > 0, "Registro de alerta guardado en RAMFS (alertas.log)");
+}
+
+/* Test 5: Simulación de conversación bidireccional NOVA-Link */
 void test_bidirectional_simulation(void) {
     printf("[*] Ejecutando: test_bidirectional_simulation...\n");
 
@@ -132,7 +158,7 @@ void test_bidirectional_simulation(void) {
     TEST_ASSERT(corrupted_frame[3] != corrupted_calc, "Deteccion y rechazo exitoso de trama corrompida");
 }
 
-/* Test 5: Validación de estructuras de protección de CPU x86 */
+/* Test 6: Validación de estructuras de protección de CPU x86 */
 void test_x86_structures(void) {
     printf("[*] Ejecutando: test_x86_structures...\n");
     struct gdt_mock {
@@ -163,6 +189,7 @@ int main(void) {
     test_klib_strings();
     test_kheap_allocator();
     test_ramfs();
+    test_rules_engine();
     test_bidirectional_simulation();
     test_x86_structures();
 
