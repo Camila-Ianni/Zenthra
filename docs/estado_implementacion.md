@@ -19,47 +19,47 @@ Este documento consolida el estado técnico del sistema operativo experimental *
 ### 2.2 Almacenamiento y Sistema de Archivos
 - **RAMFS (In-Memory Filesystem)**: En [`kernel/drivers/ramfs.c`](file:///Users/cami/Desktop/NOVA/kernel/drivers/ramfs.c), estructura para almacenar y consultar archivos en memoria RAM (`ramfs_create`, `ramfs_write`, `ramfs_read`, `ramfs_delete`, `ramfs_list`). Permite el registro y persistencia en sesión de telemetría de Arduino (`telemetria.log`), alertas del sistema (`alertas.log`) y binarios/metadatos de aplicaciones instaladas (`app_<id>`).
 
-### 2.3 Centro de Aplicaciones y Gestor de Paquetes
-- **NOVA Store ([`pkg_manager.c`](file:///Users/cami/Desktop/NOVA/kernel/drivers/pkg_manager.c) / [`pkg_manager.h`](file:///Users/cami/Desktop/NOVA/kernel/include/pkg_manager.h))**: Catálogo modular de aplicaciones con soporte para perfiles:
-  - Catálogo con nombre, versión, tamaño, descripción y perfil objetivo (`Estudiante`, `Desarrollador`, `Hardware/IoT`, `General`).
-  - Motor de recomendación de paquetes contextual según el perfil activo del usuario.
-  - Flujo demostrable de instalación y desinstalación que crea y retira los archivos correspondientes en RAMFS.
+### 2.3 Perfiles de Usuario y Auto-Aprovisionamiento (11 Perfiles)
+NOVA OS implementa **11 perfiles de usuario** especializados. Cada perfil cuenta con su propio lote de aplicaciones que se auto-descargan e instalan automáticamente en el sistema de archivos al seleccionarlo:
 
-### 2.4 Automatización y Motor de Reglas
-- **Rules Engine (Motor SI-ENTONCES)**: En [`kernel/drivers/rules_engine.c`](file:///Users/cami/Desktop/NOVA/kernel/drivers/rules_engine.c) y [`kernel/include/rules_engine.h`](file:///Users/cami/Desktop/NOVA/kernel/include/rules_engine.h). Permite evaluar en tiempo real condiciones de umbral de sensores y disparar acciones automáticas sobre actuadores (como encendido/apagado de LED/ventilador) y registro de incidencias, cubriendo el requerimiento de automatización de la propuesta.
+| # | Perfil | Herramientas Auto-Aprovisionadas | Propósito |
+|---|---|---|---|
+| **0** | **General** | `calc`, `media-player` | Uso básico diario, explorador y multimedia |
+| **1** | **Estudiante** | `office` (Suite Office), `pdf-reader` (Lector PDF), `flashcards` (Anki Cards) | Estudio, apuntes, lecturas y preparación de exámenes |
+| **2** | **Frontend Developer** | `figma` (UI/UX), `vscode` (Editor de Código), `nodejs` (Runtime JS), `dev-browser` | Desarrollo web cliente, prototipado e inspección de interfaces |
+| **3** | **Backend Developer** | `docker` (Contenedores), `postgres` (Cliente DB), `api-postman` (APIs REST), `git-cli` | Microservicios, bases de datos y control de versiones |
+| **4** | **Fullstack Developer** | `fullstack-sdk` (SDKs C/Rust/Node), `terminal-pro` (Terminal avanzada) | Entorno integral de desarrollo frontend y backend |
+| **5** | **Diseñador / Creativo** | `vector-draw` (Ilustración), `photo-editor` (Retoque), `font-manager` (Tipografías) | Edición visual, recursos gráficos y paletas |
+| **6** | **Hardware / IoT** | `arduino-ide` (Studio Arduino), `serial-mon` (Analizador UART), `relay-ctl` (Reles) | Conexión, flasheo y experimentación física con microcontroladores |
+| **7** | **Data Scientist / IA** | `jupyter-nb` (Notebooks interactivos), `stats-plot` (Gráficos estadísticos) | Análisis exploratorio, ciencia de datos y visualización |
+| **8** | **Ciberseguridad** | `net-scanner` (Auditor de puertos), `pkt-analyzer` (Sniffer de red) | Análisis de tráfico de red y auditoría de seguridad |
+| **9** | **Ofimática / Oficina** | `calc-pro` (Planillas avanzadas), `invoice-mgr` (Facturación y contabilidad) | Administración comercial y gestión de documentos |
+| **10**| **Gamer / Streamer** | `game-launcher` (GameHub optimizado), `stream-obs` (Captura y streaming OBS) | Lanzador de videojuegos y transmisión de pantalla |
 
-### 2.5 Controladores y Entrada/Salida
-- **VGA Text Mode Driver**: En [`kernel/drivers/vga.c`](file:///Users/cami/Desktop/NOVA/kernel/drivers/vga.c), gestión directa del buffer en `0xB8000`, scrolling vertical automático y actualización del cursor físico mediante puertos `0x3D4` y `0x3D5`.
-- **Serial Driver (UART 16550A)**: En [`kernel/drivers/serial.c`](file:///Users/cami/Desktop/NOVA/kernel/drivers/serial.c), configuración en `COM1 (0x3F8)` a 38400 baudios, 8N1, con verificación previa por loopback.
-- **Keyboard Driver (PS/2)**: En [`kernel/drivers/keyboard.c`](file:///Users/cami/Desktop/NOVA/kernel/drivers/keyboard.c), decodificación de scan codes a ASCII con modo no bloqueante.
+### 2.4 Centro de Aplicaciones (NOVA Store)
+- Catálogo ampliado a más de 25 herramientas nativas.
+- Función `pkg_provision_profile(profile)` que instala en masa las herramientas al elegir o cambiar de perfil.
 
-### 2.6 Interfaz de Usuario y Perfiles
-- **NOVA Shell**: En [`kernel/drivers/shell.c`](file:///Users/cami/Desktop/NOVA/kernel/drivers/shell.c), intérprete de comandos con soporte para:
-  - `help`: Lista de comandos disponibles.
-  - `info`: Información de arquitectura y versión.
-  - `clear`: Limpieza de la pantalla VGA.
-  - `mem`: Monitoreo en vivo de memoria usada y libre en el Heap.
-  - `ls`: Listado de archivos en RAMFS.
-  - `cat <archivo>`: Visualización de archivos en consola.
-  - `store search`: Explorador del catálogo completo de NOVA Store.
-  - `store list`: Lista de aplicaciones instaladas en el sistema.
-  - `store rec`: Muestra recomendaciones de aplicaciones según el perfil del usuario.
-  - `store install <id>`: Instala un paquete y registra su entrada en RAMFS.
-  - `store remove <id>`: Desinstala un paquete del sistema.
-  - `rules`: Listado de reglas de automatización y su contador de activaciones.
-  - `profile <0..3>`: Conmutación en tiempo real entre perfiles (`General`, `Estudiante`, `Desarrollador`, `Hardware/IoT`) con recomendaciones automáticas.
-  - `arduino ping | led on | led off | temp | auto | log | status`: Interacción, control, automatización y telemetría con la placa.
+### 2.5 Automatización y Motor de Reglas
+- **Rules Engine (Motor SI-ENTONCES)**: En [`kernel/drivers/rules_engine.c`](file:///Users/cami/Desktop/NOVA/kernel/drivers/rules_engine.c). Evaluación de umbrales térmicos y disparo de actuadores físicos en Arduino.
 
-### 2.7 Integración Física con Arduino
-- **Protocolo NOVA-Link**: En [`kernel/include/nova_link.h`](file:///Users/cami/Desktop/NOVA/kernel/include/nova_link.h). Formato de paquete: `[MAGIC (0xAA)] [CMD] [LEN] [PAYLOAD...] [CHECKSUM XOR]`.
-- **Servicio `nova_iot`**: En [`kernel/drivers/nova_iot.c`](file:///Users/cami/Desktop/NOVA/kernel/drivers/nova_iot.c), centraliza la validación, empaquetado, recepción con timeout y conteo de errores de integridad.
-- **Firmware Receptor**: En [`arduino/nova_link/nova_firmware.ino`](file:///Users/cami/Desktop/NOVA/arduino/nova_link/nova_firmware.ino), compatible con Arduino Uno/Nano/Mega para actuar sobre el pin digital 13 y leer sensores analógicos en `A0`.
+### 2.6 Controladores y Entrada/Salida
+- **VGA Text Mode Driver**: En [`kernel/drivers/vga.c`](file:///Users/cami/Desktop/NOVA/kernel/drivers/vga.c), gestión en `0xB8000` con scroll vertical y cursor físico.
+- **Serial Driver (UART 16550A)**: En [`kernel/drivers/serial.c`](file:///Users/cami/Desktop/NOVA/kernel/drivers/serial.c), configuración en `COM1 (0x3F8)` a 38400 baudios, 8N1.
+- **Keyboard Driver (PS/2)**: En [`kernel/drivers/keyboard.c`](file:///Users/cami/Desktop/NOVA/kernel/drivers/keyboard.c), decodificación de scan codes a ASCII.
+
+### 2.7 Interfaz de Usuario y Comandos
+- `help`: Lista completa de utilidades.
+- `profiles`: Presenta los 11 perfiles detallando su propósito.
+- `profile <0..10>`: Cambia de entorno y auto-descarga todas las aplicaciones correspondientes.
+- `store search | list | rec | install <id> | remove <id>`: Operaciones de tienda.
+- `arduino ping | led on | led off | temp | auto | log | status`: Telemetría e integración Arduino.
 
 ---
 
 ## 3. Pruebas Automatizadas y Validación
 
-Se ejecutó la suite de pruebas unitarias y de simulación mediante `make test`:
+Se ejecutó la suite de pruebas mediante `make test`:
 
 ```
 ====================================================
@@ -90,9 +90,20 @@ Se ejecutó la suite de pruebas unitarias y de simulación mediante `make test`:
   [PASS] Integridad de los datos leidos comprobada
   [PASS] Borrado de archivo exitoso
   [PASS] Archivo borrado ya no puede ser leido
+[*] Ejecutando: test_profile_provisioning...
+  [PASS] Existen al menos 11 perfiles de usuario definidos
+  [PASS] Perfil Estudiante aprovisiona 3 apps de estudio
+  [PASS] App 'office' presente en RAMFS tras seleccion de perfil Estudiante
+  [PASS] Perfil Frontend aprovisiona 4 herramientas (figma, vscode, nodejs, browser)
+  [PASS] App 'figma' presente en RAMFS
+  [PASS] App 'vscode' presente en RAMFS
+  [PASS] Perfil Backend aprovisiona 4 herramientas (docker, postgres, api-postman, git)
+  [PASS] App 'docker' presente en RAMFS
+  [PASS] Perfil Gamer aprovisiona suite de juegos y OBS
+  [PASS] App 'stream-obs' presente en RAMFS
 [*] Ejecutando: test_package_manager...
-  [PASS] Instalacion exitosa de paquete 'telemetry'
-  [PASS] Paquete instalado crea entrada binaria en RAMFS (app_telemetry)
+  [PASS] Instalacion exitosa de paquete 'arduino-ide'
+  [PASS] Paquete instalado crea entrada binaria en RAMFS (app_arduino-ide)
   [PASS] Deteccion de aplicacion ya instalada
   [PASS] Desinstalacion exitosa de paquete
   [PASS] Entrada de app retirada de RAMFS tras desinstalacion
@@ -110,12 +121,7 @@ Se ejecutó la suite de pruebas unitarias y de simulación mediante `make test`:
   [PASS] Descriptor IDT tiene tamano estandar x86 (8 bytes)
 
 ----------------------------------------------------
-Resultados: 35 Aprobados | 0 Fallidos
+Resultados: 45 Aprobados | 0 Fallidos
 ----------------------------------------------------
 [+] Todas las pruebas pasaron satisfactoriamente.
 ```
-
----
-
-## 4. Pipeline de CI/CD
-Se configuró un flujo en [`.github/workflows/ci.yml`](file:///Users/cami/Desktop/NOVA/.github/workflows/ci.yml) para ejecutar automáticamente las pruebas y compilaciones en cada push o pull request.

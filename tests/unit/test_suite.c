@@ -5,6 +5,7 @@
 #include "ktypes.h"
 #include "klib.h"
 #include "kheap.h"
+#include "task.h"
 #include "ramfs.h"
 #include "rules_engine.h"
 #include "pkg_manager.h"
@@ -74,7 +75,7 @@ void test_klib_strings(void) {
 /* Test 2: Gestor de memoria dinámica kheap */
 void test_kheap_allocator(void) {
     printf("[*] Ejecutando: test_kheap_allocator...\n");
-    static uint8_t memory_pool[8192] __attribute__((aligned(16)));
+    static uint8_t memory_pool[16384] __attribute__((aligned(16)));
     kheap_init(memory_pool, sizeof(memory_pool));
 
     size_t initial_free = kheap_get_free();
@@ -94,7 +95,34 @@ void test_kheap_allocator(void) {
     TEST_ASSERT(kheap_get_free() == initial_free, "Coalescencia de bloques contiguos restaura el espacio original");
 }
 
-/* Test 3: Sistema de Archivos en Memoria (RAMFS) */
+static void dummy_worker(void) {}
+
+/* Test 3: Planificador Multitarea (Scheduler & PCB) */
+void test_multitasking_scheduler(void) {
+    printf("[*] Ejecutando: test_multitasking_scheduler...\n");
+    scheduler_init();
+
+    struct task* cur = task_get_current();
+    TEST_ASSERT(cur != NULL, "Obtencion de la tarea actual en ejecucion");
+    TEST_ASSERT(cur->state == TASK_RUNNING, "La tarea principal del kernel esta en estado RUNNING");
+    TEST_ASSERT(k_strcmp(cur->name, "kernel_shell") == 0, "Nombre de la tarea 0 es kernel_shell");
+
+    // Creación de una tarea secundaria
+    int pid = task_create("worker_task", dummy_worker);
+    TEST_ASSERT(pid > 0, "Creacion exitosa de tarea worker_task con PID valido");
+
+    // Alternar contexto cooperativo (yield)
+    task_yield();
+    struct task* new_cur = task_get_current();
+    TEST_ASSERT(new_cur != NULL && new_cur->id == (uint32_t)pid, "task_yield conmuta al worker_task");
+    TEST_ASSERT(new_cur->state == TASK_RUNNING, "Nueva tarea conmutada a estado RUNNING");
+
+    // Regresar al kernel_shell
+    task_yield();
+    TEST_ASSERT(task_get_current()->id == 1, "task_yield regresa a la tarea principal kernel_shell (Round-Robin)");
+}
+
+/* Test 4: Sistema de Archivos en Memoria (RAMFS) */
 void test_ramfs(void) {
     printf("[*] Ejecutando: test_ramfs...\n");
     ramfs_init();
@@ -122,38 +150,33 @@ void test_ramfs(void) {
     TEST_ASSERT(bytes < 0, "Archivo borrado ya no puede ser leido");
 }
 
-/* Test 4: Validación de los 11 Perfiles y Auto-Aprovisionamiento */
+/* Test 5: Validación de los 11 Perfiles y Auto-Aprovisionamiento */
 void test_profile_provisioning(void) {
     printf("[*] Ejecutando: test_profile_provisioning...\n");
     pkg_init();
 
-    // Comprobar que existen al menos 11 perfiles
     TEST_ASSERT(PROFILE_COUNT >= 11, "Existen al menos 11 perfiles de usuario definidos");
 
-    // Probar auto-aprovisionamiento para Estudiante (debe instalar office, pdf-reader, flashcards)
     int student_installed = pkg_provision_profile(PROFILE_STUDENT);
     TEST_ASSERT(student_installed == 3, "Perfil Estudiante aprovisiona 3 apps de estudio");
     uint8_t buf[64];
     TEST_ASSERT(ramfs_read("app_office", buf, sizeof(buf)) > 0, "App 'office' presente en RAMFS tras seleccion de perfil Estudiante");
 
-    // Probar auto-aprovisionamiento para Front-end Developer (debe instalar vscode, figma, nodejs, dev-browser)
     int fe_installed = pkg_provision_profile(PROFILE_FRONTEND);
     TEST_ASSERT(fe_installed == 4, "Perfil Frontend aprovisiona 4 herramientas (figma, vscode, nodejs, browser)");
     TEST_ASSERT(ramfs_read("app_figma", buf, sizeof(buf)) > 0, "App 'figma' presente en RAMFS");
     TEST_ASSERT(ramfs_read("app_vscode", buf, sizeof(buf)) > 0, "App 'vscode' presente en RAMFS");
 
-    // Probar auto-aprovisionamiento para Back-end Developer (docker, postgres, etc.)
     int be_installed = pkg_provision_profile(PROFILE_BACKEND);
     TEST_ASSERT(be_installed == 4, "Perfil Backend aprovisiona 4 herramientas (docker, postgres, api-postman, git)");
     TEST_ASSERT(ramfs_read("app_docker", buf, sizeof(buf)) > 0, "App 'docker' presente en RAMFS");
 
-    // Probar auto-aprovisionamiento para Gamer/Streamer (game-launcher, stream-obs)
     int gamer_installed = pkg_provision_profile(PROFILE_GAMER_STREAMER);
     TEST_ASSERT(gamer_installed == 2, "Perfil Gamer aprovisiona suite de juegos y OBS");
     TEST_ASSERT(ramfs_read("app_stream-obs", buf, sizeof(buf)) > 0, "App 'stream-obs' presente en RAMFS");
 }
 
-/* Test 5: Gestor de Paquetes y Tienda (NOVA Store) */
+/* Test 6: Gestor de Paquetes y Tienda (NOVA Store) */
 void test_package_manager(void) {
     printf("[*] Ejecutando: test_package_manager...\n");
     pkg_init();
@@ -175,7 +198,7 @@ void test_package_manager(void) {
     TEST_ASSERT(bytes < 0, "Entrada de app retirada de RAMFS tras desinstalacion");
 }
 
-/* Test 6: Motor de Reglas y Automatización SI-ENTONCES */
+/* Test 7: Motor de Reglas y Automatización SI-ENTONCES */
 void test_rules_engine(void) {
     printf("[*] Ejecutando: test_rules_engine...\n");
     rules_engine_init();
@@ -193,7 +216,7 @@ void test_rules_engine(void) {
     TEST_ASSERT(b > 0, "Registro de alerta guardado en RAMFS (alertas.log)");
 }
 
-/* Test 7: Simulación de conversación bidireccional NOVA-Link */
+/* Test 8: Simulación de conversación bidireccional NOVA-Link */
 void test_bidirectional_simulation(void) {
     printf("[*] Ejecutando: test_bidirectional_simulation...\n");
 
@@ -210,7 +233,7 @@ void test_bidirectional_simulation(void) {
     TEST_ASSERT(corrupted_frame[3] != corrupted_calc, "Deteccion y rechazo exitoso de trama corrompida");
 }
 
-/* Test 8: Validación de estructuras de protección de CPU x86 */
+/* Test 9: Validación de estructuras de protección de CPU x86 */
 void test_x86_structures(void) {
     printf("[*] Ejecutando: test_x86_structures...\n");
     struct gdt_mock {
@@ -240,6 +263,7 @@ int main(void) {
 
     test_klib_strings();
     test_kheap_allocator();
+    test_multitasking_scheduler();
     test_ramfs();
     test_profile_provisioning();
     test_package_manager();

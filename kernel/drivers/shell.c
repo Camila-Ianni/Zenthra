@@ -7,6 +7,7 @@
 #include "ramfs.h"
 #include "rules_engine.h"
 #include "pkg_manager.h"
+#include "task.h"
 
 #define LINE_MAX 80
 
@@ -77,6 +78,7 @@ void shell_execute(const char* cmd) {
         kprintf("  clear                - Limpia la pantalla de la consola\n");
         kprintf("  info                 - Informacion y version del sistema operativo\n");
         kprintf("  mem                  - Muestra el estado y uso del Heap del Kernel\n");
+        kprintf("  ps                   - Lista los procesos y tareas activas del sistema\n");
         kprintf("  ls                   - Lista los archivos almacenados en RAMFS\n");
         kprintf("  cat <archivo>        - Muestra el contenido de un archivo de texto\n");
         kprintf("  profiles             - Lista los 11 perfiles de usuario disponibles\n");
@@ -100,6 +102,7 @@ void shell_execute(const char* cmd) {
         vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
         kprintf("NOVA OS v0.1 (Experimental Academic Edition - Octubre 2026)\n");
         kprintf("Arquitectura: x86_32 Modo Protegido (Ring 0 / Ring 3)\n");
+        kprintf("Multitarea: Planificador Round-Robin / Tareas Cooperativas\n");
         kprintf("Syscalls: Int 0x80 | FS: RAMFS | Store: NOVA Store | IoT: NOVA-Link\n");
         kprintf("Perfil activo actual: %s (#%u)\n", profile_names[current_profile], (uint32_t)current_profile);
     } else if (k_strcmp(cmd, "mem") == 0) {
@@ -107,6 +110,8 @@ void shell_execute(const char* cmd) {
         kprintf("Estado del Kernel Heap:\n");
         kprintf("  Memoria en uso: %u bytes\n", kheap_get_used());
         kprintf("  Memoria libre:  %u bytes\n", kheap_get_free());
+    } else if (k_strcmp(cmd, "ps") == 0) {
+        task_list();
     } else if (k_strcmp(cmd, "ls") == 0) {
         ramfs_list();
     } else if (k_strcmp(cmd, "profiles") == 0) {

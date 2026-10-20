@@ -7,6 +7,7 @@
 #include "pit.h"
 #include "syscall.h"
 #include "kheap.h"
+#include "task.h"
 #include "ramfs.h"
 #include "rules_engine.h"
 #include "pkg_manager.h"
@@ -27,6 +28,17 @@ struct multiboot_info {
 
 #define KHEAP_START 0x00400000
 #define KHEAP_SIZE  (2 * 1024 * 1024) // 2 MiB de Heap inicial
+
+/* Tarea de fondo de diagnóstico continuo de sensores IoT */
+static void background_sensor_daemon(void) {
+    while (1) {
+        uint16_t temp = 0;
+        if (nova_iot_get_temp(&temp)) {
+            rules_engine_evaluate(temp);
+        }
+        task_yield();
+    }
+}
 
 void kernel_main(uint32_t magic, struct multiboot_info* mbi) {
     // 1. Inicializar pantalla VGA en modo texto
@@ -74,40 +86,48 @@ void kernel_main(uint32_t magic, struct multiboot_info* mbi) {
     vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
     kprintf("[OK]\n");
 
-    // 8. Inicializar sistema de archivos en memoria (RAMFS)
+    // 8. Inicializar planificador de tareas (Scheduler Round-Robin)
+    vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
+    kprintf("[*] Inicializando Planificador Multitarea (Scheduler)... ");
+    scheduler_init();
+    task_create("iot_daemon", background_sensor_daemon);
+    vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
+    kprintf("[OK]\n");
+
+    // 9. Inicializar sistema de archivos en memoria (RAMFS)
     vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
     kprintf("[*] Montando sistema de archivos RAMFS... ");
     ramfs_init();
     vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
     kprintf("[OK]\n");
 
-    // 9. Inicializar catálogo y tienda de aplicaciones (NOVA Store)
+    // 10. Inicializar catálogo y tienda de aplicaciones (NOVA Store)
     vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
-    kprintf("[*] Inicializando catalogo NOVA Store... ");
+    kprintf("[*] Inicializando catalogo NOVA Store (11 Perfiles)... ");
     pkg_init();
     vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
     kprintf("[OK]\n");
 
-    // 10. Inicializar motor de automatización y reglas IoT
+    // 11. Inicializar motor de automatización y reglas IoT
     vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
     kprintf("[*] Cargando motor de reglas IoT... ");
     rules_engine_init();
     vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
     kprintf("[OK]\n");
 
-    // 11. Inicializar driver serial (COM1) para log de depuración
+    // 12. Inicializar driver serial (COM1) para log de depuración
     vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
     kprintf("[*] Inicializando puerto serie COM1 (UART 16550A)... ");
     if (serial_init() == 0) {
         vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
         kprintf("[OK]\n");
-        serial_write_string("\r\n[NOVA OS SERIAL LOG] Kernel iniciado con GDT, IDT, PIT, Syscalls, Heap, RAMFS, Store y Rules Engine.\r\n");
+        serial_write_string("\r\n[NOVA OS SERIAL LOG] Kernel iniciado con Multitarea, Heap, Syscalls, Store y 11 Perfiles.\r\n");
     } else {
         vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK));
         kprintf("[FALLO O SIN HARDWARE]\n");
     }
 
-    // 12. Verificar firma mágica de arranque Multiboot (0x2BADB002)
+    // 13. Verificar firma mágica de arranque Multiboot (0x2BADB002)
     vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
     kprintf("[*] Verificando arranque Multiboot... ");
     if (magic == 0x2BADB002) {
@@ -118,14 +138,14 @@ void kernel_main(uint32_t magic, struct multiboot_info* mbi) {
         kprintf("[ADVERTENCIA] Bootloader no estandar (0x%x)\n", magic);
     }
 
-    // 13. Diagnóstico de memoria si está disponible en Multiboot
+    // 14. Diagnóstico de memoria si está disponible en Multiboot
     if (mbi && (mbi->flags & 1)) {
         vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREY, VGA_COLOR_BLACK));
         kprintf("[*] Memoria convencional baja: %u KiB | Alta: %u KiB (~%u MiB)\n", 
                 mbi->mem_lower, mbi->mem_upper, mbi->mem_upper / 1024);
     }
 
-    // 14. Inicializar periféricos y subsistemas de usuario
+    // 15. Inicializar periféricos y subsistemas de usuario
     keyboard_init();
     nova_iot_init();
 
@@ -135,11 +155,12 @@ void kernel_main(uint32_t magic, struct multiboot_info* mbi) {
     vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
     kprintf("\n[>] Sistema operativo preparado. Iniciando NOVA Shell.\n\n");
 
-    // 15. Iniciar shell interactivo
+    // 16. Iniciar shell interactivo
     shell_init();
 
-    // 16. Bucle principal del sistema
+    // 17. Bucle principal del sistema con multiplexación de tareas
     while (1) {
         shell_step();
+        task_yield();
     }
 }
