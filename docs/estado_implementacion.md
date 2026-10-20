@@ -13,6 +13,7 @@ Este documento consolida el estado técnico del sistema operativo experimental *
 - **GDT (Global Descriptor Table)**: Configuración en [`kernel/arch/x86/gdt.c`](file:///Users/cami/Desktop/NOVA/kernel/arch/x86/gdt.c) con 5 descriptores: Nulo, Código Kernel (Ring 0), Datos Kernel (Ring 0), Código Usuario (Ring 3) y Datos Usuario (Ring 3).
 - **IDT (Interrupt Descriptor Table)**: Tabla de 256 descriptores en [`kernel/arch/x86/idt.c`](file:///Users/cami/Desktop/NOVA/kernel/arch/x86/idt.c) con remapeo del controlador PIC 8259 (IRQs 0-15 a los vectores 32-47).
 - **PIT 8254 (Programmable Interval Timer)**: En [`kernel/drivers/pit.c`](file:///Users/cami/Desktop/NOVA/kernel/drivers/pit.c), generador de onda cuadrada a 100 Hz conectado a IRQ0 (Vector 32) para conteo de ticks y función de retardo `pit_sleep(ms)`.
+- **Planificador Multitarea (Scheduler & PCB)**: En [`kernel/drivers/task.c`](file:///Users/cami/Desktop/NOVA/kernel/drivers/task.c) y [`kernel/include/task.h`](file:///Users/cami/Desktop/NOVA/kernel/include/task.h). Soporte para Bloque de Control de Proceso (PCB), creación dinámica de tareas con pila independiente (`task_create`), alternancia de contexto Round-Robin (`task_yield`), ciclo de vida (`TASK_READY`, `TASK_RUNNING`, `TASK_SLEEPING`, `TASK_TERMINATED`) y tarea de fondo demonio (`iot_daemon`).
 - **Syscalls (Int 0x80)**: Despachador en [`kernel/arch/x86/syscall.c`](file:///Users/cami/Desktop/NOVA/kernel/arch/x86/syscall.c) para invocación segura de servicios desde espacio de usuario (`SYS_WRITE`, `SYS_ARDUINO_CMD`).
 - **Kernel Heap (`kmalloc`/`kfree`)**: En [`kernel/lib/kheap.c`](file:///Users/cami/Desktop/NOVA/kernel/lib/kheap.c), asignador dinámico de memoria *First-Fit* con coalescencia de bloques liberados contiguos, ubicado a partir de los 4MB de memoria física.
 
@@ -50,9 +51,11 @@ NOVA OS implementa **11 perfiles de usuario** especializados. Cada perfil cuenta
 
 ### 2.7 Interfaz de Usuario y Comandos
 - `help`: Lista completa de utilidades.
+- `ps`: Muestra la tabla de procesos y tareas en ejecución (PID, nombre, estado, ticks consumidos).
 - `profiles`: Presenta los 11 perfiles detallando su propósito.
 - `profile <0..10>`: Cambia de entorno y auto-descarga todas las aplicaciones correspondientes.
 - `store search | list | rec | install <id> | remove <id>`: Operaciones de tienda.
+- `rules`: Listado de reglas activas de automatización.
 - `arduino ping | led on | led off | temp | auto | log | status`: Telemetría e integración Arduino.
 
 ---
@@ -82,6 +85,14 @@ Se ejecutó la suite de pruebas mediante `make test`:
   [PASS] kmalloc asigna un segundo bloque contiguo y diferenciado
   [PASS] kfree libera y decrementa memoria ocupada
   [PASS] Coalescencia de bloques contiguos restaura el espacio original
+[*] Ejecutando: test_multitasking_scheduler...
+  [PASS] Obtencion de la tarea actual en ejecucion
+  [PASS] La tarea principal del kernel esta en estado RUNNING
+  [PASS] Nombre de la tarea 0 es kernel_shell
+  [PASS] Creacion exitosa de tarea worker_task con PID valido
+  [PASS] task_yield conmuta al worker_task
+  [PASS] Nueva tarea conmutada a estado RUNNING
+  [PASS] task_yield regresa a la tarea principal kernel_shell (Round-Robin)
 [*] Ejecutando: test_ramfs...
   [PASS] Archivo bienvenida.txt existe y tiene contenido
   [PASS] Creacion de nuevo archivo sensor_test.dat
@@ -121,7 +132,7 @@ Se ejecutó la suite de pruebas mediante `make test`:
   [PASS] Descriptor IDT tiene tamano estandar x86 (8 bytes)
 
 ----------------------------------------------------
-Resultados: 45 Aprobados | 0 Fallidos
+Resultados: 52 Aprobados | 0 Fallidos
 ----------------------------------------------------
 [+] Todas las pruebas pasaron satisfactoriamente.
 ```

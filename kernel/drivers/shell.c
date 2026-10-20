@@ -8,6 +8,7 @@
 #include "rules_engine.h"
 #include "pkg_manager.h"
 #include "task.h"
+#include "acl_security.h"
 
 #define LINE_MAX 80
 
@@ -77,6 +78,7 @@ void shell_execute(const char* cmd) {
         kprintf("  help                 - Muestra este menu de ayuda\n");
         kprintf("  clear                - Limpia la pantalla de la consola\n");
         kprintf("  info                 - Informacion y version del sistema operativo\n");
+        kprintf("  perms                - Muestra los permisos de seguridad (ACL) del perfil\n");
         kprintf("  mem                  - Muestra el estado y uso del Heap del Kernel\n");
         kprintf("  ps                   - Lista los procesos y tareas activas del sistema\n");
         kprintf("  ls                   - Lista los archivos almacenados en RAMFS\n");
@@ -90,8 +92,8 @@ void shell_execute(const char* cmd) {
         kprintf("  store remove <id>    - Desinstala una aplicacion del sistema\n");
         kprintf("  rules                - Lista las reglas de automatizacion activas\n");
         kprintf("  arduino ping         - Comprueba conectividad con la placa\n");
-        kprintf("  arduino led on       - Enciende el LED de la placa\n");
-        kprintf("  arduino led off      - Apaga el LED de la placa\n");
+        kprintf("  arduino led on       - Enciende el LED de la placa (Requiere permiso IoT)\n");
+        kprintf("  arduino led off      - Apaga el LED de la placa (Requiere permiso IoT)\n");
         kprintf("  arduino temp         - Lee la temperatura actual del sensor\n");
         kprintf("  arduino auto         - Evalua reglas de automatizacion segun sensor\n");
         kprintf("  arduino log          - Registra la lectura actual en RAMFS (telemetria.log)\n");
@@ -102,9 +104,11 @@ void shell_execute(const char* cmd) {
         vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
         kprintf("NOVA OS v0.1 (Experimental Academic Edition - Octubre 2026)\n");
         kprintf("Arquitectura: x86_32 Modo Protegido (Ring 0 / Ring 3)\n");
+        kprintf("Seguridad: Principio de Minimo Privilegio (ACL por perfil)\n");
         kprintf("Multitarea: Planificador Round-Robin / Tareas Cooperativas\n");
-        kprintf("Syscalls: Int 0x80 | FS: RAMFS | Store: NOVA Store | IoT: NOVA-Link\n");
         kprintf("Perfil activo actual: %s (#%u)\n", profile_names[current_profile], (uint32_t)current_profile);
+    } else if (k_strcmp(cmd, "perms") == 0) {
+        acl_list_permissions(current_profile);
     } else if (k_strcmp(cmd, "mem") == 0) {
         vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
         kprintf("Estado del Kernel Heap:\n");
@@ -113,6 +117,12 @@ void shell_execute(const char* cmd) {
     } else if (k_strcmp(cmd, "ps") == 0) {
         task_list();
     } else if (k_strcmp(cmd, "ls") == 0) {
+        if (!acl_check_permission(current_profile, OP_FS_READ)) {
+            vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK));
+            kprintf("[ACCESO DENEGADO] El perfil actual no tiene permisos de lectura en RAMFS.\n");
+            acl_log_violation(current_profile, OP_FS_READ, "ls");
+            return;
+        }
         ramfs_list();
     } else if (k_strcmp(cmd, "profiles") == 0) {
         show_profiles_list();
@@ -133,7 +143,6 @@ void shell_execute(const char* cmd) {
                 kprintf("\n[PERFIL CAMBIADO] Ahora estas en el perfil: %s\n", profile_names[current_profile]);
                 kprintf("Descripcion: %s\n\n", profile_descriptions[current_profile]);
 
-                // Auto-aprovisionamiento de paquetes para el nuevo perfil
                 vga_set_color(vga_entry_color(VGA_COLOR_YELLOW, VGA_COLOR_BLACK));
                 kprintf("[*] Iniciando aprovisionamiento automatico de aplicaciones...\n");
                 int installed = pkg_provision_profile(current_profile);
@@ -154,6 +163,12 @@ void shell_execute(const char* cmd) {
         } else if (k_strcmp(sub, "rec") == 0) {
             pkg_recommend(current_profile);
         } else if (k_strncmp(sub, "install ", 8) == 0) {
+            if (!acl_check_permission(current_profile, OP_SYSTEM_ADMIN)) {
+                vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK));
+                kprintf("[ACCESO DENEGADO] Se requieren permisos de administracion para instalar paquetes.\n");
+                acl_log_violation(current_profile, OP_SYSTEM_ADMIN, sub);
+                return;
+            }
             const char* id = sub + 8;
             int r = pkg_install(id);
             if (r == 0) {
@@ -167,6 +182,12 @@ void shell_execute(const char* cmd) {
                 kprintf("[ERROR] No se encontro el paquete '%s' en el catalogo.\n", id);
             }
         } else if (k_strncmp(sub, "remove ", 7) == 0) {
+            if (!acl_check_permission(current_profile, OP_SYSTEM_ADMIN)) {
+                vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK));
+                kprintf("[ACCESO DENEGADO] Se requieren permisos de administracion para desinstalar paquetes.\n");
+                acl_log_violation(current_profile, OP_SYSTEM_ADMIN, sub);
+                return;
+            }
             const char* id = sub + 7;
             int r = pkg_uninstall(id);
             if (r == 0) {
@@ -183,6 +204,12 @@ void shell_execute(const char* cmd) {
     } else if (k_strcmp(cmd, "rules") == 0) {
         rules_engine_list();
     } else if (k_strncmp(cmd, "cat ", 4) == 0) {
+        if (!acl_check_permission(current_profile, OP_FS_READ)) {
+            vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK));
+            kprintf("[ACCESO DENEGADO] El perfil actual no tiene permisos para leer archivos.\n");
+            acl_log_violation(current_profile, OP_FS_READ, cmd);
+            return;
+        }
         const char* filename = cmd + 4;
         uint8_t buffer[512];
         int bytes = ramfs_read(filename, buffer, sizeof(buffer) - 1);
@@ -205,6 +232,12 @@ void shell_execute(const char* cmd) {
                 kprintf("[TIMEOUT / NO RESPONDE]\n");
             }
         } else if (k_strcmp(cmd, "arduino led on") == 0) {
+            if (!acl_check_permission(current_profile, OP_ARDUINO_WRITE)) {
+                vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK));
+                kprintf("[ACCESO DENEGADO] El perfil '%s' no tiene autorizacion para activar actuadores fisicos.\n", profile_names[current_profile]);
+                acl_log_violation(current_profile, OP_ARDUINO_WRITE, "arduino led on");
+                return;
+            }
             kprintf("[*] Orden: Activar LED... ");
             if (nova_iot_set_led(true)) {
                 vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
@@ -214,6 +247,12 @@ void shell_execute(const char* cmd) {
                 kprintf("[FALLO DE COMUNICACION]\n");
             }
         } else if (k_strcmp(cmd, "arduino led off") == 0) {
+            if (!acl_check_permission(current_profile, OP_ARDUINO_WRITE)) {
+                vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK));
+                kprintf("[ACCESO DENEGADO] El perfil '%s' no tiene autorizacion para controlar actuadores fisicos.\n", profile_names[current_profile]);
+                acl_log_violation(current_profile, OP_ARDUINO_WRITE, "arduino led off");
+                return;
+            }
             kprintf("[*] Orden: Desactivar LED... ");
             if (nova_iot_set_led(false)) {
                 vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
@@ -223,6 +262,12 @@ void shell_execute(const char* cmd) {
                 kprintf("[FALLO DE COMUNICACION]\n");
             }
         } else if (k_strcmp(cmd, "arduino temp") == 0) {
+            if (!acl_check_permission(current_profile, OP_ARDUINO_READ)) {
+                vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK));
+                kprintf("[ACCESO DENEGADO] El perfil '%s' no tiene autorizacion para leer sensores.\n", profile_names[current_profile]);
+                acl_log_violation(current_profile, OP_ARDUINO_READ, "arduino temp");
+                return;
+            }
             uint16_t temp = 0;
             kprintf("[*] Solicitando lectura de temperatura... ");
             if (nova_iot_get_temp(&temp)) {
@@ -244,6 +289,12 @@ void shell_execute(const char* cmd) {
                 kprintf("[ERROR AL LEER SENSOR]\n");
             }
         } else if (k_strcmp(cmd, "arduino log") == 0) {
+            if (!acl_check_permission(current_profile, OP_FS_WRITE)) {
+                vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK));
+                kprintf("[ACCESO DENEGADO] Permiso de escritura en almacenamiento denegado.\n");
+                acl_log_violation(current_profile, OP_FS_WRITE, "arduino log");
+                return;
+            }
             uint16_t temp = 0;
             if (nova_iot_get_temp(&temp)) {
                 char log_entry[64];

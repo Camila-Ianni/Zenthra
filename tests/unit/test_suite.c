@@ -6,6 +6,7 @@
 #include "klib.h"
 #include "kheap.h"
 #include "task.h"
+#include "acl_security.h"
 #include "ramfs.h"
 #include "rules_engine.h"
 #include "pkg_manager.h"
@@ -13,7 +14,7 @@
 #include "nova_link.h"
 #include "nova_iot.h"
 
-// Variables requeridas por drivers en host
+// Variables y stubs requeridos por drivers en host
 void vga_putc(char c) {
     (void)c;
 }
@@ -26,6 +27,16 @@ void vga_set_color(uint8_t color) {
 uint8_t vga_entry_color(int fg, int bg) {
     (void)fg; (void)bg;
     return 0x07;
+}
+
+static const char* test_profile_names[PROFILE_COUNT] = {
+    "General", "Estudiante", "Frontend", "Backend", "Fullstack",
+    "Disenador", "Hardware-IoT", "DataScientist", "Ciberseguridad", "Oficina", "Gamer-Streamer"
+};
+
+const char* profile_get_name(enum nova_profile prof) {
+    if (prof < PROFILE_COUNT) return test_profile_names[prof];
+    return "Desconocido";
 }
 
 // Mock de nova_iot_set_led para pruebas del motor de reglas
@@ -107,22 +118,47 @@ void test_multitasking_scheduler(void) {
     TEST_ASSERT(cur->state == TASK_RUNNING, "La tarea principal del kernel esta en estado RUNNING");
     TEST_ASSERT(k_strcmp(cur->name, "kernel_shell") == 0, "Nombre de la tarea 0 es kernel_shell");
 
-    // Creación de una tarea secundaria
     int pid = task_create("worker_task", dummy_worker);
     TEST_ASSERT(pid > 0, "Creacion exitosa de tarea worker_task con PID valido");
 
-    // Alternar contexto cooperativo (yield)
     task_yield();
     struct task* new_cur = task_get_current();
     TEST_ASSERT(new_cur != NULL && new_cur->id == (uint32_t)pid, "task_yield conmuta al worker_task");
     TEST_ASSERT(new_cur->state == TASK_RUNNING, "Nueva tarea conmutada a estado RUNNING");
 
-    // Regresar al kernel_shell
     task_yield();
     TEST_ASSERT(task_get_current()->id == 1, "task_yield regresa a la tarea principal kernel_shell (Round-Robin)");
 }
 
-/* Test 4: Sistema de Archivos en Memoria (RAMFS) */
+/* Test 4: Subsistema de Seguridad y Permisos por Perfil (ACL) */
+void test_acl_security(void) {
+    printf("[*] Ejecutando: test_acl_security...\n");
+    acl_init();
+
+    // 1. Estudiante no puede encender actuadores Arduino directamente
+    TEST_ASSERT(acl_check_permission(PROFILE_STUDENT, OP_ARDUINO_WRITE) == false,
+                "Perfil Estudiante tiene denegado el control de actuadores fisicos (OP_ARDUINO_WRITE)");
+
+    // 2. Hardware/IoT tiene permitido el control de actuadores
+    TEST_ASSERT(acl_check_permission(PROFILE_IOT_HARDWARE, OP_ARDUINO_WRITE) == true,
+                "Perfil Hardware/IoT tiene autorizacion para controlar actuadores");
+
+    // 3. Estudiante tiene permitido leer y escribir en almacenamiento
+    TEST_ASSERT(acl_check_permission(PROFILE_STUDENT, OP_FS_READ) == true, "Perfil Estudiante puede leer RAMFS");
+    TEST_ASSERT(acl_check_permission(PROFILE_STUDENT, OP_FS_WRITE) == true, "Perfil Estudiante puede escribir RAMFS");
+
+    // 4. Registro y auditoría de violación de seguridad
+    uint32_t prev_violations = acl_get_violations_count();
+    acl_log_violation(PROFILE_STUDENT, OP_ARDUINO_WRITE, "test_intent");
+    TEST_ASSERT(acl_get_violations_count() == prev_violations + 1, "Violacion de seguridad incrementa contador");
+
+    uint8_t sec_buf[128];
+    k_memset(sec_buf, 0, sizeof(sec_buf));
+    int b = ramfs_read("security.log", sec_buf, sizeof(sec_buf) - 1);
+    TEST_ASSERT(b > 0, "Intento no autorizado se registra en security.log");
+}
+
+/* Test 5: Sistema de Archivos en Memoria (RAMFS) */
 void test_ramfs(void) {
     printf("[*] Ejecutando: test_ramfs...\n");
     ramfs_init();
@@ -150,7 +186,7 @@ void test_ramfs(void) {
     TEST_ASSERT(bytes < 0, "Archivo borrado ya no puede ser leido");
 }
 
-/* Test 5: Validación de los 11 Perfiles y Auto-Aprovisionamiento */
+/* Test 6: Validación de los 11 Perfiles y Auto-Aprovisionamiento */
 void test_profile_provisioning(void) {
     printf("[*] Ejecutando: test_profile_provisioning...\n");
     pkg_init();
@@ -176,7 +212,7 @@ void test_profile_provisioning(void) {
     TEST_ASSERT(ramfs_read("app_stream-obs", buf, sizeof(buf)) > 0, "App 'stream-obs' presente en RAMFS");
 }
 
-/* Test 6: Gestor de Paquetes y Tienda (NOVA Store) */
+/* Test 7: Gestor de Paquetes y Tienda (NOVA Store) */
 void test_package_manager(void) {
     printf("[*] Ejecutando: test_package_manager...\n");
     pkg_init();
@@ -198,7 +234,7 @@ void test_package_manager(void) {
     TEST_ASSERT(bytes < 0, "Entrada de app retirada de RAMFS tras desinstalacion");
 }
 
-/* Test 7: Motor de Reglas y Automatización SI-ENTONCES */
+/* Test 8: Motor de Reglas y Automatización SI-ENTONCES */
 void test_rules_engine(void) {
     printf("[*] Ejecutando: test_rules_engine...\n");
     rules_engine_init();
@@ -216,7 +252,7 @@ void test_rules_engine(void) {
     TEST_ASSERT(b > 0, "Registro de alerta guardado en RAMFS (alertas.log)");
 }
 
-/* Test 8: Simulación de conversación bidireccional NOVA-Link */
+/* Test 9: Simulación de conversación bidireccional NOVA-Link */
 void test_bidirectional_simulation(void) {
     printf("[*] Ejecutando: test_bidirectional_simulation...\n");
 
@@ -233,7 +269,7 @@ void test_bidirectional_simulation(void) {
     TEST_ASSERT(corrupted_frame[3] != corrupted_calc, "Deteccion y rechazo exitoso de trama corrompida");
 }
 
-/* Test 9: Validación de estructuras de protección de CPU x86 */
+/* Test 10: Validación de estructuras de protección de CPU x86 */
 void test_x86_structures(void) {
     printf("[*] Ejecutando: test_x86_structures...\n");
     struct gdt_mock {
@@ -264,6 +300,7 @@ int main(void) {
     test_klib_strings();
     test_kheap_allocator();
     test_multitasking_scheduler();
+    test_acl_security();
     test_ramfs();
     test_profile_provisioning();
     test_package_manager();
