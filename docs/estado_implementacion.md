@@ -17,10 +17,20 @@ Este documento consolida el estado técnico del sistema operativo experimental *
 - **Syscalls (Int 0x80)**: Despachador en [`kernel/arch/x86/syscall.c`](file:///Users/cami/Desktop/NOVA/kernel/arch/x86/syscall.c) para invocación segura de servicios desde espacio de usuario (`SYS_WRITE`, `SYS_ARDUINO_CMD`).
 - **Kernel Heap (`kmalloc`/`kfree`)**: En [`kernel/lib/kheap.c`](file:///Users/cami/Desktop/NOVA/kernel/lib/kheap.c), asignador dinámico de memoria *First-Fit* con coalescencia de bloques liberados contiguos, ubicado a partir de los 4MB de memoria física.
 
-### 2.2 Almacenamiento y Sistema de Archivos
-- **RAMFS (In-Memory Filesystem)**: En [`kernel/drivers/ramfs.c`](file:///Users/cami/Desktop/NOVA/kernel/drivers/ramfs.c), estructura para almacenar y consultar archivos en memoria RAM (`ramfs_create`, `ramfs_write`, `ramfs_read`, `ramfs_delete`, `ramfs_list`). Permite el registro y persistencia en sesión de telemetría de Arduino (`telemetria.log`), alertas del sistema (`alertas.log`) y binarios/metadatos de aplicaciones instaladas (`app_<id>`).
+### 2.2 Seguridad y Control de Acceso Granular (ACL)
+- **Principio de Mínimo Privilegio**: En [`kernel/drivers/acl_security.c`](file:///Users/cami/Desktop/NOVA/kernel/drivers/acl_security.c) y [`kernel/include/acl_security.h`](file:///Users/cami/Desktop/NOVA/kernel/include/acl_security.h).
+- Valida en tiempo real que cada perfil solo ejecute las operaciones autorizadas:
+  - `OP_FS_READ`: Lectura de archivos.
+  - `OP_FS_WRITE`: Creación/modificación de archivos.
+  - `OP_ARDUINO_READ`: Lectura de sensores físicos.
+  - `OP_ARDUINO_WRITE`: Activación de actuadores físicos (LED, relés).
+  - `OP_SYSTEM_ADMIN`: Instalación de paquetes y administración.
+- **Auditoría Activa**: Cualquier intento de acceso denegado se bloquea, incrementa el contador de infracciones y se registra automáticamente en `security.log` dentro de RAMFS.
 
-### 2.3 Perfiles de Usuario y Auto-Aprovisionamiento (11 Perfiles)
+### 2.3 Almacenamiento y Sistema de Archivos
+- **RAMFS (In-Memory Filesystem)**: En [`kernel/drivers/ramfs.c`](file:///Users/cami/Desktop/NOVA/kernel/drivers/ramfs.c), estructura para almacenar y consultar archivos en memoria RAM (`ramfs_create`, `ramfs_write`, `ramfs_read`, `ramfs_delete`, `ramfs_list`). Permite el registro y persistencia en sesión de telemetría de Arduino (`telemetria.log`), alertas del sistema (`alertas.log`), registros de violaciones de seguridad (`security.log`) y binarios/metadatos de aplicaciones instaladas (`app_<id>`).
+
+### 2.4 Perfiles de Usuario y Auto-Aprovisionamiento (11 Perfiles)
 NOVA OS implementa **11 perfiles de usuario** especializados. Cada perfil cuenta con su propio lote de aplicaciones que se auto-descargan e instalan automáticamente en el sistema de archivos al seleccionarlo:
 
 | # | Perfil | Herramientas Auto-Aprovisionadas | Propósito |
@@ -37,26 +47,27 @@ NOVA OS implementa **11 perfiles de usuario** especializados. Cada perfil cuenta
 | **9** | **Ofimática / Oficina** | `calc-pro` (Planillas avanzadas), `invoice-mgr` (Facturación y contabilidad) | Administración comercial y gestión de documentos |
 | **10**| **Gamer / Streamer** | `game-launcher` (GameHub optimizado), `stream-obs` (Captura y streaming OBS) | Lanzador de videojuegos y transmisión de pantalla |
 
-### 2.4 Centro de Aplicaciones (NOVA Store)
+### 2.5 Centro de Aplicaciones (NOVA Store)
 - Catálogo ampliado a más de 25 herramientas nativas.
 - Función `pkg_provision_profile(profile)` que instala en masa las herramientas al elegir o cambiar de perfil.
 
-### 2.5 Automatización y Motor de Reglas
+### 2.6 Automatización y Motor de Reglas
 - **Rules Engine (Motor SI-ENTONCES)**: En [`kernel/drivers/rules_engine.c`](file:///Users/cami/Desktop/NOVA/kernel/drivers/rules_engine.c). Evaluación de umbrales térmicos y disparo de actuadores físicos en Arduino.
 
-### 2.6 Controladores y Entrada/Salida
+### 2.7 Controladores y Entrada/Salida
 - **VGA Text Mode Driver**: En [`kernel/drivers/vga.c`](file:///Users/cami/Desktop/NOVA/kernel/drivers/vga.c), gestión en `0xB8000` con scroll vertical y cursor físico.
 - **Serial Driver (UART 16550A)**: En [`kernel/drivers/serial.c`](file:///Users/cami/Desktop/NOVA/kernel/drivers/serial.c), configuración en `COM1 (0x3F8)` a 38400 baudios, 8N1.
 - **Keyboard Driver (PS/2)**: En [`kernel/drivers/keyboard.c`](file:///Users/cami/Desktop/NOVA/kernel/drivers/keyboard.c), decodificación de scan codes a ASCII.
 
-### 2.7 Interfaz de Usuario y Comandos
+### 2.8 Interfaz de Usuario y Comandos
 - `help`: Lista completa de utilidades.
+- `perms`: Muestra la matriz de permisos de seguridad asignados al perfil activo.
 - `ps`: Muestra la tabla de procesos y tareas en ejecución (PID, nombre, estado, ticks consumidos).
 - `profiles`: Presenta los 11 perfiles detallando su propósito.
 - `profile <0..10>`: Cambia de entorno y auto-descarga todas las aplicaciones correspondientes.
-- `store search | list | rec | install <id> | remove <id>`: Operaciones de tienda.
+- `store search | list | rec | install <id> | remove <id>`: Operaciones de tienda protegidas por ACL.
 - `rules`: Listado de reglas activas de automatización.
-- `arduino ping | led on | led off | temp | auto | log | status`: Telemetría e integración Arduino.
+- `arduino ping | led on | led off | temp | auto | log | status`: Telemetría e integración Arduino protegidas por permisos.
 
 ---
 
@@ -93,6 +104,13 @@ Se ejecutó la suite de pruebas mediante `make test`:
   [PASS] task_yield conmuta al worker_task
   [PASS] Nueva tarea conmutada a estado RUNNING
   [PASS] task_yield regresa a la tarea principal kernel_shell (Round-Robin)
+[*] Ejecutando: test_acl_security...
+  [PASS] Perfil Estudiante tiene denegado el control de actuadores fisicos (OP_ARDUINO_WRITE)
+  [PASS] Perfil Hardware/IoT tiene autorizacion para controlar actuadores
+  [PASS] Perfil Estudiante puede leer RAMFS
+  [PASS] Perfil Estudiante puede escribir RAMFS
+  [PASS] Violacion de seguridad incrementa contador
+  [PASS] Intento no autorizado se registra en security.log
 [*] Ejecutando: test_ramfs...
   [PASS] Archivo bienvenida.txt existe y tiene contenido
   [PASS] Creacion de nuevo archivo sensor_test.dat
@@ -132,7 +150,7 @@ Se ejecutó la suite de pruebas mediante `make test`:
   [PASS] Descriptor IDT tiene tamano estandar x86 (8 bytes)
 
 ----------------------------------------------------
-Resultados: 52 Aprobados | 0 Fallidos
+Resultados: 58 Aprobados | 0 Fallidos
 ----------------------------------------------------
 [+] Todas las pruebas pasaron satisfactoriamente.
 ```

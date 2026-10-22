@@ -1,4 +1,4 @@
-name: NOVA OS CI - Build & Test
+name: NOVA OS CI - Build, Test & ISO Release
 
 on:
   push:
@@ -14,15 +14,53 @@ jobs:
       - name: Checkout del Repositorio
         uses: actions/checkout@v4
 
-      - name: Instalar Dependencias de Compilación
+      - name: Instalar Dependencias (GCC x86, GRUB, xorriso, QEMU)
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-multilib build-essential qemu-system-x86
+          sudo apt-get install -y gcc-multilib build-essential grub-pc-bin grub-common xorriso qemu-system-x86
 
       - name: Ejecutar Test Suite Unitario y de Protocolo
         run: |
           make test
 
-      - name: Compilar Kernel ELF (Bare Metal x86)
+      - name: Compilar Kernel ELF (Bare Metal x86_32)
         run: |
-          gcc -m32 -c boot/boot.s -o build/boot_boot.o || true
+          mkdir -p build
+          gcc -m32 -c boot/boot.s -o build/boot_boot.o
+          gcc -std=gnu99 -m32 -ffreestanding -O2 -Wall -Wextra -fno-builtin -fno-stack-protector -nostdlib -Ikernel/include -c kernel/kernel.c -o build/kernel_kernel.o
+          gcc -std=gnu99 -m32 -ffreestanding -O2 -Wall -Wextra -fno-builtin -fno-stack-protector -nostdlib -Ikernel/include -c kernel/arch/x86/gdt.c -o build/kernel_gdt.o
+          gcc -std=gnu99 -m32 -ffreestanding -O2 -Wall -Wextra -fno-builtin -fno-stack-protector -nostdlib -Ikernel/include -c kernel/arch/x86/idt.c -o build/kernel_idt.o
+          gcc -std=gnu99 -m32 -ffreestanding -O2 -Wall -Wextra -fno-builtin -fno-stack-protector -nostdlib -Ikernel/include -c kernel/arch/x86/syscall.c -o build/kernel_syscall.o
+          gcc -std=gnu99 -m32 -ffreestanding -O2 -Wall -Wextra -fno-builtin -fno-stack-protector -nostdlib -Ikernel/include -c kernel/drivers/vga.c -o build/kernel_vga.o
+          gcc -std=gnu99 -m32 -ffreestanding -O2 -Wall -Wextra -fno-builtin -fno-stack-protector -nostdlib -Ikernel/include -c kernel/drivers/serial.c -o build/kernel_serial.o
+          gcc -std=gnu99 -m32 -ffreestanding -O2 -Wall -Wextra -fno-builtin -fno-stack-protector -nostdlib -Ikernel/include -c kernel/drivers/pit.c -o build/kernel_pit.o
+          gcc -std=gnu99 -m32 -ffreestanding -O2 -Wall -Wextra -fno-builtin -fno-stack-protector -nostdlib -Ikernel/include -c kernel/drivers/task.c -o build/kernel_task.o
+          gcc -std=gnu99 -m32 -ffreestanding -O2 -Wall -Wextra -fno-builtin -fno-stack-protector -nostdlib -Ikernel/include -c kernel/drivers/acl_security.c -o build/kernel_acl_security.o
+          gcc -std=gnu99 -m32 -ffreestanding -O2 -Wall -Wextra -fno-builtin -fno-stack-protector -nostdlib -Ikernel/include -c kernel/drivers/ramfs.c -o build/kernel_ramfs.o
+          gcc -std=gnu99 -m32 -ffreestanding -O2 -Wall -Wextra -fno-builtin -fno-stack-protector -nostdlib -Ikernel/include -c kernel/drivers/pkg_manager.c -o build/kernel_pkg_manager.o
+          gcc -std=gnu99 -m32 -ffreestanding -O2 -Wall -Wextra -fno-builtin -fno-stack-protector -nostdlib -Ikernel/include -c kernel/drivers/rules_engine.c -o build/kernel_rules_engine.o
+          gcc -std=gnu99 -m32 -ffreestanding -O2 -Wall -Wextra -fno-builtin -fno-stack-protector -nostdlib -Ikernel/include -c kernel/drivers/keyboard.c -o build/kernel_keyboard.o
+          gcc -std=gnu99 -m32 -ffreestanding -O2 -Wall -Wextra -fno-builtin -fno-stack-protector -nostdlib -Ikernel/include -c kernel/drivers/nova_iot.c -o build/kernel_nova_iot.o
+          gcc -std=gnu99 -m32 -ffreestanding -O2 -Wall -Wextra -fno-builtin -fno-stack-protector -nostdlib -Ikernel/include -c kernel/drivers/shell.c -o build/kernel_shell.o
+          gcc -std=gnu99 -m32 -ffreestanding -O2 -Wall -Wextra -fno-builtin -fno-stack-protector -nostdlib -Ikernel/include -c kernel/lib/klib.c -o build/kernel_klib.o
+          gcc -std=gnu99 -m32 -ffreestanding -O2 -Wall -Wextra -fno-builtin -fno-stack-protector -nostdlib -Ikernel/include -c kernel/lib/kheap.c -o build/kernel_kheap.o
+          ld -m elf_i386 -T boot/linker.ld -nostdlib -o build/nova_kernel.elf build/*.o
+
+      - name: Validar Cabecera Multiboot del Kernel ELF
+        run: |
+          grub-file --is-x86-multiboot build/nova_kernel.elf
+          echo "[OK] El binario ELF cumple estrictamente la especificacion Multiboot"
+
+      - name: Generar Imagen ISO Arrancable (VirtualBox / GRUB)
+        run: |
+          mkdir -p build/isodir/boot/grub
+          cp build/nova_kernel.elf build/isodir/boot/nova_kernel.elf
+          cp boot/grub/grub.cfg build/isodir/boot/grub/grub.cfg
+          grub-mkrescue -o build/nova_os.iso build/isodir
+          sha256sum build/nova_os.iso
+
+      - name: Subir Imagen ISO como Artefacto de Build
+        uses: actions/upload-artifact@v4
+        with:
+          name: nova-os-virtualbox-iso
+          path: build/nova_os.iso

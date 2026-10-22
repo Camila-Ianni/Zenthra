@@ -1,20 +1,18 @@
 # Makefile para NOVA OS
 # Arquitectura de destino: i686 (x86 32-bit Protected Mode ELF)
 
-TARGET ?= i686-elf
-CC     ?= $(TARGET)-gcc
-LD     ?= $(TARGET)-ld
-AS     ?= $(TARGET)-as
+# Configuración por defecto usando clang con target freestanding
+CC = clang -target i386-unknown-none-elf -m32
+AS = clang -target i386-unknown-none-elf -m32 -c
 
-# Detección de herramientas
-ifeq ($(shell which $(CC) 2>/dev/null),)
-    ifeq ($(shell which clang 2>/dev/null),)
-        $(error "No se encontro ni $(TARGET)-gcc ni clang en el sistema")
-    else
-        CC = clang -target i386-unknown-none-elf -m32
-        LD = ld.lld -m elf_i386
-        AS = clang -target i386-unknown-none-elf -m32 -c
-    endif
+# Detección de linker cruzado (i686-elf-ld o ld.lld si están instalados)
+ifneq ($(shell which i686-elf-ld 2>/dev/null),)
+    LD = i686-elf-ld
+else ifneq ($(shell which ld.lld 2>/dev/null),)
+    LD = ld.lld -m elf_i386
+else
+    # Fallback informativo si aún no se instaló el cross-linker
+    LD = @echo "[-] Cross-linker i686-elf-ld/ld.lld no encontrado localmente. Para enlace bare-metal instala llvm o usa Linux/CI." && exit 1 #
 endif
 
 CFLAGS = -std=gnu99 -ffreestanding -O2 -Wall -Wextra \
@@ -25,6 +23,8 @@ LDFLAGS = -T boot/linker.ld -nostdlib
 
 BUILD_DIR = build
 BIN_NAME  = $(BUILD_DIR)/nova_kernel.elf
+ISO_NAME  = $(BUILD_DIR)/nova_os.iso
+ISO_DIR   = $(BUILD_DIR)/isodir
 
 SRCS_C = kernel/kernel.c \
          kernel/arch/x86/gdt.c \
@@ -67,6 +67,28 @@ $(BIN_NAME): $(OBJS)
 	@echo " [OK] NOVA Kernel compilado con exito: $@"
 	@echo "=========================================="
 
+# Creación de imagen ISO arrancable con GRUB (para VirtualBox / QEMU)
+iso: $(OBJS)
+	@echo "=== Preparando estructura ISO de arranque (VirtualBox / GRUB) ==="
+	mkdir -p $(ISO_DIR)/boot/grub
+	cp boot/grub/grub.cfg $(ISO_DIR)/boot/grub/grub.cfg
+	@if [ -f $(BIN_NAME) ]; then \
+		cp $(BIN_NAME) $(ISO_DIR)/boot/nova_kernel.elf; \
+		if command -v grub-mkrescue >/dev/null 2>&1; then \
+			grub-mkrescue -o $(ISO_NAME) $(ISO_DIR); \
+			echo "========================================================"; \
+			echo " [OK] Imagen ISO creada: $(ISO_NAME)"; \
+			shasum -a 256 $(ISO_NAME) 2>/dev/null || sha256sum $(ISO_NAME); \
+			echo "========================================================"; \
+		else \
+			echo "[-] 'grub-mkrescue' no disponible localmente en macOS."; \
+			echo "    Estructura lista en $(ISO_DIR). Generable en Linux / GitHub Actions."; \
+		fi; \
+	else \
+		echo "[-] Se compilaron los objetos ELF x86_32 en $(BUILD_DIR)."; \
+		echo "    El enlace final del ELF/ISO se ejecuta en entorno Linux o con i686-elf-ld."; \
+	fi
+
 clean:
 	rm -rf $(BUILD_DIR) bin_test
 
@@ -80,4 +102,8 @@ test:
 qemu: $(BIN_NAME)
 	qemu-system-i386 -kernel $(BIN_NAME) -serial stdio
 
-.PHONY: all clean qemu test
+# Regla de arranque desde ISO en QEMU
+qemu-iso: iso
+	qemu-system-i386 -cdrom $(ISO_NAME) -serial stdio
+
+.PHONY: all clean qemu qemu-iso iso test
