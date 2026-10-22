@@ -14,7 +14,11 @@ Este documento consolida el estado técnico del sistema operativo experimental *
 - **IDT (Interrupt Descriptor Table)**: Tabla de 256 descriptores en [`kernel/arch/x86/idt.c`](file:///Users/cami/Desktop/NOVA/kernel/arch/x86/idt.c) con remapeo del controlador PIC 8259 (IRQs 0-15 a los vectores 32-47).
 - **PIT 8254 (Programmable Interval Timer)**: En [`kernel/drivers/pit.c`](file:///Users/cami/Desktop/NOVA/kernel/drivers/pit.c), generador de onda cuadrada a 100 Hz conectado a IRQ0 (Vector 32) para conteo de ticks y función de retardo `pit_sleep(ms)`.
 - **Planificador Multitarea (Scheduler & PCB)**: En [`kernel/drivers/task.c`](file:///Users/cami/Desktop/NOVA/kernel/drivers/task.c) y [`kernel/include/task.h`](file:///Users/cami/Desktop/NOVA/kernel/include/task.h). Soporte para Bloque de Control de Proceso (PCB), creación dinámica de tareas con pila independiente (`task_create`), alternancia de contexto Round-Robin (`task_yield`), ciclo de vida (`TASK_READY`, `TASK_RUNNING`, `TASK_SLEEPING`, `TASK_TERMINATED`) y tarea de fondo demonio (`iot_daemon`).
-- **Syscalls (Int 0x80)**: Despachador en [`kernel/arch/x86/syscall.c`](file:///Users/cami/Desktop/NOVA/kernel/arch/x86/syscall.c) para invocación segura de servicios desde espacio de usuario (`SYS_WRITE`, `SYS_ARDUINO_CMD`).
+- **Syscalls Seguras (Int 0x80)**: Despachador en [`kernel/arch/x86/syscall.c`](file:///Users/cami/Desktop/NOVA/kernel/arch/x86/syscall.c) con protección estricta contra ataques de inyección y lecturas fuera de límites desde Ring 3:
+  - `is_user_pointer(ptr, size)`: Verifica punteros no nulos, previene desbordamiento aritmético y bloquea el acceso al espacio reservado del kernel (`USER_MEMORY_LIMIT`).
+  - `copy_from_user(k_dest, u_src, size)`: Copia segura hacia buffers acotados en kernel.
+  - `copy_to_user(u_dest, k_src, size)`: Copia segura de resultados hacia userland.
+  - `strnlen_user(u_str, max_len)`: Lectura acotada de cadenas que valida la presencia obligatoria de terminador `NUL` sin cruzar páginas inválidas.
 - **Kernel Heap (`kmalloc`/`kfree`)**: En [`kernel/lib/kheap.c`](file:///Users/cami/Desktop/NOVA/kernel/lib/kheap.c), asignador dinámico de memoria *First-Fit* con coalescencia de bloques liberados contiguos, ubicado a partir de los 4MB de memoria física.
 
 ### 2.2 Seguridad y Control de Acceso Granular (ACL)
@@ -96,6 +100,15 @@ Se ejecutó la suite de pruebas mediante `make test`:
   [PASS] kmalloc asigna un segundo bloque contiguo y diferenciado
   [PASS] kfree libera y decrementa memoria ocupada
   [PASS] Coalescencia de bloques contiguos restaura el espacio original
+[*] Ejecutando: test_syscall_security_checks...
+  [PASS] is_user_pointer rechaza puntero NULL
+  [PASS] is_user_pointer rechaza acceso a memoria del kernel
+  [PASS] is_user_pointer acepta buffer en userland
+  [PASS] copy_from_user realiza copia exitosa de buffer valido
+  [PASS] Contenido copiado de forma integra al kernel
+  [PASS] copy_from_user bloquea lectura no autorizada desde memoria kernel
+  [PASS] strnlen_user calcula longitud exacta hasta NUL
+  [PASS] strnlen_user detecta y rechaza cadena sin terminador NUL dentro del limite
 [*] Ejecutando: test_multitasking_scheduler...
   [PASS] Obtencion de la tarea actual en ejecucion
   [PASS] La tarea principal del kernel esta en estado RUNNING
@@ -150,7 +163,12 @@ Se ejecutó la suite de pruebas mediante `make test`:
   [PASS] Descriptor IDT tiene tamano estandar x86 (8 bytes)
 
 ----------------------------------------------------
-Resultados: 58 Aprobados | 0 Fallidos
+Resultados: 66 Aprobados | 0 Fallidos
 ----------------------------------------------------
 [+] Todas las pruebas pasaron satisfactoriamente.
 ```
+
+---
+
+## 4. Pipeline de CI/CD
+Se configuró un flujo en [`.github/workflows/ci.yml`](file:///Users/cami/Desktop/NOVA/.github/workflows/ci.yml) para compilar en Linux, validar la especificación Multiboot con `grub-file` y generar la ISO arrancable `nova_os.iso` como artefacto de descarga en cada commit.
