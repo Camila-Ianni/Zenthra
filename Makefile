@@ -11,7 +11,6 @@ ifneq ($(shell which i686-elf-ld 2>/dev/null),)
 else ifneq ($(shell which ld.lld 2>/dev/null),)
     LD = ld.lld -m elf_i386
 else
-    # Fallback informativo si aún no se instaló el cross-linker
     LD = @echo "[-] Cross-linker i686-elf-ld/ld.lld no encontrado localmente. Para enlace bare-metal instala llvm o usa Linux/CI." && exit 1 #
 endif
 
@@ -95,7 +94,7 @@ clean:
 # Ejecutar suite de pruebas lógicas y unitarias nativas
 test:
 	@echo "=== Compilando y ejecutando Test Suite de NOVA OS ==="
-	clang -Wall -Wextra -Ikernel/include tests/mocks/mock_hw.c kernel/lib/klib.c kernel/lib/kheap.c kernel/drivers/task.c kernel/drivers/acl_security.c kernel/drivers/ramfs.c kernel/drivers/rules_engine.c kernel/drivers/pkg_manager.c tests/unit/test_suite.c -o bin_test
+	clang -Wall -Wextra -Ikernel/include tests/mocks/mock_hw.c kernel/lib/klib.c kernel/lib/kheap.c kernel/arch/x86/syscall.c kernel/drivers/task.c kernel/drivers/acl_security.c kernel/drivers/ramfs.c kernel/drivers/rules_engine.c kernel/drivers/pkg_manager.c tests/unit/test_suite.c -o bin_test
 	./bin_test
 
 # Regla de prueba con emulador QEMU

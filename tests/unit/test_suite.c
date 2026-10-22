@@ -7,6 +7,7 @@
 #include "kheap.h"
 #include "task.h"
 #include "acl_security.h"
+#include "syscall.h"
 #include "ramfs.h"
 #include "rules_engine.h"
 #include "pkg_manager.h"
@@ -106,9 +107,44 @@ void test_kheap_allocator(void) {
     TEST_ASSERT(kheap_get_free() == initial_free, "Coalescencia de bloques contiguos restaura el espacio original");
 }
 
+/* Test 3: Validación Robusta de Punteros y Copias en Syscalls */
+void test_syscall_security_checks(void) {
+    printf("[*] Ejecutando: test_syscall_security_checks...\n");
+
+    // 1. Puntero NULL debe ser rechazado
+    TEST_ASSERT(is_user_pointer(NULL, 10) == false, "is_user_pointer rechaza puntero NULL");
+
+    // 2. Puntero que invade espacio de memoria de kernel (por encima del límite)
+    void* kernel_space_ptr = (void*)(uintptr_t)(USER_MEMORY_LIMIT + 0x1000);
+    TEST_ASSERT(is_user_pointer(kernel_space_ptr, 16) == false, "is_user_pointer rechaza acceso a memoria del kernel");
+
+    // 3. Puntero válido en espacio de usuario
+    char valid_user_buf[64] = "Hello from Userland";
+    TEST_ASSERT(is_user_pointer(valid_user_buf, sizeof(valid_user_buf)) == true, "is_user_pointer acepta buffer en userland");
+
+    // 4. Copia segura copy_from_user
+    char k_buf[64];
+    int res = copy_from_user(k_buf, valid_user_buf, 20);
+    TEST_ASSERT(res == 0, "copy_from_user realiza copia exitosa de buffer valido");
+    TEST_ASSERT(k_strncmp(k_buf, "Hello from Userland", 19) == 0, "Contenido copiado de forma integra al kernel");
+
+    // 5. Intento de copia desde memoria kernel debe fallar
+    res = copy_from_user(k_buf, kernel_space_ptr, 16);
+    TEST_ASSERT(res == -1, "copy_from_user bloquea lectura no autorizada desde memoria kernel");
+
+    // 6. Validación de cadena strnlen_user
+    ssize_t len = strnlen_user(valid_user_buf, 30);
+    TEST_ASSERT(len == 19, "strnlen_user calcula longitud exacta hasta NUL");
+
+    // Cadena sin NUL dentro de max_len
+    char no_nul_buf[8] = {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'};
+    ssize_t bad_len = strnlen_user(no_nul_buf, 8);
+    TEST_ASSERT(bad_len == -1, "strnlen_user detecta y rechaza cadena sin terminador NUL dentro del limite");
+}
+
 static void dummy_worker(void) {}
 
-/* Test 3: Planificador Multitarea (Scheduler & PCB) */
+/* Test 4: Planificador Multitarea (Scheduler & PCB) */
 void test_multitasking_scheduler(void) {
     printf("[*] Ejecutando: test_multitasking_scheduler...\n");
     scheduler_init();
@@ -130,24 +166,20 @@ void test_multitasking_scheduler(void) {
     TEST_ASSERT(task_get_current()->id == 1, "task_yield regresa a la tarea principal kernel_shell (Round-Robin)");
 }
 
-/* Test 4: Subsistema de Seguridad y Permisos por Perfil (ACL) */
+/* Test 5: Subsistema de Seguridad y Permisos por Perfil (ACL) */
 void test_acl_security(void) {
     printf("[*] Ejecutando: test_acl_security...\n");
     acl_init();
 
-    // 1. Estudiante no puede encender actuadores Arduino directamente
     TEST_ASSERT(acl_check_permission(PROFILE_STUDENT, OP_ARDUINO_WRITE) == false,
                 "Perfil Estudiante tiene denegado el control de actuadores fisicos (OP_ARDUINO_WRITE)");
 
-    // 2. Hardware/IoT tiene permitido el control de actuadores
     TEST_ASSERT(acl_check_permission(PROFILE_IOT_HARDWARE, OP_ARDUINO_WRITE) == true,
                 "Perfil Hardware/IoT tiene autorizacion para controlar actuadores");
 
-    // 3. Estudiante tiene permitido leer y escribir en almacenamiento
     TEST_ASSERT(acl_check_permission(PROFILE_STUDENT, OP_FS_READ) == true, "Perfil Estudiante puede leer RAMFS");
     TEST_ASSERT(acl_check_permission(PROFILE_STUDENT, OP_FS_WRITE) == true, "Perfil Estudiante puede escribir RAMFS");
 
-    // 4. Registro y auditoría de violación de seguridad
     uint32_t prev_violations = acl_get_violations_count();
     acl_log_violation(PROFILE_STUDENT, OP_ARDUINO_WRITE, "test_intent");
     TEST_ASSERT(acl_get_violations_count() == prev_violations + 1, "Violacion de seguridad incrementa contador");
@@ -158,7 +190,7 @@ void test_acl_security(void) {
     TEST_ASSERT(b > 0, "Intento no autorizado se registra en security.log");
 }
 
-/* Test 5: Sistema de Archivos en Memoria (RAMFS) */
+/* Test 6: Sistema de Archivos en Memoria (RAMFS) */
 void test_ramfs(void) {
     printf("[*] Ejecutando: test_ramfs...\n");
     ramfs_init();
@@ -186,7 +218,7 @@ void test_ramfs(void) {
     TEST_ASSERT(bytes < 0, "Archivo borrado ya no puede ser leido");
 }
 
-/* Test 6: Validación de los 11 Perfiles y Auto-Aprovisionamiento */
+/* Test 7: Validación de los 11 Perfiles y Auto-Aprovisionamiento */
 void test_profile_provisioning(void) {
     printf("[*] Ejecutando: test_profile_provisioning...\n");
     pkg_init();
@@ -212,7 +244,7 @@ void test_profile_provisioning(void) {
     TEST_ASSERT(ramfs_read("app_stream-obs", buf, sizeof(buf)) > 0, "App 'stream-obs' presente en RAMFS");
 }
 
-/* Test 7: Gestor de Paquetes y Tienda (NOVA Store) */
+/* Test 8: Gestor de Paquetes y Tienda (NOVA Store) */
 void test_package_manager(void) {
     printf("[*] Ejecutando: test_package_manager...\n");
     pkg_init();
@@ -234,7 +266,7 @@ void test_package_manager(void) {
     TEST_ASSERT(bytes < 0, "Entrada de app retirada de RAMFS tras desinstalacion");
 }
 
-/* Test 8: Motor de Reglas y Automatización SI-ENTONCES */
+/* Test 9: Motor de Reglas y Automatización SI-ENTONCES */
 void test_rules_engine(void) {
     printf("[*] Ejecutando: test_rules_engine...\n");
     rules_engine_init();
@@ -252,7 +284,7 @@ void test_rules_engine(void) {
     TEST_ASSERT(b > 0, "Registro de alerta guardado en RAMFS (alertas.log)");
 }
 
-/* Test 9: Simulación de conversación bidireccional NOVA-Link */
+/* Test 10: Simulación de conversación bidireccional NOVA-Link */
 void test_bidirectional_simulation(void) {
     printf("[*] Ejecutando: test_bidirectional_simulation...\n");
 
@@ -269,7 +301,7 @@ void test_bidirectional_simulation(void) {
     TEST_ASSERT(corrupted_frame[3] != corrupted_calc, "Deteccion y rechazo exitoso de trama corrompida");
 }
 
-/* Test 10: Validación de estructuras de protección de CPU x86 */
+/* Test 11: Validación de estructuras de protección de CPU x86 */
 void test_x86_structures(void) {
     printf("[*] Ejecutando: test_x86_structures...\n");
     struct gdt_mock {
@@ -299,6 +331,7 @@ int main(void) {
 
     test_klib_strings();
     test_kheap_allocator();
+    test_syscall_security_checks();
     test_multitasking_scheduler();
     test_acl_security();
     test_ramfs();

@@ -32,6 +32,7 @@ typedef uint8_t bool;
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
+#include <sys/types.h>
 #endif
 
 #endif
