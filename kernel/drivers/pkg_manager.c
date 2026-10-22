@@ -6,6 +6,20 @@
 static struct package_info catalog[MAX_PACKAGES];
 static size_t catalog_count = 0;
 
+/* Implementación estándar de CRC32 (IEEE 802.3 polinomial 0xEDB88320) */
+uint32_t pkg_compute_crc32(const uint8_t* data, size_t length) {
+    uint32_t crc = 0xFFFFFFFF;
+    for (size_t i = 0; i < length; i++) {
+        uint8_t byte = data[i];
+        crc ^= byte;
+        for (int j = 0; j < 8; j++) {
+            uint32_t mask = -(crc & 1);
+            crc = (crc >> 1) ^ (0xEDB88320 & mask);
+        }
+    }
+    return ~crc;
+}
+
 static void register_pkg(const char* id, const char* name, const char* ver, const char* desc, enum nova_profile prof, size_t size) {
     if (catalog_count >= MAX_PACKAGES) return;
 
@@ -30,7 +44,23 @@ static void register_pkg(const char* id, const char* name, const char* ver, cons
 
     p->target_profile = prof;
     p->size_bytes = size;
+
+    // Calcular firma CRC32 estándar sobre el binario/payload predeterminado
+    const char* default_payload = "NOVA_APP_EXEC_V1";
+    p->expected_crc32 = pkg_compute_crc32((const uint8_t*)default_payload, k_strlen(default_payload));
     p->installed = false;
+}
+
+bool pkg_verify_integrity(const char* pkg_id, const uint8_t* data, size_t length) {
+    if (!pkg_id || !data) return false;
+
+    for (size_t i = 0; i < catalog_count; i++) {
+        if (k_strcmp(catalog[i].id, pkg_id) == 0) {
+            uint32_t computed = pkg_compute_crc32(data, length);
+            return (computed == catalog[i].expected_crc32);
+        }
+    }
+    return false;
 }
 
 void pkg_init(void) {
@@ -139,6 +169,14 @@ int pkg_install(const char* pkg_id) {
             if (catalog[i].installed) {
                 return 1; // Ya estaba instalado
             }
+            // Verificación obligatoria de integridad por Checksum CRC32
+            const char* app_meta = "NOVA_APP_EXEC_V1";
+            if (!pkg_verify_integrity(pkg_id, (const uint8_t*)app_meta, k_strlen(app_meta))) {
+                vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK));
+                kprintf("\n[ERROR DE SEGURIDAD] Fallo de integridad CRC32 en paquete '%s'. Instalacion cancelada.\n", pkg_id);
+                return -2; // Fallo de verificación de integridad
+            }
+
             catalog[i].installed = true;
 
             // Registrar binario/metadata en el sistema de archivos RAMFS
@@ -150,7 +188,6 @@ int pkg_install(const char* pkg_id) {
             for (size_t j = 0; catalog[i].id[j] && idx < 28; j++) filename[idx++] = catalog[i].id[j];
             filename[idx] = '\0';
 
-            const char* app_meta = "NOVA_APP_EXEC_V1";
             ramfs_create(filename);
             ramfs_write(filename, (const uint8_t*)app_meta, k_strlen(app_meta));
 

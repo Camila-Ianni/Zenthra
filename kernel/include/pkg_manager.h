@@ -13,6 +13,7 @@ struct package_info {
     char description[64];
     enum nova_profile target_profile;
     size_t size_bytes;
+    uint32_t expected_crc32; /* Checksum de integridad del paquete */
     bool installed;
 };
 
@@ -22,6 +23,10 @@ void pkg_list_installed(void);
 void pkg_recommend(enum nova_profile profile);
 int pkg_install(const char* pkg_id);
 int pkg_uninstall(const char* pkg_id);
+
+/* Verificación de integridad estándar mediante CRC32 (IEEE 802.3) */
+uint32_t pkg_compute_crc32(const uint8_t* data, size_t length);
+bool pkg_verify_integrity(const char* pkg_id, const uint8_t* data, size_t length);
 
 /* Aprovisiona e instala automáticamente el lote de apps del perfil seleccionado */
 int pkg_provision_profile(enum nova_profile profile);

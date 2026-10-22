@@ -1,7 +1,7 @@
 #ifndef KTYPES_H
 #define KTYPES_H
 
-#ifdef __KERNEL__
+#if defined(__KERNEL__) || (defined(__STDC_HOSTED__) && __STDC_HOSTED__ == 0)
 typedef unsigned char      uint8_t;
 typedef unsigned short     uint16_t;
 typedef unsigned int       uint32_t;
@@ -14,6 +14,8 @@ typedef signed long long   int64_t;
 
 typedef uint32_t           size_t;
 typedef int32_t            ssize_t;
+typedef uint32_t           uintptr_t;
+typedef int32_t            intptr_t;
 
 #ifndef NULL
 #define NULL ((void*)0)

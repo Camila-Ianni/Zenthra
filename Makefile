@@ -5,17 +5,16 @@
 CC = clang -target i386-unknown-none-elf -m32
 AS = clang -target i386-unknown-none-elf -m32 -c
 
-# Detección de linker cruzado (i686-elf-ld o ld.lld si están instalados)
 ifneq ($(shell which i686-elf-ld 2>/dev/null),)
     LD = i686-elf-ld
 else ifneq ($(shell which ld.lld 2>/dev/null),)
     LD = ld.lld -m elf_i386
 else
-    LD = @echo "[-] Cross-linker i686-elf-ld/ld.lld no encontrado localmente. Para enlace bare-metal instala llvm o usa Linux/CI." && exit 1 #
+    LD = false
 endif
 
 CFLAGS = -std=gnu99 -ffreestanding -O2 -Wall -Wextra \
-         -fno-builtin -fno-stack-protector -nostdlib \
+         -fno-builtin -fno-stack-protector -nostdlib -D__KERNEL__ \
          -Ikernel/include
 
 LDFLAGS = -T boot/linker.ld -nostdlib
@@ -61,6 +60,12 @@ $(BUILD_DIR)/kernel_%.o: kernel/%.c | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BIN_NAME): $(OBJS)
+	@if [ "$(LD)" = "false" ]; then \
+		echo "[-] Cross-linker i686-elf-ld/ld.lld no disponible localmente en el host macOS."; \
+		echo "    Todos los modulos bare-metal fueron compilados a objetos .o exitosamente."; \
+		echo "    El enlace ELF e ISO se genera automaticamente en GitHub Actions CI."; \
+		exit 1; \
+	fi
 	$(LD) $(LDFLAGS) -o $@ $(OBJS)
 	@echo "=========================================="
 	@echo " [OK] NOVA Kernel compilado con exito: $@"

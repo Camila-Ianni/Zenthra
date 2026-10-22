@@ -74,7 +74,7 @@ static void syscall_dispatcher(struct registers* regs) {
     switch (syscall_num) {
         case SYS_WRITE: {
             // ebx: puntero userland a cadena, ecx: longitud solicitada
-            const char* user_str = (const char*)regs->ebx;
+            const char* user_str = (const char*)(uintptr_t)regs->ebx;
             size_t requested_len = (size_t)regs->ecx;
 
             if (requested_len == 0 || requested_len >= KERNEL_SYSCALL_BUF_SIZE) {
@@ -114,7 +114,7 @@ static void syscall_dispatcher(struct registers* regs) {
             } else if (cmd == 3) {
                 regs->eax = nova_iot_set_led(false) ? 0 : 1;
             } else if (cmd == 4) {
-                void* user_out_ptr = (void*)regs->ecx;
+                void* user_out_ptr = (void*)(uintptr_t)regs->ecx;
                 uint16_t kernel_temp = 0;
                 bool ok = nova_iot_get_temp(&kernel_temp);
                 if (ok) {
@@ -142,6 +142,6 @@ static void syscall_dispatcher(struct registers* regs) {
 
 void syscall_init(void) {
     // Interrupción de software 0x80 (128 decimal) accesible desde Ring 3 (DPL=3)
-    idt_set_gate(0x80, (uint32_t)syscall_dispatcher, 0x08, 0xEE);
+    idt_set_gate(0x80, (uint32_t)(uintptr_t)syscall_dispatcher, 0x08, 0xEE);
     register_interrupt_handler(0x80, syscall_dispatcher);
 }

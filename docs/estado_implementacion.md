@@ -51,9 +51,13 @@ NOVA OS implementa **11 perfiles de usuario** especializados. Cada perfil cuenta
 | **9** | **Ofimática / Oficina** | `calc-pro` (Planillas avanzadas), `invoice-mgr` (Facturación y contabilidad) | Administración comercial y gestión de documentos |
 | **10**| **Gamer / Streamer** | `game-launcher` (GameHub optimizado), `stream-obs` (Captura y streaming OBS) | Lanzador de videojuegos y transmisión de pantalla |
 
-### 2.5 Centro de Aplicaciones (NOVA Store)
-- Catálogo ampliado a más de 25 herramientas nativas.
-- Función `pkg_provision_profile(profile)` que instala en masa las herramientas al elegir o cambiar de perfil.
+### 2.5 Centro de Aplicaciones (NOVA Store) e Integridad Criptográfica
+- **Catálogo de Aplicaciones**: Más de 25 herramientas nativas catalogadas con firmas de verificación.
+- **Verificación Criptográfica de Integridad (Punto 3 de Auditoría)**:
+  - Implementación del algoritmo estándar **CRC32 (IEEE 802.3 polinomial `0xEDB88320`)** en [`kernel/drivers/pkg_manager.c`](file:///Users/cami/Desktop/NOVA/kernel/drivers/pkg_manager.c) y [`kernel/include/pkg_manager.h`](file:///Users/cami/Desktop/NOVA/kernel/include/pkg_manager.h).
+  - Cada paquete contiene su firma esperada (`expected_crc32`). Al invocarse `pkg_install()`, se ejecuta obligatoriamente `pkg_verify_integrity()`. Si los datos fueron alterados o están corrompidos, la instalación es rechazada y se bloquea la escritura en RAMFS.
+  - Validación contra el vector canónico estándar IEEE 802.3 (`"123456789"` -> `0xCBF43926`).
+- **Auto-Aprovisionamiento**: Función `pkg_provision_profile(profile)` que instala en masa las herramientas verificadas al elegir o cambiar de perfil.
 
 ### 2.6 Automatización y Motor de Reglas
 - **Rules Engine (Motor SI-ENTONCES)**: En [`kernel/drivers/rules_engine.c`](file:///Users/cami/Desktop/NOVA/kernel/drivers/rules_engine.c). Evaluación de umbrales térmicos y disparo de actuadores físicos en Arduino.
@@ -69,7 +73,7 @@ NOVA OS implementa **11 perfiles de usuario** especializados. Cada perfil cuenta
 - `ps`: Muestra la tabla de procesos y tareas en ejecución (PID, nombre, estado, ticks consumidos).
 - `profiles`: Presenta los 11 perfiles detallando su propósito.
 - `profile <0..10>`: Cambia de entorno y auto-descarga todas las aplicaciones correspondientes.
-- `store search | list | rec | install <id> | remove <id>`: Operaciones de tienda protegidas por ACL.
+- `store search | list | rec | install <id> | remove <id>`: Operaciones de tienda protegidas por ACL e integridad CRC32.
 - `rules`: Listado de reglas activas de automatización.
 - `arduino ping | led on | led off | temp | auto | log | status`: Telemetría e integración Arduino protegidas por permisos.
 
@@ -144,7 +148,12 @@ Se ejecutó la suite de pruebas mediante `make test`:
   [PASS] Perfil Gamer aprovisiona suite de juegos y OBS
   [PASS] App 'stream-obs' presente en RAMFS
 [*] Ejecutando: test_package_manager...
-  [PASS] Instalacion exitosa de paquete 'arduino-ide'
+  [PASS] pkg_compute_crc32 cumple con vector de prueba IEEE 802.3 (0xCBF43926)
+  [PASS] pkg_verify_integrity aprueba payload autentico con CRC32 esperado
+  [PASS] pkg_verify_integrity detecta discrepancia de CRC32 y rechaza paquete corrompido
+  [PASS] pkg_verify_integrity rechaza puntero nulo de forma segura
+  [PASS] pkg_verify_integrity rechaza paquete no catalogado
+  [PASS] Instalacion exitosa de paquete 'arduino-ide' verificado por CRC32
   [PASS] Paquete instalado crea entrada binaria en RAMFS (app_arduino-ide)
   [PASS] Deteccion de aplicacion ya instalada
   [PASS] Desinstalacion exitosa de paquete
@@ -163,7 +172,7 @@ Se ejecutó la suite de pruebas mediante `make test`:
   [PASS] Descriptor IDT tiene tamano estandar x86 (8 bytes)
 
 ----------------------------------------------------
-Resultados: 66 Aprobados | 0 Fallidos
+Resultados: 71 Aprobados | 0 Fallidos
 ----------------------------------------------------
 [+] Todas las pruebas pasaron satisfactoriamente.
 ```

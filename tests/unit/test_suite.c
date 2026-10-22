@@ -244,13 +244,33 @@ void test_profile_provisioning(void) {
     TEST_ASSERT(ramfs_read("app_stream-obs", buf, sizeof(buf)) > 0, "App 'stream-obs' presente en RAMFS");
 }
 
-/* Test 8: Gestor de Paquetes y Tienda (NOVA Store) */
+/* Test 8: Gestor de Paquetes y Tienda (NOVA Store) con Integridad Criptográfica */
 void test_package_manager(void) {
     printf("[*] Ejecutando: test_package_manager...\n");
     pkg_init();
 
+    // Verificación de algoritmo estándar IEEE 802.3 CRC32
+    uint32_t crc_vector = pkg_compute_crc32((const uint8_t*)"123456789", 9);
+    TEST_ASSERT(crc_vector == 0xCBF43926, "pkg_compute_crc32 cumple con vector de prueba IEEE 802.3 (0xCBF43926)");
+
+    // Verificación de integridad con payload auténtico
+    const char* valid_payload = "NOVA_APP_EXEC_V1";
+    TEST_ASSERT(pkg_verify_integrity("arduino-ide", (const uint8_t*)valid_payload, k_strlen(valid_payload)) == true,
+                "pkg_verify_integrity aprueba payload autentico con CRC32 esperado");
+
+    // Detección y rechazo de payload alterado/corrompido
+    const char* tampered_payload = "TAMPERED_MALICIOUS_APP";
+    TEST_ASSERT(pkg_verify_integrity("arduino-ide", (const uint8_t*)tampered_payload, k_strlen(tampered_payload)) == false,
+                "pkg_verify_integrity detecta discrepancia de CRC32 y rechaza paquete corrompido");
+
+    // Robustez ante punteros nulos o paquete inexistente
+    TEST_ASSERT(pkg_verify_integrity(NULL, (const uint8_t*)valid_payload, 16) == false,
+                "pkg_verify_integrity rechaza puntero nulo de forma segura");
+    TEST_ASSERT(pkg_verify_integrity("inexistente", (const uint8_t*)valid_payload, 16) == false,
+                "pkg_verify_integrity rechaza paquete no catalogado");
+
     int res = pkg_install("arduino-ide");
-    TEST_ASSERT(res == 0, "Instalacion exitosa de paquete 'arduino-ide'");
+    TEST_ASSERT(res == 0, "Instalacion exitosa de paquete 'arduino-ide' verificado por CRC32");
 
     uint8_t meta_buf[64];
     k_memset(meta_buf, 0, sizeof(meta_buf));
