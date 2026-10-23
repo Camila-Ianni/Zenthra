@@ -35,6 +35,9 @@ typedef uint8_t bool;
 #ifndef UINT32_MAX
 #define UINT32_MAX 0xFFFFFFFFU
 #endif
+#ifndef UINTPTR_MAX
+#define UINTPTR_MAX 0xFFFFFFFFU
+#endif
 
 #else
 /* Entorno de pruebas / Host */
