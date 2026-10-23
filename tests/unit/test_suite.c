@@ -22,6 +22,8 @@
 #include "gfx.h"
 #include "mouse.h"
 #include "window_manager.h"
+#include "keyboard.h"
+#include "errno.h"
 
 // Variables y stubs requeridos por drivers en host
 void vga_putc(char c) {
@@ -516,7 +518,7 @@ void test_syscall_boundary_and_abi(void) {
     TEST_ASSERT(regs_acl.eax == 0, "SYS_SET_PROFILE cambia el perfil activo con permisos de administracion");
     TEST_ASSERT(task_get_current()->profile == PROFILE_STUDENT, "Perfil de proceso verificado tras SYS_SET_PROFILE");
 
-    // Auditoría v14: Semántica ABI de SYS_WRITE (buffer binario, count=0 POSIX y no requiere NUL)
+    // Auditoría v14/v15: Semántica ABI de SYS_WRITE (buffer binario, count=0 POSIX y códigos errno estandarizados)
     char sample_user_buf[32] = "Userland Output Test";
     struct registers regs_w;
     k_memset(&regs_w, 0, sizeof(struct registers));
@@ -534,19 +536,26 @@ void test_syscall_boundary_and_abi(void) {
     syscall_dispatcher(&regs_w);
     TEST_ASSERT(regs_w.eax == 6, "SYS_WRITE escribe buffer binario con NUL intermedio sin truncar");
 
-    // SYS_WRITE con puntero NULL
+    // SYS_WRITE con puntero NULL retorna -EFAULT (-14)
     regs_w.eax = SYS_WRITE;
     regs_w.ebx = 0;
     regs_w.ecx = 10;
     syscall_dispatcher(&regs_w);
-    TEST_ASSERT(regs_w.eax == (uint32_t)-1, "SYS_WRITE rechaza puntero NULL");
+    TEST_ASSERT(regs_w.eax == (uint32_t)-EFAULT, "SYS_WRITE rechaza puntero NULL retornando -EFAULT (-14)");
 
-    // SYS_WRITE con puntero en espacio de kernel
+    // SYS_WRITE con puntero en espacio de kernel retorna -EFAULT (-14)
     regs_w.eax = SYS_WRITE;
     regs_w.ebx = (uintptr_t)(USER_MEMORY_LIMIT + 0x1000);
     regs_w.ecx = 10;
     syscall_dispatcher(&regs_w);
-    TEST_ASSERT(regs_w.eax == (uint32_t)-1, "SYS_WRITE rechaza puntero en espacio de memoria del kernel");
+    TEST_ASSERT(regs_w.eax == (uint32_t)-EFAULT, "SYS_WRITE rechaza puntero en espacio de memoria del kernel retornando -EFAULT (-14)");
+
+    // Auditoría v15: Syscall desconocida/no implementada retorna -ENOSYS (-38)
+    struct registers regs_unk;
+    k_memset(&regs_unk, 0, sizeof(struct registers));
+    regs_unk.eax = 999;
+    syscall_dispatcher(&regs_unk);
+    TEST_ASSERT(regs_unk.eax == (uint32_t)-ENOSYS, "Syscall desconocida retorna -ENOSYS (-38)");
 
     // SYS_READ con count=0 retorna 0
     struct registers regs_r;
@@ -557,12 +566,68 @@ void test_syscall_boundary_and_abi(void) {
     syscall_dispatcher(&regs_r);
     TEST_ASSERT(regs_r.eax == 0, "SYS_READ con count=0 retorna 0 exitosamente");
 
-    // SYS_READ con puntero NULL retorna -1
+    // SYS_READ con puntero NULL retorna -EFAULT (-14)
     regs_r.eax = SYS_READ;
     regs_r.ebx = 0;
     regs_r.ecx = 10;
     syscall_dispatcher(&regs_r);
-    TEST_ASSERT(regs_r.eax == (uint32_t)-1, "SYS_READ rechaza puntero NULL");
+    TEST_ASSERT(regs_r.eax == (uint32_t)-EFAULT, "SYS_READ rechaza puntero NULL retornando -EFAULT (-14)");
+
+    // Auditoría v15: SYS_READ con cola de teclado vacía en modo interactivo retorna -EAGAIN (-11)
+    keyboard_queue_clear();
+    char read_target[32];
+    k_memset(read_target, 0, sizeof(read_target));
+    regs_r.eax = SYS_READ;
+    regs_r.ebx = (uintptr_t)read_target;
+    regs_r.ecx = 10;
+    syscall_dispatcher(&regs_r);
+    TEST_ASSERT(regs_r.eax == (uint32_t)-EAGAIN, "SYS_READ con cola vacia retorna -EAGAIN (-11) en lugar de 0 EOF");
+
+    // Auditoría v15: Inyección en cola de teclado y lectura real vía SYS_READ
+    keyboard_enqueue_char('Z');
+    keyboard_enqueue_char('E');
+    keyboard_enqueue_char('N');
+    TEST_ASSERT(keyboard_queue_length() == 3, "Cola de teclado encola 3 caracteres correctamente");
+    regs_r.eax = SYS_READ;
+    regs_r.ebx = (uintptr_t)read_target;
+    regs_r.ecx = 10;
+    syscall_dispatcher(&regs_r);
+    TEST_ASSERT(regs_r.eax == 3, "SYS_READ lee los 3 caracteres encolados exitosamente");
+    TEST_ASSERT(k_strncmp(read_target, "ZEN", 3) == 0, "Contenido leido por SYS_READ coincide exactamente con la entrada");
+    TEST_ASSERT(keyboard_queue_is_empty() == true, "Cola de teclado queda vacia tras el consumo por SYS_READ");
+
+    // Auditoría v15: Salvaguarda contra pérdida de teclas ante búfer destino inválido
+    keyboard_enqueue_char('K');
+    keyboard_enqueue_char('E');
+    keyboard_enqueue_char('Y');
+    regs_r.eax = SYS_READ;
+    regs_r.ebx = 0; // Puntero inválido
+    regs_r.ecx = 3;
+    syscall_dispatcher(&regs_r);
+    TEST_ASSERT(regs_r.eax == (uint32_t)-EFAULT, "SYS_READ con puntero invalido es rechazado con -EFAULT");
+    TEST_ASSERT(keyboard_queue_length() == 3, "Salvaguarda: no se pierden teclas de la cola si el buffer de usuario es invalido");
+    // Lectura posterior con búfer válido recupera los datos íntegros
+    char safe_read_buf[16];
+    regs_r.eax = SYS_READ;
+    regs_r.ebx = (uintptr_t)safe_read_buf;
+    regs_r.ecx = 3;
+    syscall_dispatcher(&regs_r);
+    TEST_ASSERT(regs_r.eax == 3, "Lectura posterior con buffer valido recupera los datos intactos");
+    TEST_ASSERT(k_strncmp(safe_read_buf, "KEY", 3) == 0, "Caracteres recuperados intactos de la cola");
+
+    // Auditoría v15: Prevención de desbordamiento de la cola de teclado
+    keyboard_queue_clear();
+    bool all_enqueued = true;
+    for (size_t i = 0; i < KEYBOARD_QUEUE_CAPACITY; i++) {
+        if (!keyboard_enqueue_char('X')) {
+            all_enqueued = false;
+            break;
+        }
+    }
+    TEST_ASSERT(all_enqueued == true, "Cola de teclado admite hasta su capacidad maxima (128 caracteres)");
+    TEST_ASSERT(keyboard_queue_length() == KEYBOARD_QUEUE_CAPACITY, "Cola alcanza capacidad maxima");
+    TEST_ASSERT(keyboard_enqueue_char('!') == false, "keyboard_enqueue_char rechaza desbordamiento cuando la cola esta saturada");
+    keyboard_queue_clear();
 }
 
 /* Test 15: Multitarea Preemptiva, Quantum y Estados Sleep / Wakeup (Fase 3) */
@@ -777,27 +842,34 @@ void test_virtual_memory_paging(void) {
     TEST_ASSERT(strnlen_user((const char*)0x40002000, 32) == -1, "strnlen_user rechaza cadena en pagina no mapeada sin causar #PF");
     TEST_ASSERT(strnlen_user((const char*)0x00100000, 32) == -1, "strnlen_user rechaza cadena en pagina de kernel sin PTE_USER");
 
-    // Auditoría v14: SYS_WRITE y SYS_READ bajo paginación activa en pdir
+    // Auditoría v14/v15: SYS_WRITE y SYS_READ bajo paginación activa en pdir retornan -EFAULT (-14)
     struct registers regs_sw;
     k_memset(&regs_sw, 0, sizeof(struct registers));
     regs_sw.eax = SYS_WRITE;
     regs_sw.ebx = (uintptr_t)0x40002000; // no mapeada
     regs_sw.ecx = 10;
     syscall_dispatcher(&regs_sw);
-    TEST_ASSERT(regs_sw.eax == (uint32_t)-1, "SYS_WRITE rechaza escritura desde pagina de usuario no mapeada");
+    TEST_ASSERT(regs_sw.eax == (uint32_t)-EFAULT, "SYS_WRITE rechaza escritura desde pagina de usuario no mapeada con -EFAULT");
 
+    regs_sw.eax = SYS_WRITE;
     regs_sw.ebx = (uintptr_t)(proc_virt + 4000); // cruza frontera a página no mapeada (0x40001000 no mapeada)
     regs_sw.ecx = 200;
     syscall_dispatcher(&regs_sw);
-    TEST_ASSERT(regs_sw.eax == (uint32_t)-1, "SYS_WRITE rechaza buffer que cruza frontera hacia pagina no mapeada");
+    TEST_ASSERT(regs_sw.eax == (uint32_t)-EFAULT, "SYS_WRITE rechaza buffer que cruza frontera hacia pagina no mapeada con -EFAULT");
 
     regs_sw.eax = SYS_READ;
     regs_sw.ebx = (uintptr_t)proc_virt; // proc_virt actualmente de solo lectura
     regs_sw.ecx = 10;
     syscall_dispatcher(&regs_sw);
-    TEST_ASSERT(regs_sw.eax == (uint32_t)-1, "SYS_READ rechaza lectura hacia pagina de solo lectura sin PTE_WRITABLE");
+    TEST_ASSERT(regs_sw.eax == (uint32_t)-EFAULT, "SYS_READ rechaza lectura hacia pagina de solo lectura sin PTE_WRITABLE con -EFAULT");
+
+    // Auditoría v15: Validación Fail-Closed de espacio de usuario (sin recurrir al directorio del kernel)
+    vmm_switch_page_directory(kdir);
+    TEST_ASSERT(is_user_pages_accessible_failclosed((const void*)proc_virt, 10, false) == false,
+                "is_user_pages_accessible_failclosed falla cerrado si la pagina no existe en el directorio de usuario");
 
     // Restaurar permiso de escritura con vmm_set_page_flags
+    vmm_switch_page_directory(pdir);
     vmm_set_page_flags(pdir, proc_virt, PTE_PRESENT | PTE_USER | PTE_WRITABLE);
     vmm_switch_page_directory(kdir);
 

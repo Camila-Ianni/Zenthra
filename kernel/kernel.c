@@ -31,11 +31,13 @@ static volatile uint32_t worker_a_counter = 0;
 static volatile uint32_t worker_b_counter = 0;
 static volatile uint32_t cpu_bound_ticks = 0;
 static volatile bool test_complete_emitted = false;
+static volatile bool kernel_test_mode = false;
 
 /*
- * Verificación estricta de finalización de pruebas de arranque en QEMU (Auditoría v14):
+ * Verificación estricta de finalización de pruebas de arranque en QEMU (Auditoría v14/v15):
  * Emite una señal final inequívoca únicamente cuando los tres trabajadores concurrentes
  * han completado sus ciclos y se ha demostrado la preempción por hardware del PIT IRQ0.
+ * En modo automatizado de prueba (test-mode), efectúa un apagado limpio de QEMU vía ACPI.
  */
 static void check_all_workers_complete(void) {
     if (!test_complete_emitted && 
@@ -44,6 +46,11 @@ static void check_all_workers_complete(void) {
         cpu_bound_ticks >= 500000) {
         test_complete_emitted = true;
         serial_write_string("[TEST_COMPLETE] ZENTHRA_QEMU_TEST_COMPLETE: Kernel inicializado, subsistemas activos y tareas ejecutadas con exito.\r\n");
+        if (kernel_test_mode) {
+            serial_write_string("[POWER] Apagado limpio ACPI de QEMU (test-complete confirmado).\r\n");
+            for (volatile int i = 0; i < 50000; i++) {}
+            qemu_poweroff();
+        }
     }
 }
 
@@ -220,6 +227,10 @@ void kernel_main(uint32_t magic, uintptr_t mbi_addr) {
     if (mb_ok) {
         vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
         kprintf("[OK] (Multiboot %u, Magic: 0x%x)\n", mb_info.version, magic);
+        if (mb_info.is_test_mode) {
+            kernel_test_mode = true;
+            serial_write_string("[BOOT] Modo automatizado de prueba (test-mode) detectado en cmdline.\r\n");
+        }
         if (mb_info.version == 2) {
             vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREY, VGA_COLOR_BLACK));
             kprintf("    Etiquetas parseadas de forma segura: %u tags.\n", mb_info.tags_count);

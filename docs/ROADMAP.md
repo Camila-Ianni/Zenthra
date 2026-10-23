@@ -1,7 +1,7 @@
-# Zenthra OS — Hoja de Ruta de Desarrollo (Roadmap v14)
+# Zenthra OS — Hoja de Ruta de Desarrollo (Roadmap v15)
 
 > **Plan Maestro de Evolución hacia un Sistema Operativo de PC**  
-> Formulado para el proyecto académico de grado de Camila Ianni (2026), estructurado con base en la **Auditoría Técnica v14**.
+> Formulado para el proyecto académico de grado de Camila Ianni (2026), estructurado con base en la **Auditoría Técnica v15**.
 
 ---
 
@@ -9,8 +9,8 @@
 
 ```mermaid
 flowchart TD
-    F0["Fase 0: Congelar Base y Hashes Criptográficos"] --> F1["Fase 1: Arranque Reproducible y CI con Señal Final"]
-    F1 --> F2["Fase 2: Memoria, Paginación 64 MiB y Syscalls Seguras"]
+    F0["Fase 0: Congelar Base y Hashes Criptográficos"] --> F1["Fase 1: Arranque Confiable CI test-complete y boot-smoke"]
+    F1 --> F2["Fase 2: SYS_READ Funcional, Fail-Closed, errno.h y VMM 64 MiB"]
     F2 --> F3["Fase 3: Proceso Ring 3 Aislado y Cargador ELF"]
     F3 --> F4["Fase 4: Userland Nativo (Terminal, Monitor, Editor)"]
     F4 --> F5["Fase 5: Persistencia en Disco Virtual (ATA/IDE y FS)"]
@@ -27,23 +27,31 @@ flowchart TD
 
 ### Fase 0 — Congelar Base y Registrar Hashes (COMPLETADA)
 - [x] Versionar el commit y registrar hashes criptográficos SHA-256 en `build/BUILD_INFO.txt`.
-- [x] Suite de pruebas automatizadas con 237 pruebas unitarias aprobadas (0 fallos).
+- [x] Suite de pruebas automatizadas con 251 pruebas unitarias aprobadas (0 fallos).
 - [x] Criterio de salida: Manifiesto reproducible con SHA-256 de binarios ELF e ISO.
 
-### Fase 1 — Arranque Reproducible e Integración Continua (COMPLETADA EN CI)
-- [x] Flujo de compilación determinista y reproducible con `make clean`, `make check-env` y `make test` (237 tests).
+### Fase 1 — Arranque Confiable e Integración Continua (COMPLETADA EN CI)
+- [x] Flujo de compilación determinista y reproducible con `make clean`, `make check-env` y `make test` (251 tests).
 - [x] Validación estricta de cabecera con `grub-file --is-x86-multiboot` en CI (Ubuntu runner).
 - [x] Generación de ISO con `grub-mkrescue` y hash SHA-256 verificado en CI.
-- [x] Señal inequívoca de fin de prueba `ZENTHRA_QEMU_TEST_COMPLETE` emitida tras la finalización de todos los workers concurrentes y preempción PIT IRQ0.
+- [x] Separación estricta de pruebas en QEMU:
+  - `verify-qemu-complete`: Ejecución directa del kernel con bandera `test-mode`, emisión del marcador `ZENTHRA_QEMU_TEST_COMPLETE`, apagado limpio ACPI y finalización con **exit code 0**. **No se acepta timeout 124 como PASS**.
+  - `verify-qemu-smoke`: Arranque de la imagen ISO con GRUB, inicialización gráfica VESA LFB, ratón PS/2, gestor de ventanas y estabilidad del escritorio sin pánicos de CPU.
 - [x] Pipeline de GitHub Actions CI archivando ISO, ELF, `serial.log` y `BUILD_INFO.txt`.
 - [ ] Reproducción local en hosts macOS/Windows (reportado de forma limpia como `[BLOCKED]` por herramientas de virtualización de host).
 
-### Fase 2 — Memoria Física/Virtual y Syscalls Seguras (COMPLETADA)
+### Fase 2 — Entrada Real, Syscalls Seguras, Memoria Fail-Closed y errno.h (COMPLETADA)
+- [x] Implementación funcional de `SYS_READ` conectada a cola circular de teclado y terminal:
+  - Retorna bytes leídos si hay caracteres disponibles en la cola.
+  - En lectura interactiva no bloqueante sin datos listos, retorna `-EAGAIN` (-11) en lugar de `0` (el cual representa EOF en POSIX).
+  - Validación previa del búfer de usuario antes de extraer caracteres de la cola, garantizando que no se pierdan pulsaciones de teclas ante punteros inválidos.
+  - Salvaguarda contra saturación y desbordamiento de la cola de teclado (capacidad fija de 128 caracteres).
+- [x] Validación de memoria Fail-Closed en `is_user_pages_accessible_failclosed()`: si el directorio de páginas activo es nulo o inaccesible, se rechaza la llamada de usuario con `-EFAULT` sin recurrir al espacio del kernel por defecto.
+- [x] Centralización de códigos de error y ABI de syscalls en `kernel/include/errno.h` (`EPERM`, `EBADF`, `EAGAIN`, `ENOMEM`, `EACCES`, `EFAULT`, `EINVAL`, `ENOSYS`, `EOVERFLOW`).
 - [x] Aritmética de 64 bits en PMM a prueba de desbordamiento en redondeos superiores (`UINT64_MAX`) y reserva de regiones críticas.
 - [x] Unificación del Identity Mapping del kernel supervisor a 64 MiB (`KERNEL_IDENTITY_TABLES = 16`, `KERNEL_IDENTITY_MAP_SIZE = 64 MiB`).
-- [x] Verificación de accesibilidad de directorio con `vmm_is_directory_accessible(pd)` impidiendo desreferencias físicas no mapeadas.
-- [x] Inspección segura página por página en `strnlen_user()` exigiendo `PTE_PRESENT` y `PTE_USER` antes de desreferenciar cada byte, evitando `#PF` en Ring 0.
-- [x] Definición formal de la ABI de `SYS_WRITE` para buffers binarios (`count == 0` retorna 0 según POSIX, sin requerir terminador NUL) y `SYS_READ`.
+- [x] Inspección segura bloque por bloque en `strnlen_user()` exigiendo `PTE_PRESENT` y `PTE_USER`.
+- [x] Definición formal de la ABI de `SYS_WRITE` para buffers binarios (`count == 0` retorna 0 según POSIX, sin requerir terminador NUL).
 
 ### Fase 3 — Proceso Ring 3 y Cargador ELF i386 (PRÓXIMO OBJETIVO)
 - [ ] Definición formal de la ABI de llamadas al sistema (Syscalls) para Ring 3 (convenciones, estructuras y códigos de error).

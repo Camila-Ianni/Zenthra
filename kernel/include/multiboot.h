@@ -96,6 +96,7 @@ struct multiboot_parsed_info {
     uint32_t fb_height;     /* Alto en píxeles */
     uint32_t fb_pitch;      /* Bytes por fila (scanline) */
     uint8_t  fb_bpp;        /* Bits por píxel (e.g. 32 bpp) */
+    bool is_test_mode;      /* true si cmdline incluye "test" para apagado automático en CI */
     bool valid;             /* true si la firma y estructura fueron validadas */
 };
 
@@ -115,6 +116,7 @@ static inline bool multiboot_parse(uint32_t magic, uintptr_t addr, struct multib
     out->fb_height = 0;
     out->fb_pitch = 0;
     out->fb_bpp = 0;
+    out->is_test_mode = false;
     out->valid = false;
 
     if (addr == 0) {
@@ -137,6 +139,15 @@ static inline bool multiboot_parse(uint32_t magic, uintptr_t addr, struct multib
             out->fb_height = mbi->framebuffer_height;
             out->fb_pitch = mbi->framebuffer_pitch;
             out->fb_bpp = mbi->framebuffer_bpp;
+        }
+        if ((mbi->flags & MULTIBOOT_INFO_CMDLINE) && mbi->cmdline != 0) {
+            const char* cmd = (const char*)(uintptr_t)mbi->cmdline;
+            for (size_t i = 0; cmd[i] != '\0' && i < 256; i++) {
+                if (cmd[i] == 't' && cmd[i+1] == 'e' && cmd[i+2] == 's' && cmd[i+3] == 't') {
+                    out->is_test_mode = true;
+                    break;
+                }
+            }
         }
         return true;
     }
@@ -163,6 +174,17 @@ static inline bool multiboot_parse(uint32_t magic, uintptr_t addr, struct multib
             }
 
             out->tags_count++;
+
+            // Tag 1: Línea de comandos (cmdline)
+            if (tag->type == 1 && tag->size > 8) {
+                const char* cmd = (const char*)(addr + offset + 8);
+                for (size_t i = 0; cmd[i] != '\0' && i < 256; i++) {
+                    if (cmd[i] == 't' && cmd[i+1] == 'e' && cmd[i+2] == 's' && cmd[i+3] == 't') {
+                        out->is_test_mode = true;
+                        break;
+                    }
+                }
+            }
 
             // Tag 4: Información básica de memoria
             if (tag->type == 4 && tag->size >= sizeof(struct multiboot2_tag_basic_mem)) {

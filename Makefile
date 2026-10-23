@@ -190,66 +190,35 @@ endif
 # Ejecutar suite de pruebas unitarias y de subsistemas
 test:
 	@echo "=== Compilando y ejecutando Test Suite de Zenthra OS ==="
-	$(CC_HOST) -Wall -Wextra -Ikernel/include tests/mocks/mock_hw.c kernel/lib/klib.c kernel/lib/kheap.c kernel/arch/x86/syscall.c kernel/drivers/task.c kernel/drivers/acl_security.c kernel/drivers/ramfs.c kernel/drivers/rules_engine.c kernel/drivers/pkg_manager.c kernel/drivers/pmm.c kernel/drivers/vmm.c kernel/drivers/page_fault.c kernel/drivers/gfx.c kernel/drivers/mouse.c kernel/drivers/window_manager.c tests/unit/test_suite.c -o bin_test
+	$(CC_HOST) -Wall -Wextra -Ikernel/include tests/mocks/mock_hw.c kernel/lib/klib.c kernel/lib/kheap.c kernel/arch/x86/syscall.c kernel/drivers/keyboard.c kernel/drivers/task.c kernel/drivers/acl_security.c kernel/drivers/ramfs.c kernel/drivers/rules_engine.c kernel/drivers/pkg_manager.c kernel/drivers/pmm.c kernel/drivers/vmm.c kernel/drivers/page_fault.c kernel/drivers/gfx.c kernel/drivers/mouse.c kernel/drivers/window_manager.c tests/unit/test_suite.c -o bin_test
 	./bin_test
 
-# Verificación automatizada de arranque en QEMU y captura serial
-verify-qemu: $(ISO_NAME)
-	@echo "=== Verificando arranque de Zenthra OS en QEMU (Headless) ==="
+# Verificación 1: Prueba de finalización estricta (test-complete)
+# Ejecuta en modo test-mode con kernel ELF directo, exige finalización de workers,
+# emisión del marcador final y apagado limpio ACPI (exit code 0). NO acepta timeouts.
+verify-qemu-complete: $(BIN_NAME)
+	@echo "=== Verificando prueba de finalizacion estricta (test-complete) en QEMU ==="
 	@if ! command -v qemu-system-i386 >/dev/null 2>&1; then \
 		echo "[BLOCKED] 'qemu-system-i386' no esta disponible en este host."; \
 		echo "          El arranque en QEMU se valida de forma automatica en GitHub Actions CI."; \
 		exit 1; \
 	fi
 	@rm -f $(BUILD_DIR)/serial.log
-	@qemu_status=0; timeout 8s qemu-system-i386 -cdrom $(ISO_NAME) -serial file:$(BUILD_DIR)/serial.log -display none || qemu_status=$$?; \
-	if [ $$qemu_status -ne 0 ] && [ $$qemu_status -ne 124 ]; then \
-		echo "[-] Error fatal: QEMU aborto con fallo anomalo (exit code $$qemu_status)"; \
+	@qemu_status=0; timeout 15s qemu-system-i386 -no-reboot -kernel $(BIN_NAME) -append "test-mode" -serial file:$(BUILD_DIR)/serial.log -display none || qemu_status=$$?; \
+	if [ $$qemu_status -eq 124 ]; then \
+		echo "[-] Error fatal: QEMU expiro por timeout (15s) sin completar la prueba ni apagarse limpiamente."; \
+		exit 1; \
+	elif [ $$qemu_status -ne 0 ]; then \
+		echo "[-] Error fatal: QEMU aborto con codigo anomalo (exit code $$qemu_status)"; \
 		exit 1; \
 	fi
 	@if [ ! -s $(BUILD_DIR)/serial.log ]; then \
 		echo "[-] Error: QEMU no genero salida serial o el archivo serial.log esta vacio"; \
 		exit 1; \
 	fi
-	@echo "--- Contenido del Log Serial de Zenthra OS ---"
+	@echo "--- Log Serial de Finalizacion Estricta (test-complete) ---"
 	@cat $(BUILD_DIR)/serial.log
-	@echo "-----------------------------------------------"
-	@if grep -q "CPU PANIC" $(BUILD_DIR)/serial.log; then \
-		echo "[-] Error: Se detecto un Panic de CPU no controlado en serial.log"; \
-		exit 1; \
-	fi
-	@grep -q "ZENTHRA OS SERIAL LOG" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se encontro el banner serial del kernel" && exit 1)
-	@grep -q "PMM" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se encontro inicializacion de PMM en serial.log" && exit 1)
-	@grep -q "VMM" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se encontro activacion de Paginacion x86 en serial.log" && exit 1)
-	@grep -q "GFX" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se encontro inicializacion de GFX en serial.log" && exit 1)
-	@grep -q "MOUSE" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se encontro inicializacion de MOUSE en serial.log" && exit 1)
-	@grep -q "WM" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se encontro inicializacion de Window Manager en serial.log" && exit 1)
-	@grep -q "Worker A" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se registro la ejecucion del Worker A" && exit 1)
-	@grep -q "Worker B" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se registro la ejecucion del Worker B" && exit 1)
-	@grep -q "Worker C (CPU-bound)" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se registro la ejecucion de Worker C CPU-bound" && exit 1)
-	@grep -q "Interrupcion IRQ0" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se registraron ticks de interrupcion de PIT IRQ0" && exit 1)
-	@grep -q "ZENTHRA_QEMU_TEST_COMPLETE" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se encontro el marcador final ZENTHRA_QEMU_TEST_COMPLETE (ejecucion incompleta o abortada)" && exit 1)
-	@echo "[+] [PASS] Arranque verificado: Banner presente, PMM detectado, Paginacion VMM activa, GFX/Mouse/WM listos, PIT IRQ0 activo, preempcion multitarea exitosa y senal final ZENTHRA_QEMU_TEST_COMPLETE confirmada."
-
-verify-qemu-direct: $(BIN_NAME)
-	@echo "=== Verificando arranque directo de Zenthra Kernel ELF en QEMU (Headless) ==="
-	@if ! command -v qemu-system-i386 >/dev/null 2>&1; then \
-		echo "[BLOCKED] 'qemu-system-i386' no esta disponible en este host."; \
-		exit 1; \
-	fi
-	@rm -f $(BUILD_DIR)/serial.log
-	@qemu_status=0; timeout 8s qemu-system-i386 -kernel $(BIN_NAME) -serial file:$(BUILD_DIR)/serial.log -display none || qemu_status=$$?; \
-	if [ $$qemu_status -ne 0 ] && [ $$qemu_status -ne 124 ]; then \
-		echo "[-] Error fatal: QEMU aborto con fallo anomalo (exit code $$qemu_status)"; \
-		exit 1; \
-	fi
-	@if [ ! -s $(BUILD_DIR)/serial.log ]; then \
-		echo "[-] Error: QEMU no genero salida serial o el archivo serial.log esta vacio"; \
-		exit 1; \
-	fi
-	@echo "--- Contenido del Log Serial de Zenthra OS ---"
-	@cat $(BUILD_DIR)/serial.log
-	@echo "-----------------------------------------------"
+	@echo "------------------------------------------------------------"
 	@if grep -q "CPU PANIC" $(BUILD_DIR)/serial.log; then \
 		echo "[-] Error: Se detecto un Panic de CPU no controlado en serial.log"; \
 		exit 1; \
@@ -262,7 +231,48 @@ verify-qemu-direct: $(BIN_NAME)
 	@grep -q "Worker C (CPU-bound)" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se registro la ejecucion de Worker C CPU-bound" && exit 1)
 	@grep -q "Interrupcion IRQ0" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se registraron ticks de interrupcion de PIT IRQ0" && exit 1)
 	@grep -q "ZENTHRA_QEMU_TEST_COMPLETE" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se encontro el marcador final ZENTHRA_QEMU_TEST_COMPLETE" && exit 1)
-	@echo "[+] [PASS] Arranque directo en QEMU verificado exitosamente con senal final ZENTHRA_QEMU_TEST_COMPLETE."
+	@grep -q "Apagado limpio ACPI" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se registro el apagado ACPI limpio en serial.log" && exit 1)
+	@echo "[+] [PASS] Prueba test-complete superada: Kernel completado y apagado limpiamente con exit code 0 (sin timeouts)."
+
+# Verificación 2: Prueba de humo de arranque ISO y GUI viva (boot-smoke)
+# Comprueba que la imagen ISO arranque con GRUB, cargue el framebuffer VESA, mouse,
+# gestor de ventanas y mantenga la ejecución viva de forma estable sin crasheos.
+verify-qemu-smoke: $(ISO_NAME)
+	@echo "=== Verificando prueba de humo de arranque ISO y GUI (boot-smoke) en QEMU ==="
+	@if ! command -v qemu-system-i386 >/dev/null 2>&1; then \
+		echo "[BLOCKED] 'qemu-system-i386' no esta disponible en este host."; \
+		exit 1; \
+	fi
+	@rm -f $(BUILD_DIR)/serial.log
+	@qemu_status=0; timeout 8s qemu-system-i386 -cdrom $(ISO_NAME) -serial file:$(BUILD_DIR)/serial.log -display none || qemu_status=$$?; \
+	if [ $$qemu_status -ne 0 ] && [ $$qemu_status -ne 124 ]; then \
+		echo "[-] Error fatal: QEMU aborto con fallo anomalo (exit code $$qemu_status)"; \
+		exit 1; \
+	fi
+	@if [ ! -s $(BUILD_DIR)/serial.log ]; then \
+		echo "[-] Error: QEMU no genero salida serial o el archivo serial.log esta vacio"; \
+		exit 1; \
+	fi
+	@echo "--- Log Serial de Prueba de Humo ISO / GUI (boot-smoke) ---"
+	@cat $(BUILD_DIR)/serial.log
+	@echo "------------------------------------------------------------"
+	@if grep -q "CPU PANIC" $(BUILD_DIR)/serial.log; then \
+		echo "[-] Error: Se detecto un Panic de CPU no controlado en serial.log"; \
+		exit 1; \
+	fi
+	@grep -q "ZENTHRA OS SERIAL LOG" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se encontro el banner serial del kernel" && exit 1)
+	@grep -q "GFX" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se encontro inicializacion de GFX en serial.log" && exit 1)
+	@grep -q "MOUSE" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se encontro inicializacion de MOUSE en serial.log" && exit 1)
+	@grep -q "WM" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se encontro inicializacion de Window Manager en serial.log" && exit 1)
+	@echo "[+] [PASS] Prueba boot-smoke superada: ISO arrancable con GRUB, subsistema grafico, raton y escritorio activos."
+
+# Verificación integral: combina test-complete estricto y boot-smoke
+verify-qemu: verify-qemu-complete verify-qemu-smoke
+	@echo "=========================================================================="
+	@echo " [+] [PASS] Todas las verificaciones QEMU (test-complete y boot-smoke) OK."
+	@echo "=========================================================================="
+
+verify-qemu-direct: verify-qemu-complete
 
 qemu: $(BIN_NAME)
 	qemu-system-i386 -kernel $(BIN_NAME) -serial stdio
@@ -270,4 +280,4 @@ qemu: $(BIN_NAME)
 qemu-iso: iso
 	qemu-system-i386 -cdrom $(ISO_NAME) -serial stdio
 
-.PHONY: all kernel check-env check-multiboot clean qemu qemu-iso iso test verify-qemu verify-qemu-direct
+.PHONY: all kernel check-env check-multiboot clean qemu qemu-iso iso test verify-qemu verify-qemu-complete verify-qemu-smoke verify-qemu-direct
