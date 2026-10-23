@@ -85,9 +85,9 @@ Zenthra OS implementa **11 perfiles de usuario** especializados. Cada perfil cue
 
 ---
 
-### 3. Pruebas Automatizadas y Validación
+### 3. Pruebas Automatizadas y Validación (Auditoría v14)
 
-Se ejecutó la suite de pruebas mediante `make test` (221 pruebas automatizadas, 0 fallos):
+Se ejecutó la suite de pruebas mediante `make test` (**237 pruebas automatizadas, 0 fallos**):
 
 ```
 ====================================================
@@ -96,31 +96,41 @@ Se ejecutó la suite de pruebas mediante `make test` (221 pruebas automatizadas,
 
 [*] Ejecutando: test_klib_strings... (8 pruebas)
 [*] Ejecutando: test_kheap_allocator... (6 pruebas)
-[*] Ejecutando: test_syscall_security_checks... (10 pruebas: buffers, limites, multi-pagina)
-[*] Ejecutando: test_multitasking_scheduler... (10 pruebas: Round-Robin, yield, estres 40 tareas)
+[*] Ejecutando: test_syscall_security_checks... (16 pruebas: strnlen_user seguro con validación de páginas, SYS_WRITE binario POSIX, SYS_READ con PTE_WRITABLE, buffers multi-página y límites de memoria)
+[*] Ejecutando: test_multitasking_scheduler... (10 pruebas: Round-Robin, yield, estrés 40 tareas)
 [*] Ejecutando: test_acl_security... (7 pruebas: permisos granulares por proceso)
 [*] Ejecutando: test_ramfs... (9 pruebas: CRUD, rechazo de sobreflujo >1024)
 [*] Ejecutando: test_profile_provisioning... (10 pruebas: 11 perfiles, auto-aprovisionamiento)
-[*] Ejecutando: test_package_manager... (12 pruebas: CRC32 IEEE 802.3, verificacion, rollback)
+[*] Ejecutando: test_package_manager... (12 pruebas: CRC32 IEEE 802.3, verificación, rollback)
 [*] Ejecutando: test_rules_engine... (3 pruebas: disparadores y logging)
 [*] Ejecutando: test_bidirectional_simulation... (4 pruebas: protocolo ZIoT serie)
 [*] Ejecutando: test_x86_structures... (3 pruebas: GDT, IDT, TSS 104 bytes)
 [*] Ejecutando: test_multiboot_and_power... (11 pruebas: firmas, tags, salvaguardas ACPI)
-[*] Ejecutando: test_pmm_physical_allocator... (22 pruebas: 64-bit, alineacion, limites)
-[*] Ejecutando: test_vmm_hardware_paging... (28 pruebas: CR0, CR3, accesibilidad, direct map)
-[*] Ejecutando: test_page_fault_handler... (8 pruebas: decodificacion #PF CR2)
-[*] Ejecutando: test_pit_and_irq_masks... (10 pruebas: 100 Hz, mascaras PIC)
+[*] Ejecutando: test_pmm_physical_allocator... (23 pruebas: 64-bit, alineación, límites, salvaguarda de desbordamiento)
+[*] Ejecutando: test_vmm_hardware_paging... (38 pruebas: Identity Mapping exacto a 64 MiB, CR0, CR3, accesibilidad, direct map, aislamiento de proceso, TLB invalidation)
+[*] Ejecutando: test_page_fault_handler... (8 pruebas: decodificación #PF CR2)
+[*] Ejecutando: test_pit_and_irq_masks... (10 pruebas: 100 Hz, máscaras PIC)
 [*] Ejecutando: test_gfx_and_lfb... (25 pruebas: 1024x768x32bpp, doble buffer, clipping)
-[*] Ejecutando: test_mouse_ps2... (17 pruebas: paquetes, botones, limites de pantalla)
+[*] Ejecutando: test_mouse_ps2... (17 pruebas: paquetes, botones, límites de pantalla)
 [*] Ejecutando: test_window_manager_and_desktop... (18 pruebas: drag, focus, launcher, terminal)
 
 ----------------------------------------------------
-Resultados: 221 Aprobados | 0 Fallidos
+Resultados: 237 Aprobados | 0 Fallidos
 ----------------------------------------------------
 [+] Todas las pruebas pasaron satisfactoriamente.
 ```
 
 ---
 
-## 4. Pipeline de CI/CD
-Se configuró un flujo automatizado en [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) para compilar en Linux, validar la especificación Multiboot con `grub-file`, generar la imagen ISO arrancable `build/zenthra_os.iso`, calcular hashes SHA-256 en `build/BUILD_INFO.txt`, y verificar el arranque headless en QEMU con captura de logs seriales y ticks PIT IRQ0 en cada commit.
+## 4. Pipeline de CI/CD y Validación de Arranque
+
+- **Flujo GitHub Actions (`.github/workflows/ci.yml`)**:
+  - `make check-env`: Diagnóstico y reporte de herramientas del entorno.
+  - `make test`: Ejecución de las 237 pruebas unitarias sin dependencias externas.
+  - `make kernel`: Compilación y enlace del ELF x86 de 32 bits (`i686`).
+  - `grub-file`: Verificación estricta del encabezado Multiboot.
+  - `make iso`: Creación de la imagen arrancable `build/zenthra_os.iso` con GRUB y generación de `build/BUILD_INFO.txt` con SHA-256.
+  - `make verify-qemu` / `make verify-qemu-direct`: Ejecución headless en QEMU exigiendo la emisión del marcador `[TEST_COMPLETE] ZENTHRA_QEMU_TEST_COMPLETE` y descartando ejecuciones finalizadas únicamente por timeout.
+- **Portabilidad Host macOS / Darwin**:
+  - Detección explícita de SO en `Makefile`.
+  - En macOS emite mensajes informativos `[BLOCKED]` si faltan herramientas de cross-compilación (`i686-linux-gnu-gcc` o `grub-file`), permitiendo que el host compile y ejecute la suite de pruebas local (`make test`) limpiamente sin fallar por rutas inexistentes.

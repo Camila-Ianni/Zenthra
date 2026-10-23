@@ -2,26 +2,38 @@
 # Arquitectura: i686 (x86 32-bit Protected Mode ELF)
 
 # Detección flexible de Toolchain para host Linux y entornos cruzados
-ifneq ($(shell which i686-elf-gcc 2>/dev/null),)
-    CC = i686-elf-gcc
-    AS = i686-elf-as
-    LD = i686-elf-ld
-else ifneq ($(shell which gcc 2>/dev/null),)
-    CC = gcc -m32
-    AS = gcc -m32 -c
-    LD = ld -m elf_i386
-else ifneq ($(shell which clang 2>/dev/null),)
-    CC = clang -target i386-unknown-none-elf -m32
-    AS = clang -target i386-unknown-none-elf -m32 -c
-    ifneq ($(shell which ld.lld 2>/dev/null),)
-        LD = ld.lld -m elf_i386
+ifeq ($(shell uname -s),Darwin)
+    ifneq ($(shell which i686-elf-gcc 2>/dev/null),)
+        CC = i686-elf-gcc
+        AS = i686-elf-as
+        LD = i686-elf-ld
     else
+        CC = false
+        AS = false
         LD = false
     endif
 else
-    CC = false
-    AS = false
-    LD = false
+    ifneq ($(shell which i686-elf-gcc 2>/dev/null),)
+        CC = i686-elf-gcc
+        AS = i686-elf-as
+        LD = i686-elf-ld
+    else ifneq ($(shell which gcc 2>/dev/null),)
+        CC = gcc -m32
+        AS = gcc -m32 -c
+        LD = ld -m elf_i386
+    else ifneq ($(shell which clang 2>/dev/null),)
+        CC = clang -target i386-unknown-none-elf -m32
+        AS = clang -target i386-unknown-none-elf -m32 -c
+        ifneq ($(shell which ld.lld 2>/dev/null),)
+            LD = ld.lld -m elf_i386
+        else
+            LD = false
+        endif
+    else
+        CC = false
+        AS = false
+        LD = false
+    endif
 endif
 
 CFLAGS = -std=gnu99 -ffreestanding -O2 -Wall -Wextra \
@@ -73,16 +85,27 @@ $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
 
 $(BUILD_DIR)/%.o: %.s | $(BUILD_DIR)
-	mkdir -p $(dir $@)
+	@mkdir -p $(dir $@)
+	@if [ "$(AS)" = "false" ]; then \
+		echo "[BLOCKED] Ensamblador x86 bare-metal no disponible en este host (macOS Darwin)."; \
+		echo "          La compilacion del kernel ELF se ejecuta de forma reproducible en Ubuntu CI."; \
+		exit 1; \
+	fi
 	$(AS) $< -o $@
 
 $(BUILD_DIR)/%.o: %.c | $(BUILD_DIR)
-	mkdir -p $(dir $@)
+	@mkdir -p $(dir $@)
+	@if [ "$(CC)" = "false" ]; then \
+		echo "[BLOCKED] Compilador C x86 bare-metal no disponible en este host (macOS Darwin)."; \
+		echo "          La compilacion del kernel ELF se ejecuta de forma reproducible en Ubuntu CI."; \
+		exit 1; \
+	fi
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BIN_NAME): $(OBJS)
 	@if [ "$(LD)" = "false" ]; then \
-		echo "[-] Error: Cross-linker x86 (ld -m elf_i386 o i686-elf-ld) no disponible en este host."; \
+		echo "[BLOCKED] Cross-linker x86 (ld -m elf_i386 o i686-elf-ld) no disponible en este host (macOS Darwin)."; \
+		echo "          El enlace del kernel ELF se ejecuta de forma reproducible en Ubuntu CI."; \
 		exit 1; \
 	fi
 	$(LD) $(LDFLAGS) -o $@ $(OBJS)
@@ -94,8 +117,12 @@ check-env:
 	@echo "=== Diagnostico de Herramientas de Construccion Zenthra OS ==="
 	@printf "  Compilador C Host (%s): " "$(CC_HOST)"
 	@command -v $(CC_HOST) >/dev/null 2>&1 && echo "[OK]" || echo "[FALTA]"
-	@printf "  Compilador C Kernel x86 (gcc -m32): "
-	@gcc -m32 -E -x c /dev/null -o /dev/null >/dev/null 2>&1 && echo "[OK]" || echo "[FALTA - Se requiere gcc-multilib]"
+	@printf "  Compilador C Kernel (%s): " "$(CC)"
+	@if [ "$(CC)" != "false" ]; then echo "[OK]"; else echo "[BLOCKED en host Darwin - Requiere i686-elf-gcc o Linux CI]"; fi
+	@printf "  Ensamblador Kernel (%s): " "$(AS)"
+	@if [ "$(AS)" != "false" ]; then echo "[OK]"; else echo "[BLOCKED en host Darwin - Requiere i686-elf-as o Linux CI]"; fi
+	@printf "  Enlazador Kernel (%s): " "$(LD)"
+	@if [ "$(LD)" != "false" ]; then echo "[OK]"; else echo "[BLOCKED en host Darwin - Requiere i686-elf-ld o Linux CI]"; fi
 	@printf "  Validador Multiboot 1 (grub-file): "
 	@command -v grub-file >/dev/null 2>&1 && echo "[OK]" || echo "[BLOCKED en host local - Se valida en CI]"
 	@printf "  Generador ISO (grub-mkrescue): "
@@ -201,7 +228,8 @@ verify-qemu: $(ISO_NAME)
 	@grep -q "Worker B" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se registro la ejecucion del Worker B" && exit 1)
 	@grep -q "Worker C (CPU-bound)" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se registro la ejecucion de Worker C CPU-bound" && exit 1)
 	@grep -q "Interrupcion IRQ0" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se registraron ticks de interrupcion de PIT IRQ0" && exit 1)
-	@echo "[+] [PASS] Arranque verificado: Banner presente, PMM detectado, Paginacion VMM activa, GFX/Mouse/WM listos, PIT IRQ0 activo y preempcion multitarea exitosa."
+	@grep -q "ZENTHRA_QEMU_TEST_COMPLETE" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se encontro el marcador final ZENTHRA_QEMU_TEST_COMPLETE (ejecucion incompleta o abortada)" && exit 1)
+	@echo "[+] [PASS] Arranque verificado: Banner presente, PMM detectado, Paginacion VMM activa, GFX/Mouse/WM listos, PIT IRQ0 activo, preempcion multitarea exitosa y senal final ZENTHRA_QEMU_TEST_COMPLETE confirmada."
 
 verify-qemu-direct: $(BIN_NAME)
 	@echo "=== Verificando arranque directo de Zenthra Kernel ELF en QEMU (Headless) ==="
@@ -222,10 +250,19 @@ verify-qemu-direct: $(BIN_NAME)
 	@echo "--- Contenido del Log Serial de Zenthra OS ---"
 	@cat $(BUILD_DIR)/serial.log
 	@echo "-----------------------------------------------"
+	@if grep -q "CPU PANIC" $(BUILD_DIR)/serial.log; then \
+		echo "[-] Error: Se detecto un Panic de CPU no controlado en serial.log"; \
+		exit 1; \
+	fi
 	@grep -q "ZENTHRA OS SERIAL LOG" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se encontro el banner serial del kernel" && exit 1)
 	@grep -q "PMM" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se encontro inicializacion de PMM en serial.log" && exit 1)
 	@grep -q "VMM" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se encontro activacion de Paginacion x86 en serial.log" && exit 1)
-	@echo "[+] [PASS] Arranque directo en QEMU verificado exitosamente."
+	@grep -q "Worker A" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se registro la ejecucion del Worker A" && exit 1)
+	@grep -q "Worker B" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se registro la ejecucion del Worker B" && exit 1)
+	@grep -q "Worker C (CPU-bound)" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se registro la ejecucion de Worker C CPU-bound" && exit 1)
+	@grep -q "Interrupcion IRQ0" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se registraron ticks de interrupcion de PIT IRQ0" && exit 1)
+	@grep -q "ZENTHRA_QEMU_TEST_COMPLETE" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se encontro el marcador final ZENTHRA_QEMU_TEST_COMPLETE" && exit 1)
+	@echo "[+] [PASS] Arranque directo en QEMU verificado exitosamente con senal final ZENTHRA_QEMU_TEST_COMPLETE."
 
 qemu: $(BIN_NAME)
 	qemu-system-i386 -kernel $(BIN_NAME) -serial stdio

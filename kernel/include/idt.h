@@ -20,10 +20,17 @@ struct idt_ptr {
 
 /* Estructura del estado de registros guardados durante una interrupción */
 struct registers {
+#if !defined(__KERNEL__) && (defined(__x86_64__) || defined(__aarch64__) || defined(_M_ARM64) || defined(_M_X64))
+    uintptr_t ds;                                      // Selector del segmento de datos (puntero ancho en host 64-bit)
+    uintptr_t edi, esi, ebp, esp, ebx, edx, ecx, eax;  // Registros generales preservados
+    uintptr_t int_no, err_code;                        // Número de interrupción y código de error
+    uintptr_t eip, cs, eflags, useresp, ss;            // Registros de control
+#else
     uint32_t ds;                                      // Selector del segmento de datos
-    uint32_t edi, esi, ebp, esp, ebx, edx, ecx, eax;  // Pushed por pusha
+    uint32_t edi, esi, ebp, esp, ebx, edx, ecx, eax;  // Pushed por pusha (x86 32 bits nativo)
     uint32_t int_no, err_code;                        // Número de interrupción y código de error
     uint32_t eip, cs, eflags, useresp, ss;            // Pushed por la CPU automáticamente
+#endif
 };
 
 typedef void (*isr_t)(struct registers*);

@@ -12,15 +12,20 @@
 #define PTE_NOCACHE       0x010
 #define PTE_ACCESSED      0x020
 #define PTE_DIRTY         0x040
-#define PTE_FRAME_MASK    0xFFFFF000
+#define PTE_FRAME_MASK    (~(uintptr_t)0xFFF)
 
 #define PDE_PRESENT       0x001
 #define PDE_WRITABLE      0x002
 #define PDE_USER          0x004
-#define PDE_FRAME_MASK    0xFFFFF000
+#define PDE_FRAME_MASK    (~(uintptr_t)0xFFF)
 
 #define ENTRIES_PER_PAGE_TABLE 1024
 #define ENTRIES_PER_PAGE_DIR   1024
+
+/* Configuración de Identity Mapping supervisor de 32 bits (Ring 0) */
+#define KERNEL_IDENTITY_TABLES 16 // 16 tablas x 1024 entradas x 4096 bytes = 64 MiB (0x04000000)
+#define KERNEL_IDENTITY_MAP_SIZE ((uintptr_t)KERNEL_IDENTITY_TABLES * ENTRIES_PER_PAGE_TABLE * PAGE_SIZE)
+#define KERNEL_IDENTITY_LIMIT    KERNEL_IDENTITY_MAP_SIZE
 
 /* Estructura alineada a 4 KiB para tabla de páginas (1024 entradas x 4 bytes = 4 KiB) */
 struct page_table {
@@ -61,6 +66,9 @@ uint32_t vmm_get_page_flags(struct page_directory* pd, uintptr_t virt_addr);
 
 /* Comprobar si un directorio de páginas es accesible directamente en memoria baja (< 64 MiB) */
 bool vmm_is_directory_accessible(struct page_directory* pd);
+
+/* Obtener el límite superior en bytes del Identity Mapping supervisor (64 MiB) */
+uintptr_t vmm_get_identity_limit(void);
 
 /* Obtener el directorio de páginas maestro del kernel */
 struct page_directory* vmm_get_kernel_directory(void);

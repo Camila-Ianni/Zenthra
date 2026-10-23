@@ -83,20 +83,52 @@ int copy_to_user(void* user_dest, const void* kernel_src, size_t size) {
 
 /*
  * Calcula la longitud de una cadena de usuario de forma segura hasta max_len.
- * Evita desbordamiento si la cadena no tiene terminador NUL dentro del rango.
- * Retorna la longitud en bytes (sin incluir el NUL), o -1 si no se encontró NUL dentro de max_len.
+ *
+ * Contrato de seguridad y prevención de fallos (#PF en Ring 0) - Auditoría v14:
+ * Valida página por página en el directorio de páginas activo que cada bloque
+ * de memoria pertenezca a userland (USER_MEMORY_LIMIT), esté presente (PTE_PRESENT)
+ * y cuente con permisos de usuario (PTE_USER). Si la cadena se extiende o cruza
+ * la frontera hacia una página no mapeada o sin PTE_USER antes de encontrar un
+ * terminador NUL, aborta de forma segura retornando -1 sin provocar fallos de CPU.
+ *
+ * Retorna la longitud en bytes (sin incluir el NUL), o -1 ante cadenas sin NUL,
+ * punteros inválidos o páginas inaccesibles.
  */
 ssize_t strnlen_user(const char* user_str, size_t max_len) {
-    if (!user_str) return -1;
+    if (!user_str || max_len == 0) return -1;
     if (!is_user_pointer(user_str, 1)) return -1;
 
-    for (size_t i = 0; i < max_len; i++) {
-        if (!is_user_pointer(user_str + i, 1)) return -1;
-        if (user_str[i] == '\0') {
-            return (ssize_t)i;
+    size_t inspected = 0;
+    while (inspected < max_len) {
+        const char* cur = user_str + inspected;
+        if (!is_user_pointer(cur, 1)) {
+            return -1;
         }
+
+        // Validar que la página que contiene 'cur' sea accesible con permisos de usuario
+        if (!is_user_pages_accessible(cur, 1, false)) {
+            return -1; // Página inaccesible: abortar de forma segura sin desreferenciar
+        }
+
+        // Determinar cuántos bytes restan en la página actual antes del siguiente límite de 4 KiB
+        uintptr_t cur_addr = (uintptr_t)cur;
+        size_t bytes_left_in_page = PAGE_SIZE - (cur_addr & (PAGE_SIZE - 1));
+        size_t chunk_len = max_len - inspected;
+        if (chunk_len > bytes_left_in_page) {
+            chunk_len = bytes_left_in_page;
+        }
+
+        // Inspeccionar bytes dentro del rango validado de la página
+        for (size_t j = 0; j < chunk_len; j++) {
+            if (cur[j] == '\0') {
+                return (ssize_t)(inspected + j);
+            }
+        }
+
+        inspected += chunk_len;
     }
-    return -1; // Cadena sin terminador NUL dentro de max_len
+
+    return -1; // Terminador NUL no encontrado dentro de max_len
 }
 
 /* Buffer acotado seguro en el kernel para transferencias de syscalls */
@@ -109,33 +141,84 @@ void syscall_dispatcher(struct registers* regs) {
 
     switch (syscall_num) {
         case SYS_WRITE: {
-            // ebx: puntero userland a cadena, ecx: longitud solicitada
-            const char* user_str = (const char*)(uintptr_t)regs->ebx;
-            size_t requested_len = (size_t)regs->ecx;
+            // ABI de Syscall Zenthra OS (Auditoría v14):
+            //   EBX: const void* user_buf (puntero a búfer de usuario)
+            //   ECX: size_t count (número exacto de bytes a transferir)
+            // Retorno en EAX:
+            //   count == 0  -> 0 (éxito nulo estándar POSIX)
+            //   éxito       -> número de bytes transferidos/escritos
+            //   error       -> (uint32_t)-1 (-EFAULT ante puntero nulo, páginas no mapeadas, sin PTE_USER o fuera de rango)
+            const char* user_buf = (const char*)(uintptr_t)regs->ebx;
+            size_t count = (size_t)regs->ecx;
 
-            if (requested_len == 0 || requested_len >= KERNEL_SYSCALL_BUF_SIZE) {
+            if (count == 0) {
+                regs->eax = 0;
+                break;
+            }
+
+            // Validar puntero y desbordamiento en espacio de usuario
+            if (!user_buf || !is_user_pointer(user_buf, count)) {
                 regs->eax = (uint32_t)-1;
                 break;
             }
 
-            // Validar de forma segura la cadena antes de acceder a ella en Ring 0
-            ssize_t safe_len = strnlen_user(user_str, requested_len + 1);
-            if (safe_len < 0) {
-                regs->eax = (uint32_t)-1; // Cadena malformada, sin NUL o puntero fuera de límites
-                break;
-            }
-
-            // Copia segura al buffer interno del kernel
-            if (copy_from_user(kernel_safe_buf, user_str, (size_t)safe_len) != 0) {
+            // Validar accesibilidad de todas las páginas comprendidas en [user_buf, user_buf + count)
+            if (!is_user_pages_accessible(user_buf, count, false)) {
                 regs->eax = (uint32_t)-1;
                 break;
             }
 
-            kernel_safe_buf[safe_len] = '\0';
-            for (size_t i = 0; i < (size_t)safe_len; i++) {
-                vga_putc(kernel_safe_buf[i]);
+            size_t total_written = 0;
+            while (total_written < count) {
+                size_t chunk = count - total_written;
+                if (chunk > KERNEL_SYSCALL_BUF_SIZE) {
+                    chunk = KERNEL_SYSCALL_BUF_SIZE;
+                }
+
+                if (copy_from_user(kernel_safe_buf, user_buf + total_written, chunk) != 0) {
+                    regs->eax = (total_written > 0) ? (uint32_t)total_written : (uint32_t)-1;
+                    break;
+                }
+
+                for (size_t i = 0; i < chunk; i++) {
+                    vga_putc(kernel_safe_buf[i]);
+                }
+                total_written += chunk;
             }
-            regs->eax = (uint32_t)safe_len;
+
+            regs->eax = (uint32_t)total_written;
+            break;
+        }
+
+        case SYS_READ: {
+            // ABI de Syscall Zenthra OS:
+            //   EBX: void* user_buf (puntero a búfer de destino en usuario)
+            //   ECX: size_t count (número de bytes a leer)
+            // Retorno en EAX:
+            //   count == 0  -> 0 (éxito nulo estándar POSIX)
+            //   éxito       -> número de bytes leídos
+            //   error       -> (uint32_t)-1 (-EFAULT ante puntero nulo o páginas de solo lectura / no mapeadas)
+            void* user_buf = (void*)(uintptr_t)regs->ebx;
+            size_t count = (size_t)regs->ecx;
+
+            if (count == 0) {
+                regs->eax = 0;
+                break;
+            }
+
+            if (!user_buf || !is_user_pointer(user_buf, count)) {
+                regs->eax = (uint32_t)-1;
+                break;
+            }
+
+            // Requiere permiso de escritura (write_intent = true) en las páginas de destino
+            if (!is_user_pages_accessible(user_buf, count, true)) {
+                regs->eax = (uint32_t)-1;
+                break;
+            }
+
+            // Lectura interactiva (sin datos listos por el momento)
+            regs->eax = 0;
             break;
         }
 

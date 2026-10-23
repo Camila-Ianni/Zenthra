@@ -22,6 +22,7 @@ jobs:
       - name: Ejecutar Test Suite Unitario y de Protocolo
         run: |
           make clean
+          make check-env
           make test
 
       - name: Compilar Kernel ELF y Generar Imagen ISO Arrancable

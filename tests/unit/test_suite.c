@@ -148,6 +148,10 @@ void test_syscall_security_checks(void) {
     char no_nul_buf[8] = {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'};
     ssize_t bad_len = strnlen_user(no_nul_buf, 8);
     TEST_ASSERT(bad_len == -1, "strnlen_user detecta y rechaza cadena sin terminador NUL dentro del limite");
+
+    // Auditoría v14: Longitud cero o puntero NULL
+    TEST_ASSERT(strnlen_user(NULL, 10) == -1, "strnlen_user rechaza puntero NULL");
+    TEST_ASSERT(strnlen_user(valid_user_buf, 0) == -1, "strnlen_user con max_len=0 retorna -1");
 }
 
 static void dummy_worker(void) {}
@@ -511,6 +515,54 @@ void test_syscall_boundary_and_abi(void) {
     syscall_dispatcher(&regs_acl);
     TEST_ASSERT(regs_acl.eax == 0, "SYS_SET_PROFILE cambia el perfil activo con permisos de administracion");
     TEST_ASSERT(task_get_current()->profile == PROFILE_STUDENT, "Perfil de proceso verificado tras SYS_SET_PROFILE");
+
+    // Auditoría v14: Semántica ABI de SYS_WRITE (buffer binario, count=0 POSIX y no requiere NUL)
+    char sample_user_buf[32] = "Userland Output Test";
+    struct registers regs_w;
+    k_memset(&regs_w, 0, sizeof(struct registers));
+    regs_w.eax = SYS_WRITE;
+    regs_w.ebx = (uintptr_t)sample_user_buf;
+    regs_w.ecx = 0; // count == 0 debe retornar 0 según estándar POSIX
+    syscall_dispatcher(&regs_w);
+    TEST_ASSERT(regs_w.eax == 0, "SYS_WRITE con count=0 retorna 0 exitosamente");
+
+    // SYS_WRITE con buffer binario que contiene bytes NUL intermedios (no debe truncar)
+    char bin_data[6] = {'T', 'E', '\0', 'S', 'T', '!'};
+    regs_w.eax = SYS_WRITE;
+    regs_w.ebx = (uintptr_t)bin_data;
+    regs_w.ecx = 6;
+    syscall_dispatcher(&regs_w);
+    TEST_ASSERT(regs_w.eax == 6, "SYS_WRITE escribe buffer binario con NUL intermedio sin truncar");
+
+    // SYS_WRITE con puntero NULL
+    regs_w.eax = SYS_WRITE;
+    regs_w.ebx = 0;
+    regs_w.ecx = 10;
+    syscall_dispatcher(&regs_w);
+    TEST_ASSERT(regs_w.eax == (uint32_t)-1, "SYS_WRITE rechaza puntero NULL");
+
+    // SYS_WRITE con puntero en espacio de kernel
+    regs_w.eax = SYS_WRITE;
+    regs_w.ebx = (uintptr_t)(USER_MEMORY_LIMIT + 0x1000);
+    regs_w.ecx = 10;
+    syscall_dispatcher(&regs_w);
+    TEST_ASSERT(regs_w.eax == (uint32_t)-1, "SYS_WRITE rechaza puntero en espacio de memoria del kernel");
+
+    // SYS_READ con count=0 retorna 0
+    struct registers regs_r;
+    k_memset(&regs_r, 0, sizeof(struct registers));
+    regs_r.eax = SYS_READ;
+    regs_r.ebx = (uintptr_t)bin_data;
+    regs_r.ecx = 0;
+    syscall_dispatcher(&regs_r);
+    TEST_ASSERT(regs_r.eax == 0, "SYS_READ con count=0 retorna 0 exitosamente");
+
+    // SYS_READ con puntero NULL retorna -1
+    regs_r.eax = SYS_READ;
+    regs_r.ebx = 0;
+    regs_r.ecx = 10;
+    syscall_dispatcher(&regs_r);
+    TEST_ASSERT(regs_r.eax == (uint32_t)-1, "SYS_READ rechaza puntero NULL");
 }
 
 /* Test 15: Multitarea Preemptiva, Quantum y Estados Sleep / Wakeup (Fase 3) */
@@ -657,11 +709,14 @@ void test_virtual_memory_paging(void) {
     struct page_directory* kdir = vmm_get_kernel_directory();
     TEST_ASSERT(kdir != NULL, "Directorio maestro de paginas del kernel existe");
 
-    // Verificar identidad de 16 MiB (Ring 0 / Supervisor)
+    // Verificar identidad de 64 MiB (Ring 0 / Supervisor - Auditoría v14)
     TEST_ASSERT(vmm_virt_to_phys(kdir, 0x00000000) == 0x00000000, "Mapeo identidad de pagina cero (0x00000000)");
     TEST_ASSERT(vmm_virt_to_phys(kdir, 0x000B8000) == 0x000B8000, "Mapeo identidad del buffer VGA (0x000B8000)");
     TEST_ASSERT(vmm_virt_to_phys(kdir, 0x00100000) == 0x00100000, "Mapeo identidad del kernel ELF (1 MiB / 0x00100000)");
     TEST_ASSERT(vmm_virt_to_phys(kdir, 0x00400000) == 0x00400000, "Mapeo identidad del Heap del kernel (4 MiB / 0x00400000)");
+    TEST_ASSERT(vmm_virt_to_phys(kdir, 0x03FFF000) == 0x03FFF000, "Mapeo identidad cubre hasta el limite de 64 MiB (0x03FFF000)");
+    TEST_ASSERT(vmm_is_mapped(kdir, 0x04000000) == false, "Direccion exactamente en 64 MiB (0x04000000) no esta mapeada en el mapa de identidad");
+    TEST_ASSERT(vmm_get_identity_limit() == (64 * 1024 * 1024), "vmm_get_identity_limit retorna exactamente 64 MiB");
 
     // Mapeo dinámico de página en espacio de usuario (Ring 3)
     uintptr_t user_virt = 0x80000000;
@@ -717,6 +772,30 @@ void test_virtual_memory_paging(void) {
 
     int cross_write = copy_to_user((void*)(proc_virt + 4000), k_buf, 200);
     TEST_ASSERT(cross_write == -1, "copy_to_user rechaza rango que cruza frontera hacia una pagina no mapeada");
+
+    // Auditoría v14: strnlen_user con validación página por página en VMM activo
+    TEST_ASSERT(strnlen_user((const char*)0x40002000, 32) == -1, "strnlen_user rechaza cadena en pagina no mapeada sin causar #PF");
+    TEST_ASSERT(strnlen_user((const char*)0x00100000, 32) == -1, "strnlen_user rechaza cadena en pagina de kernel sin PTE_USER");
+
+    // Auditoría v14: SYS_WRITE y SYS_READ bajo paginación activa en pdir
+    struct registers regs_sw;
+    k_memset(&regs_sw, 0, sizeof(struct registers));
+    regs_sw.eax = SYS_WRITE;
+    regs_sw.ebx = (uintptr_t)0x40002000; // no mapeada
+    regs_sw.ecx = 10;
+    syscall_dispatcher(&regs_sw);
+    TEST_ASSERT(regs_sw.eax == (uint32_t)-1, "SYS_WRITE rechaza escritura desde pagina de usuario no mapeada");
+
+    regs_sw.ebx = (uintptr_t)(proc_virt + 4000); // cruza frontera a página no mapeada (0x40001000 no mapeada)
+    regs_sw.ecx = 200;
+    syscall_dispatcher(&regs_sw);
+    TEST_ASSERT(regs_sw.eax == (uint32_t)-1, "SYS_WRITE rechaza buffer que cruza frontera hacia pagina no mapeada");
+
+    regs_sw.eax = SYS_READ;
+    regs_sw.ebx = (uintptr_t)proc_virt; // proc_virt actualmente de solo lectura
+    regs_sw.ecx = 10;
+    syscall_dispatcher(&regs_sw);
+    TEST_ASSERT(regs_sw.eax == (uint32_t)-1, "SYS_READ rechaza lectura hacia pagina de solo lectura sin PTE_WRITABLE");
 
     // Restaurar permiso de escritura con vmm_set_page_flags
     vmm_set_page_flags(pdir, proc_virt, PTE_PRESENT | PTE_USER | PTE_WRITABLE);

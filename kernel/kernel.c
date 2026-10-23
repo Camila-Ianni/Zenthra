@@ -29,6 +29,23 @@
 
 static volatile uint32_t worker_a_counter = 0;
 static volatile uint32_t worker_b_counter = 0;
+static volatile uint32_t cpu_bound_ticks = 0;
+static volatile bool test_complete_emitted = false;
+
+/*
+ * Verificación estricta de finalización de pruebas de arranque en QEMU (Auditoría v14):
+ * Emite una señal final inequívoca únicamente cuando los tres trabajadores concurrentes
+ * han completado sus ciclos y se ha demostrado la preempción por hardware del PIT IRQ0.
+ */
+static void check_all_workers_complete(void) {
+    if (!test_complete_emitted && 
+        worker_a_counter >= 3 && 
+        worker_b_counter >= 3 && 
+        cpu_bound_ticks >= 500000) {
+        test_complete_emitted = true;
+        serial_write_string("[TEST_COMPLETE] ZENTHRA_QEMU_TEST_COMPLETE: Kernel inicializado, subsistemas activos y tareas ejecutadas con exito.\r\n");
+    }
+}
 
 static void worker_task_a(void) {
     for (int i = 1; i <= 3; i++) {
@@ -41,6 +58,7 @@ static void worker_task_a(void) {
         task_yield();
     }
     serial_write_string("[SCHEDULER] Worker A completo con exito.\r\n");
+    check_all_workers_complete();
     task_exit();
 }
 
@@ -55,10 +73,9 @@ static void worker_task_b(void) {
         task_yield();
     }
     serial_write_string("[SCHEDULER] Worker B completo con exito.\r\n");
+    check_all_workers_complete();
     task_exit();
 }
-
-static volatile uint32_t cpu_bound_ticks = 0;
 
 /* Tarea de cálculo intensivo sin yield voluntario para demostrar preempción automática por PIT IRQ0 */
 static void worker_task_c_cpubound(void) {
@@ -68,6 +85,7 @@ static void worker_task_c_cpubound(void) {
         // Tarea sin yield: liberada únicamente cuando el PIT IRQ0 agota su quantum de tiempo
     }
     serial_write_string("[SCHEDULER] Worker C (CPU-bound) preemptado y completado exitosamente.\r\n");
+    check_all_workers_complete();
     task_exit();
 }
 
@@ -136,9 +154,9 @@ void kernel_main(uint32_t magic, uintptr_t mbi_addr) {
     vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
     kprintf("[OK]\n");
 
-    // 9. Inicializar Paginacion x86 de 32 bits (VMM, Identity Mapping 16 MiB y Page Faults)
+    // 9. Inicializar Paginacion x86 de 32 bits (VMM, Identity Mapping 64 MiB y Page Faults)
     vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
-    kprintf("[*] Activando Paginacion x86 (CR0.PG, CR3, VMM 16 MiB)... ");
+    kprintf("[*] Activando Paginacion x86 (CR0.PG, CR3, VMM %u MiB)... ", (uint32_t)(KERNEL_IDENTITY_MAP_SIZE / (1024 * 1024)));
     vmm_init();
     vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
     kprintf("[OK]\n");

@@ -4,13 +4,14 @@
 #include "serial.h"
 #include "vga.h"
 
-#define KERNEL_IDENTITY_TABLES 16 // 16 tablas de 1024 entradas = 64 MiB mapeados 1:1
-#define KERNEL_IDENTITY_LIMIT  ((uintptr_t)KERNEL_IDENTITY_TABLES * ENTRIES_PER_PAGE_TABLE * PAGE_SIZE)
-
 static struct page_directory kernel_pdir __attribute__((aligned(4096)));
 static struct page_table kernel_pts[KERNEL_IDENTITY_TABLES] __attribute__((aligned(4096)));
 static struct page_directory* current_pdir = &kernel_pdir;
 static bool paging_enabled = false;
+
+uintptr_t vmm_get_identity_limit(void) {
+    return KERNEL_IDENTITY_LIMIT;
+}
 
 #if !defined(__KERNEL__)
 #include <stdlib.h>
@@ -370,8 +371,8 @@ void vmm_init(void) {
     // 1. Limpiar directorio maestro del kernel
     k_memset(&kernel_pdir, 0, sizeof(struct page_directory));
 
-    // 2. Mapear de forma idéntica los primeros 16 MiB (Ring 0 / Supervisor)
-    // Cubre: IVT, BDA, VGA B8000, código del kernel, heap (4-6 MB) y buffers iniciales
+    // 2. Mapear de forma idéntica los primeros 64 MiB (Ring 0 / Supervisor)
+    // Cubre: IVT, BDA, VGA B8000, código del kernel, heap (4-6 MB), tablas de paginación y buffers iniciales
     for (size_t t = 0; t < KERNEL_IDENTITY_TABLES; t++) {
         for (size_t i = 0; i < ENTRIES_PER_PAGE_TABLE; i++) {
             uintptr_t phys_addr = (t * ENTRIES_PER_PAGE_TABLE + i) * PAGE_SIZE;
