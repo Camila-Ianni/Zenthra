@@ -53,6 +53,9 @@ SRCS_C = kernel/kernel.c \
          kernel/drivers/pmm.c \
          kernel/drivers/vmm.c \
          kernel/drivers/page_fault.c \
+         kernel/drivers/gfx.c \
+         kernel/drivers/mouse.c \
+         kernel/drivers/window_manager.c \
          kernel/lib/klib.c \
          kernel/lib/kheap.c
 
@@ -131,7 +134,7 @@ endif
 # Ejecutar suite de pruebas unitarias y de subsistemas
 test:
 	@echo "=== Compilando y ejecutando Test Suite de Zenthra OS ==="
-	$(CC_HOST) -Wall -Wextra -Ikernel/include tests/mocks/mock_hw.c kernel/lib/klib.c kernel/lib/kheap.c kernel/arch/x86/syscall.c kernel/drivers/task.c kernel/drivers/acl_security.c kernel/drivers/ramfs.c kernel/drivers/rules_engine.c kernel/drivers/pkg_manager.c kernel/drivers/pmm.c kernel/drivers/vmm.c kernel/drivers/page_fault.c tests/unit/test_suite.c -o bin_test
+	$(CC_HOST) -Wall -Wextra -Ikernel/include tests/mocks/mock_hw.c kernel/lib/klib.c kernel/lib/kheap.c kernel/arch/x86/syscall.c kernel/drivers/task.c kernel/drivers/acl_security.c kernel/drivers/ramfs.c kernel/drivers/rules_engine.c kernel/drivers/pkg_manager.c kernel/drivers/pmm.c kernel/drivers/vmm.c kernel/drivers/page_fault.c kernel/drivers/gfx.c kernel/drivers/mouse.c kernel/drivers/window_manager.c tests/unit/test_suite.c -o bin_test
 	./bin_test
 
 # Verificación automatizada de arranque en QEMU y captura serial
@@ -161,11 +164,14 @@ verify-qemu: $(ISO_NAME)
 	@grep -q "ZENTHRA OS SERIAL LOG" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se encontro el banner serial del kernel" && exit 1)
 	@grep -q "PMM" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se encontro inicializacion de PMM en serial.log" && exit 1)
 	@grep -q "VMM" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se encontro activacion de Paginacion x86 en serial.log" && exit 1)
+	@grep -q "GFX" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se encontro inicializacion de GFX en serial.log" && exit 1)
+	@grep -q "MOUSE" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se encontro inicializacion de MOUSE en serial.log" && exit 1)
+	@grep -q "WM" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se encontro inicializacion de Window Manager en serial.log" && exit 1)
 	@grep -q "Worker A" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se registro la ejecucion del Worker A" && exit 1)
 	@grep -q "Worker B" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se registro la ejecucion del Worker B" && exit 1)
 	@grep -q "Worker C (CPU-bound)" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se registro la ejecucion de Worker C CPU-bound" && exit 1)
 	@grep -q "Interrupcion IRQ0" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se registraron ticks de interrupcion de PIT IRQ0" && exit 1)
-	@echo "[+] [PASS] Arranque verificado: Banner presente, PMM detectado, Paginacion VMM activa, PIT IRQ0 activo y preempcion multitarea exitosa."
+	@echo "[+] [PASS] Arranque verificado: Banner presente, PMM detectado, Paginacion VMM activa, GFX/Mouse/WM listos, PIT IRQ0 activo y preempcion multitarea exitosa."
 
 qemu: $(BIN_NAME)
 	qemu-system-i386 -kernel $(BIN_NAME) -serial stdio

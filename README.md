@@ -37,8 +37,7 @@ Para máxima transparencia técnica, el estado del código se clasifica rigurosa
 | **Gestor de Paquetes / Store** | **SIMULADA** | Catálogo demostrativo de aplicaciones con verificación de integridad por CRC32 (IEEE 802.3). Formato `.zpkg` firmado planificado para Fase 6. |
 | **Protocolo de Enlace Arduino (IoT)** | **REAL** | Trama binaria estructurada con delimitador MAGIC (`0xAA55`), comandos (PING, TEMP, LED_ON, LED_OFF) y checksum XOR. |
 | **Control de Energía (ACPI / 8042)** | **REAL** | Puertos de apagado ACPI en emulador (`0x604`, `0x0804`, `0x4004`) y reinicio por teclado 8042. |
-| **Interfaz de Usuario Actual** | **REAL** | Consola de texto VGA color de 80x25 con prompt interactivo y comandos integrados (modo de rescate). |
-| **Interfaz Gráfica de Escritorio (GUI)** | **PENDIENTE** | Diseñada en arquitectura (Fase 5): Framebuffer VESA 1024x768, primitivas 2D, mouse PS/2 y gestor de ventanas. |
+| **Interfaz Gráfica de Escritorio (GUI)** | **REAL (MVP)** | Linear Framebuffer VESA / LFB (1024x768x32bpp) con doble búfer anti-parpadeo (`gfx.c`), fuente bitmap 8x16 (`font8x16.h`), driver de ratón PS/2 (IRQ 12) con cursor flecha 12x18 (`mouse.c`) y Gestor de Ventanas Zenthra (`window_manager.c`) con fondo degradado corporativo, barra de tareas (badge de perfil + reloj), ventanas flotantes interactivas arrastrables (*drag-and-drop*) y botón de cierre [X]. Fallback suave a consola VGA. |
 
 ---
 

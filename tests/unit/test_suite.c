@@ -19,6 +19,9 @@
 #include "pmm.h"
 #include "vmm.h"
 #include "page_fault.h"
+#include "gfx.h"
+#include "mouse.h"
+#include "window_manager.h"
 
 // Variables y stubs requeridos por drivers en host
 void vga_putc(char c) {
@@ -612,6 +615,178 @@ void test_page_fault_handling(void) {
     TEST_ASSERT(page_fault_get_last_error_code() == (PF_ERR_WRITE | PF_ERR_USER), "Codigo de error (#PF) decodificado con precision");
 }
 
+/* Test 19: Primitivas GFX 2D, Clipping y Doble Búfer */
+void test_gfx_2d_primitives_and_double_buffer(void) {
+    printf("[*] Ejecutando: test_gfx_2d_primitives_and_double_buffer...\n");
+    const uint32_t width = 800;
+    const uint32_t height = 600;
+    const uint32_t pitch = width * sizeof(uint32_t);
+
+    uint32_t* front = (uint32_t*)malloc(height * pitch);
+    uint32_t* back = (uint32_t*)malloc(height * pitch);
+    assert(front != NULL && back != NULL);
+    memset(front, 0, height * pitch);
+    memset(back, 0, height * pitch);
+
+    gfx_init_custom(front, back, width, height, pitch, 32);
+    TEST_ASSERT(gfx_is_active() == true, "Motor gráfico 2D activo tras gfx_init_custom");
+
+    // Limpieza
+    gfx_clear(0xFF102030);
+    TEST_ASSERT(gfx_getpixel(0, 0) == 0xFF102030, "gfx_clear colorea origen del backbuffer");
+    TEST_ASSERT(gfx_getpixel(width - 1, height - 1) == 0xFF102030, "gfx_clear colorea extremo del backbuffer");
+
+    // Putpixel y Getpixel
+    gfx_putpixel(150, 200, 0xFFAABBCC);
+    TEST_ASSERT(gfx_getpixel(150, 200) == 0xFFAABBCC, "gfx_putpixel escribe color correcto en backbuffer");
+
+    // Clipping fuera de límites
+    gfx_putpixel(9999, 9999, 0xFFFFFFFF);
+    TEST_ASSERT(gfx_getpixel(9999, 9999) == 0, "Acceso fuera de limites recortado de forma segura");
+
+    // Fill Rect con Clipping
+    gfx_fill_rect(50, 50, 40, 30, 0xFF00FF00);
+    TEST_ASSERT(gfx_getpixel(50, 50) == 0xFF00FF00, "gfx_fill_rect esquina superior izquierda");
+    TEST_ASSERT(gfx_getpixel(89, 79) == 0xFF00FF00, "gfx_fill_rect esquina inferior derecha");
+    TEST_ASSERT(gfx_getpixel(90, 80) != 0xFF00FF00, "gfx_fill_rect no invade fuera del rectangulo");
+
+    // Draw Rect (Bordes)
+    gfx_draw_rect(100, 100, 20, 20, 0xFFFF0000);
+    TEST_ASSERT(gfx_getpixel(100, 100) == 0xFFFF0000, "gfx_draw_rect traza borde superior");
+    TEST_ASSERT(gfx_getpixel(110, 110) != 0xFFFF0000, "gfx_draw_rect preserva interior hueco");
+
+    // Línea Bresenham
+    gfx_draw_line(200, 200, 210, 210, 0xFFFFFFFF);
+    TEST_ASSERT(gfx_getpixel(200, 200) == 0xFFFFFFFF, "gfx_draw_line punto inicial");
+    TEST_ASSERT(gfx_getpixel(205, 205) == 0xFFFFFFFF, "gfx_draw_line interpolacion diagonal Bresenham");
+    TEST_ASSERT(gfx_getpixel(210, 210) == 0xFFFFFFFF, "gfx_draw_line punto final");
+
+    // Texto con fuente bitmap 8x16
+    gfx_draw_string(300, 300, "Zenthra", COLOR_TEXT_WHITE, 0);
+    // Verificar que al menos algún píxel del glifo 'Z' fue dibujado
+    bool has_drawn_text_pixel = false;
+    for (int y = 300; y < 316; y++) {
+        for (int x = 300; x < 308; x++) {
+            if (gfx_getpixel(x, y) == COLOR_TEXT_WHITE) {
+                has_drawn_text_pixel = true;
+                break;
+            }
+        }
+        if (has_drawn_text_pixel) break;
+    }
+    TEST_ASSERT(has_drawn_text_pixel == true, "gfx_draw_string rasteriza glifos de la fuente bitmap 8x16");
+
+    // Verificación de Doble Búfer (Flip)
+    TEST_ASSERT(front[200 * (pitch / 4) + 150] != 0xFFAABBCC, "Frontbuffer aislado antes del flip");
+    gfx_flip();
+    TEST_ASSERT(front[200 * (pitch / 4) + 150] == 0xFFAABBCC, "gfx_flip vuelca backbuffer completo a frontbuffer");
+
+    free(front);
+    free(back);
+}
+
+/* Test 20: Driver de Ratón PS/2 (8042) y Decodificación de Paquetes */
+void test_ps2_mouse_driver(void) {
+    printf("[*] Ejecutando: test_ps2_mouse_driver...\n");
+    mouse_init(800, 600);
+    struct mouse_state* ms = mouse_get_state();
+
+    TEST_ASSERT(ms != NULL, "mouse_get_state retorna puntero valido");
+    TEST_ASSERT(ms->x == 400 && ms->y == 300, "Posicion inicial del raton centrada en pantalla");
+    TEST_ASSERT(ms->left_button == false && ms->right_button == false, "Botones en reposo al inicio");
+
+    // Byte fuera de sincronía (bit 3 == 0) debe ser descartado
+    mouse_process_byte(0x00);
+    TEST_ASSERT(ms->x == 400 && ms->y == 300, "Byte desincronizado descartado por el protocolo");
+
+    // Paquete 1: Clic Izquierdo + Mover +20 en X, +10 en Y (que sube en pantalla)
+    mouse_process_byte(0x08 | 0x01); // Bit 3=1, LeftBtn=1
+    mouse_process_byte(20);          // dx = +20
+    mouse_process_byte(10);          // dy = +10 (y = y - 10 = 290)
+
+    TEST_ASSERT(ms->left_button == true, "mouse_process_byte detecta boton izquierdo presionado");
+    TEST_ASSERT(ms->x == 420, "Coordenada X actualizada (+20px)");
+    TEST_ASSERT(ms->y == 290, "Coordenada Y actualizada (-10px pantalla)");
+
+    // Paquete 2: Clic Derecho + Mover -30 en X, -20 en Y con signo negativo
+    mouse_process_byte(0x08 | 0x02 | 0x10 | 0x20); // Bit3=1, RightBtn=1, X_sign=1, Y_sign=1
+    mouse_process_byte((uint8_t)(-30));             // dx = -30
+    mouse_process_byte((uint8_t)(-20));             // dy = -20 (y = y - (-20) = y + 20)
+
+    TEST_ASSERT(ms->left_button == false, "Boton izquierdo liberado");
+    TEST_ASSERT(ms->right_button == true, "Boton derecho activado");
+    TEST_ASSERT(ms->x == 390, "Coordenada X extendida con signo negativo (-30px)");
+    TEST_ASSERT(ms->y == 310, "Coordenada Y extendida con signo negativo (+20px pantalla)");
+
+    // Prueba de Delimitación Estricta a Pantalla (Clamping)
+    for (int i = 0; i < 50; i++) {
+        mouse_process_byte(0x08 | 0x10); // mover fuertemente a la izquierda
+        mouse_process_byte((uint8_t)(-100));
+        mouse_process_byte(0);
+    }
+    TEST_ASSERT(ms->x == 0, "Cursor delimitado en borde izquierdo (X=0)");
+
+    for (int i = 0; i < 50; i++) {
+        mouse_process_byte(0x08 | 0x20); // mover fuertemente hacia abajo (dy negativo con signo)
+        mouse_process_byte(0);
+        mouse_process_byte((uint8_t)(-100)); // dy negativo -> y aumenta hacia abajo
+    }
+    TEST_ASSERT(ms->y == 599, "Cursor delimitado en borde inferior (Y=599)");
+}
+
+/* Test 21: Gestor de Ventanas Zenthra (WM), Arrastre y Hit-Testing */
+void test_window_manager_and_desktop(void) {
+    printf("[*] Ejecutando: test_window_manager_and_desktop...\n");
+
+    // Configurar framebuffer virtual para el Window Manager
+    uint32_t* fb_mock = (uint32_t*)malloc(800 * 600 * sizeof(uint32_t));
+    memset(fb_mock, 0, 800 * 600 * sizeof(uint32_t));
+    gfx_init_custom(fb_mock, fb_mock, 800, 600, 800 * 4, 32);
+
+    wm_init();
+    TEST_ASSERT(wm_get_window_count() >= 2, "wm_init crea ventanas predeterminadas del sistema");
+
+    struct window* win_term = wm_get_window(0);
+    struct window* win_iot = wm_get_window(1);
+    TEST_ASSERT(win_term != NULL && win_iot != NULL, "Ventanas del sistema accesibles");
+    TEST_ASSERT(strcmp(win_term->title, "Terminal Zenthra OS") == 0, "Ventana 1 es Terminal Zenthra OS");
+    TEST_ASSERT(strcmp(win_iot->title, "Monitor de Sistema & IoT") == 0, "Ventana 2 es Monitor IoT");
+
+    // Crear ventana adicional de usuario
+    struct window* win_app = wm_create_window("Zenthra Code Editor", 100, 100, 300, 200, NULL);
+    TEST_ASSERT(win_app != NULL, "wm_create_window crea ventana de usuario");
+    TEST_ASSERT(win_app->is_visible == true, "Nueva ventana visible");
+    TEST_ASSERT(win_app->is_focused == true, "Nueva ventana toma el foco activo");
+
+    // Simular clic en barra de título para arrastre (Drag & Drop)
+    // Barra de título de win_app: x in [100, 380], y in [100, 122]
+    wm_handle_mouse(150, 110, true);
+    TEST_ASSERT(win_app->is_dragging == true, "Clic en barra de titulo inicia arrastre (is_dragging)");
+
+    // Mover ratón durante el arrastre
+    wm_handle_mouse(180, 140, true);
+    TEST_ASSERT(win_app->x == 130 && win_app->y == 130, "Ventana desplazada en sincronia con el raton (+30px, +30px)");
+
+    // Soltar arrastre
+    wm_handle_mouse(180, 140, false);
+    TEST_ASSERT(win_app->is_dragging == false, "Liberar boton de raton detiene arrastre");
+
+    // Simular clic en botón [X] de cierre de la ventana
+    // Botón [X] ubicado en: win->x + win->width - 20, win->y + 3
+    int32_t close_x = win_app->x + (int32_t)win_app->width - 12; // En medio del botón de 16x16
+    int32_t close_y = win_app->y + 10;
+    wm_handle_mouse(close_x, close_y, true);
+
+    TEST_ASSERT(win_app->is_visible == false, "Clic en boton [X] cierra la ventana (is_visible=false)");
+
+    // Comprobar actualización de reloj y renderizado de escritorio
+    wm_update_clock(12500); // 125 segundos
+    wm_render_desktop();
+    TEST_ASSERT(fb_mock[0] != 0, "wm_render_desktop renderiza gradiente corporativo en el framebuffer");
+
+    free(fb_mock);
+}
+
 int main(void) {
     printf("====================================================\n");
     printf("    ZENTHRA OS — SUITE DE PRUEBAS AUTOMATIZADAS     \n");
@@ -635,6 +810,9 @@ int main(void) {
     test_physical_memory_manager();
     test_virtual_memory_paging();
     test_page_fault_handling();
+    test_gfx_2d_primitives_and_double_buffer();
+    test_ps2_mouse_driver();
+    test_window_manager_and_desktop();
 
     printf("\n----------------------------------------------------\n");
     printf("Resultados: %d Aprobados | %d Fallidos\n", tests_passed, tests_failed);

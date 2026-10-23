@@ -11,14 +11,14 @@ Para garantizar rigor académico y de ingeniería de software en el proyecto de 
 
 | Nivel de Verificación | Estado | Evidencia Concreta |
 | :--- | :---: | :--- |
-| **UNIT TESTS** | **PASS** | 134 pruebas automatizadas ejecutadas con `make test` (0 fallos). |
+| **UNIT TESTS** | **PASS** | 175 pruebas automatizadas ejecutadas con `make test` (0 fallos). |
 | **BUILD ELF** | **PASS** | Compilación y enlace limpio de `build/zenthra_kernel.elf` (i686). |
 | **MULTIBOOT 1 VALIDATION** | **PASS** | Contrato oficial de arranque Multiboot 1 validado estrictamente por `grub-file --is-x86-multiboot`. |
 | **ISO GENERATION** | **PASS** | Imagen `build/zenthra_os.iso` construida con `grub-mkrescue` y hash SHA-256. |
-| **QEMU HEADLESS BOOT** | **PASS** | Verificado con `make verify-qemu`: banner serial, PMM activo, Paginación x86 VMM activa en CR0/CR3, ticks PIT IRQ0 y alternancia de tareas concurrentes con preempción de tarea CPU-bound. |
+| **QEMU HEADLESS BOOT** | **PASS** | Verificado con `make verify-qemu`: banner serial, PMM activo, Paginación x86 VMM activa en CR0/CR3, GFX/Mouse/WM listos, ticks PIT IRQ0 y alternancia de tareas concurrentes con preempción de tarea CPU-bound. |
 | **VIRTUALBOX** | **PROCEDIMIENTO VALIDADO** | Procedimiento de arranque documentado en [docs/virtualbox_guia.md](virtualbox_guia.md) utilizando la ISO oficial. |
 | **SYSCALL RING 3** | **PROTOTIPO AVANZADO** | Stub assembly `isr128` con marco `struct registers` e `iret`, TSS de hardware configurado (DPL 0 `0x89`, selector `0x28`, `esp0 = kernel_stack_top`). Syscalls validan rango lógico y credencial ACL asociada al proceso. Paging x86 activado en hardware (CR0.PG / CR0.WP) y aislamiento de memoria por proceso en VMM. |
-| **DESKTOP GUI** | **PENDIENTE** | Diseñado en [docs/DESKTOP_MVP.md](DESKTOP_MVP.md). Código actual implementa consola de texto VGA 80x25 como modo de rescate. Siguiente hito (Fase 5). |
+| **DESKTOP GUI** | **REAL (MVP)** | VESA Linear Framebuffer (LFB) con doble búfer anti-flicker, motor de primitivas 2D y recorte (`gfx.c`), fuente bitmap 8x16 (`font8x16.h`), driver de ratón PS/2 con cursor flecha 12x18 (`mouse.c`) y gestor de ventanas interactivo con arrastre, cierre, terminal y monitor de telemetría (`window_manager.c`). |
 
 ---
 
@@ -43,4 +43,4 @@ Para garantizar rigor académico y de ingeniería de software en el proyecto de 
 | **Protocolo Arduino (IoT)** | **REAL** | Trama binaria estructurada con delimitador `0xAA`, comandos PING, TEMP, LED y checksum XOR. Validado con control de acceso por proceso en syscall. | Probado en simulación y soporte serie COM1 en hardware real. |
 | **Control de Energía (ACPI / 8042)** | **REAL** | Puertos de apagado ACPI en emulador (`0x604`, `0x0804`, `0x4004`) y reinicio por teclado 8042. | ACPI DSDT/SSDT avanzado para placas modernas en Fase 8. |
 | **Interfaz VGA Modo Texto** | **REAL** | Búfer `0xB8000` 80x25 con shell interactiva (modo de rescate y diagnóstico). | Se conservará permanentemente como consola de recuperación. |
-| **Escritorio Gráfico (GUI)** | **PENDIENTE** | Especificación completa en [docs/DESKTOP_MVP.md](DESKTOP_MVP.md). | Framebuffer VESA 1024x768x32bpp, doble búfer, mouse PS/2 y gestor de ventanas en Fase 5. |
+| **Escritorio Gráfico (GUI)** | **REAL (MVP)** | VESA Linear Framebuffer (LFB) 1024x768x32bpp, doble búfer en RAM (`backbuffer`), primitivas 2D con recorte (`gfx.c`), fuente bitmap 8x16 (`font8x16.h`), driver PS/2 de ratón con IRQ 12 y cursor de flecha 12x18 (`mouse.c`), y gestor de ventanas (`window_manager.c`) con fondo degradado corporativo, barra de tareas (badge de perfil + reloj), ventanas flotantes interactivas arrastrables (*drag-and-drop*) y botón de cierre [X]. Fallback automático a modo texto VGA. | Driver de aceleración de vídeo VirtIO-GPU en Fase 8. |

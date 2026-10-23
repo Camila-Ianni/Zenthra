@@ -18,7 +18,33 @@ struct multiboot1_info {
     uint32_t syms[4];
     uint32_t mmap_length;
     uint32_t mmap_addr;
+    uint32_t drives_length;
+    uint32_t drives_addr;
+    uint32_t config_table;
+    uint32_t boot_loader_name;
+    uint32_t apm_table;
+    uint32_t vbe_control_info;
+    uint32_t vbe_mode_info;
+    uint16_t vbe_mode;
+    uint16_t vbe_interface_seg;
+    uint16_t vbe_interface_off;
+    uint16_t vbe_interface_len;
+    uint64_t framebuffer_addr;
+    uint32_t framebuffer_pitch;
+    uint32_t framebuffer_width;
+    uint32_t framebuffer_height;
+    uint8_t  framebuffer_bpp;
+    uint8_t  framebuffer_type;
+    uint8_t  color_info[6];
 };
+
+#define MULTIBOOT_INFO_MEMORY             (1 << 0)
+#define MULTIBOOT_INFO_BOOTDEV            (1 << 1)
+#define MULTIBOOT_INFO_CMDLINE            (1 << 2)
+#define MULTIBOOT_INFO_MODS               (1 << 3)
+#define MULTIBOOT_INFO_MEM_MAP            (1 << 6)
+#define MULTIBOOT_INFO_VBE_INFO           (1 << 11)
+#define MULTIBOOT_INFO_FRAMEBUFFER_INFO   (1 << 12)
 
 /* Entrada de mapa de memoria según la especificación Multiboot 1 */
 struct multiboot_mmap_entry {
@@ -56,6 +82,12 @@ struct multiboot_parsed_info {
     uint32_t mem_lower_kib; /* Memoria baja convencional */
     uint32_t mem_upper_kib; /* Memoria extendida alta */
     uint32_t tags_count;    /* Total de etiquetas parseadas de forma segura */
+    bool has_framebuffer;   /* true si hay framebuffer VESA/LFB disponible */
+    uint64_t fb_addr;       /* Dirección física del Linear Framebuffer */
+    uint32_t fb_width;      /* Ancho en píxeles */
+    uint32_t fb_height;     /* Alto en píxeles */
+    uint32_t fb_pitch;      /* Bytes por fila (scanline) */
+    uint8_t  fb_bpp;        /* Bits por píxel (e.g. 32 bpp) */
     bool valid;             /* true si la firma y estructura fueron validadas */
 };
 
@@ -69,6 +101,12 @@ static inline bool multiboot_parse(uint32_t magic, uintptr_t addr, struct multib
     out->mem_lower_kib = 0;
     out->mem_upper_kib = 0;
     out->tags_count = 0;
+    out->has_framebuffer = false;
+    out->fb_addr = 0;
+    out->fb_width = 0;
+    out->fb_height = 0;
+    out->fb_pitch = 0;
+    out->fb_bpp = 0;
     out->valid = false;
 
     if (addr == 0) {
@@ -83,6 +121,14 @@ static inline bool multiboot_parse(uint32_t magic, uintptr_t addr, struct multib
         if (mbi->flags & 0x01) {
             out->mem_lower_kib = mbi->mem_lower;
             out->mem_upper_kib = mbi->mem_upper;
+        }
+        if (mbi->flags & MULTIBOOT_INFO_FRAMEBUFFER_INFO) {
+            out->has_framebuffer = true;
+            out->fb_addr = mbi->framebuffer_addr;
+            out->fb_width = mbi->framebuffer_width;
+            out->fb_height = mbi->framebuffer_height;
+            out->fb_pitch = mbi->framebuffer_pitch;
+            out->fb_bpp = mbi->framebuffer_bpp;
         }
         return true;
     }

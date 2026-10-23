@@ -20,6 +20,9 @@
 #include "pmm.h"
 #include "vmm.h"
 #include "page_fault.h"
+#include "gfx.h"
+#include "mouse.h"
+#include "window_manager.h"
 
 #define KHEAP_START 0x00400000
 #define KHEAP_SIZE  (2 * 1024 * 1024) // 2 MiB de Heap inicial
@@ -213,22 +216,59 @@ void kernel_main(uint32_t magic, uintptr_t mbi_addr) {
         kprintf("[ADVERTENCIA] Firma no reconocida (Magic: 0x%x)\n", magic);
     }
 
+    // 15. Inicializar subsistema gráfico (Linear Framebuffer VESA o Fallback VGA)
+    vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
+    kprintf("[*] Inicializando Framebuffer VESA / LFB... ");
+    if (gfx_init(magic, mbi_addr)) {
+        vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
+        kprintf("[OK]\n");
+    } else {
+        vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_BROWN, VGA_COLOR_BLACK));
+        kprintf("[FALLBACK VGA MODO TEXTO]\n");
+    }
+
     // 16. Inicializar periféricos y subsistemas de usuario
     keyboard_init();
     nova_iot_init();
 
+    // 17. Inicializar controlador de ratón PS/2 (IRQ 12)
+    vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
+    kprintf("[*] Inicializando Raton PS/2 (IRQ 12)... ");
+    struct framebuffer_info* fb = gfx_get_fb_info();
+    uint32_t sw = (fb && fb->width > 0) ? fb->width : 1024;
+    uint32_t sh = (fb && fb->height > 0) ? fb->height : 768;
+    mouse_init(sw, sh);
+    vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
+    kprintf("[OK]\n");
+
+    // 18. Inicializar gestor de ventanas Zenthra WM
+    vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
+    kprintf("[*] Inicializando Gestor de Ventanas Zenthra WM... ");
+    wm_init();
+    vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
+    kprintf("[OK]\n");
+
     // Habilitar interrupciones de hardware en la CPU
     __asm__ volatile ("sti");
 
-    vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
-    kprintf("\n[>] Sistema operativo preparado. Iniciando Zenthra Shell.\n\n");
+    if (gfx_is_active()) {
+        wm_render_desktop();
+    } else {
+        vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
+        kprintf("\n[>] Sistema operativo preparado. Iniciando Zenthra Shell.\n\n");
+        shell_init();
+    }
 
-    // 17. Iniciar shell interactivo
-    shell_init();
-
-    // 18. Bucle principal del sistema con multiplexación de tareas
+    // 19. Bucle principal del sistema con renderizado GUI o multiplexación Shell
     while (1) {
-        shell_step();
+        if (gfx_is_active()) {
+            struct mouse_state* ms = mouse_get_state();
+            wm_handle_mouse(ms->x, ms->y, ms->left_button);
+            wm_update_clock(pit_get_ticks());
+            wm_render_desktop();
+        } else {
+            shell_step();
+        }
         task_yield();
     }
 }
