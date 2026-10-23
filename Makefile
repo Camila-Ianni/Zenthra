@@ -96,10 +96,17 @@ iso: $(OBJS)
 clean:
 	rm -rf $(BUILD_DIR) bin_test
 
+# Detección de compilador host para la suite de tests
+ifneq ($(shell which clang 2>/dev/null),)
+    CC_HOST = clang
+else
+    CC_HOST = gcc
+endif
+
 # Ejecutar suite de pruebas lógicas y unitarias nativas
 test:
-	@echo "=== Compilando y ejecutando Test Suite de NOVA OS ==="
-	clang -Wall -Wextra -Ikernel/include tests/mocks/mock_hw.c kernel/lib/klib.c kernel/lib/kheap.c kernel/arch/x86/syscall.c kernel/drivers/task.c kernel/drivers/acl_security.c kernel/drivers/ramfs.c kernel/drivers/rules_engine.c kernel/drivers/pkg_manager.c tests/unit/test_suite.c -o bin_test
+	@echo "=== Compilando y ejecutando Test Suite de Zenthra OS ==="
+	$(CC_HOST) -Wall -Wextra -Ikernel/include tests/mocks/mock_hw.c kernel/lib/klib.c kernel/lib/kheap.c kernel/arch/x86/syscall.c kernel/drivers/task.c kernel/drivers/acl_security.c kernel/drivers/ramfs.c kernel/drivers/rules_engine.c kernel/drivers/pkg_manager.c tests/unit/test_suite.c -o bin_test
 	./bin_test
 
 # Regla de prueba con emulador QEMU

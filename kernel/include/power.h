@@ -33,7 +33,7 @@ static inline void cpu_reboot(void) {
     // Pulsar línea de reset de la CPU (pin CPU RESET conectado al pin 0 del puerto de salida del 8042)
     outb(0x64, 0xFE);
 
-#if defined(__i386__) || defined(__x86_64__)
+#if defined(__KERNEL__) && (defined(__i386__) || defined(__x86_64__))
     // Fallback: Triple fallo deliberado si el controlador no responde
     struct {
         uint16_t limit;

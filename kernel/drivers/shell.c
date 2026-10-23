@@ -344,7 +344,7 @@ void shell_execute(const char* cmd) {
         qemu_poweroff();
         vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREY, VGA_COLOR_BLACK));
         kprintf("[HALT] Sistema detenido de forma segura.\n");
-#if defined(__i386__) || defined(__x86_64__)
+#if defined(__KERNEL__) && (defined(__i386__) || defined(__x86_64__))
         __asm__ volatile ("cli; hlt");
 #endif
     } else if (k_strcmp(cmd, "reboot") == 0) {
