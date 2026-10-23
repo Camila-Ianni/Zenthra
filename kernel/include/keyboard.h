@@ -21,6 +21,8 @@ bool keyboard_queue_is_empty(void);
 size_t keyboard_queue_length(void);
 void keyboard_queue_clear(void);
 ssize_t keyboard_read_queue(char* dest, size_t count);
+size_t keyboard_peek_queue(char* dest, size_t count);
+void keyboard_discard_chars(size_t count);
 void keyboard_poll_hardware(void);
 
 /* Modificadores, layouts y telemetría de cola (Auditoría v16) */

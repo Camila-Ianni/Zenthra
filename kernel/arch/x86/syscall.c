@@ -164,14 +164,20 @@ void syscall_dispatcher(struct registers* regs) {
                 break;
             }
 
-            // Validar puntero y desbordamiento en espacio de usuario
-            if (!user_buf || !is_user_pointer(user_buf, count)) {
+            // Validar puntero base en espacio de usuario
+            if (!user_buf || !is_user_pointer(user_buf, 1)) {
                 regs->eax = (uint32_t)-EFAULT;
                 break;
             }
 
-            // Validar accesibilidad fail-closed de todas las páginas en [user_buf, user_buf + count)
-            if (!is_user_pages_accessible_failclosed(user_buf, count, false)) {
+            // Acotar tamaño máximo transferible por llamada para evitar consumo excesivo de CPU (Auditoría v17)
+            #define MAX_SYSCALL_TRANSFER_SIZE 65536
+            if (count > MAX_SYSCALL_TRANSFER_SIZE) {
+                count = MAX_SYSCALL_TRANSFER_SIZE;
+            }
+
+            // Validar que el rango completo no desborde el límite de usuario
+            if (!is_user_pointer(user_buf, count)) {
                 regs->eax = (uint32_t)-EFAULT;
                 break;
             }
@@ -184,6 +190,7 @@ void syscall_dispatcher(struct registers* regs) {
                     chunk = sizeof(kbuf_write);
                 }
 
+                // copy_from_user valida cada chunk de forma exacta (fail-closed)
                 if (copy_from_user(kbuf_write, user_buf + total_written, chunk) != 0) {
                     regs->eax = (total_written > 0) ? (uint32_t)total_written : (uint32_t)-EFAULT;
                     break;
@@ -195,12 +202,14 @@ void syscall_dispatcher(struct registers* regs) {
                 total_written += chunk;
             }
 
-            regs->eax = (uint32_t)total_written;
+            if (total_written > 0 || count == 0) {
+                regs->eax = (uint32_t)total_written;
+            }
             break;
         }
 
         case SYS_READ: {
-            // ABI de Syscall Zenthra OS (Auditoría v15/v16):
+            // ABI de Syscall Zenthra OS (Auditoría v15/v16/v17):
             //   EBX: void* user_buf (puntero a búfer de destino en usuario)
             //   ECX: size_t count (número máximo de bytes solicitados)
             //   EDX: uint32_t flags (SYS_READ_NONBLOCK o SYS_READ_BLOCKING)
@@ -211,6 +220,11 @@ void syscall_dispatcher(struct registers* regs) {
             //               -> -EFAULT (-14) ante puntero nulo, fuera de rango o sin PTE_WRITABLE en el rango transferido
             //               -> -EAGAIN (-11) si no hay datos en la cola de entrada (lectura interactiva no bloqueante)
             //   éxito       -> número de bytes efectivamente leídos (> 0)
+            //
+            // Lectura Transaccional (Auditoría v17):
+            // Los caracteres solo se extraen definitivamente de la cola (keyboard_discard_chars)
+            // DESPUÉS de que copy_to_user confirme que los datos fueron transferidos a userland con éxito,
+            // previniendo la pérdida irrecuperable de pulsaciones de teclado ante fallos de memoria.
             void* user_buf = (void*)(uintptr_t)regs->ebx;
             size_t count = (size_t)regs->ecx;
             uint32_t flags = (uint32_t)regs->edx;
@@ -262,19 +276,25 @@ void syscall_dispatcher(struct registers* regs) {
                 break;
             }
 
-            // Búfer local en la pila de kernel privada de la tarea (reentrante y seguro frente a preempción)
+            // Inspección no destructiva de la cola de teclado (Lectura Transaccional)
             char kbuf_read[KERNEL_SYSCALL_BUF_SIZE];
-            for (size_t i = 0; i < to_read; i++) {
-                kbuf_read[i] = keyboard_dequeue_char();
+            size_t peeked = keyboard_peek_queue(kbuf_read, to_read);
+            if (peeked == 0) {
+                regs->eax = (uint32_t)-EAGAIN;
+                break;
             }
 
             // Copiar los datos leídos hacia el espacio de usuario
-            if (copy_to_user(user_buf, kbuf_read, to_read) != 0) {
+            if (copy_to_user(user_buf, kbuf_read, peeked) != 0) {
+                // Si la copia falla, los caracteres permanecen intactos en la cola
                 regs->eax = (uint32_t)-EFAULT;
                 break;
             }
 
-            regs->eax = (uint32_t)to_read;
+            // Confirmación transaccional: consumir efectivamente los caracteres tras copia exitosa
+            keyboard_discard_chars(peeked);
+
+            regs->eax = (uint32_t)peeked;
             break;
         }
 

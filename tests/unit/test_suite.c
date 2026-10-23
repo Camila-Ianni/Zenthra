@@ -518,10 +518,16 @@ void test_syscall_boundary_and_abi(void) {
     TEST_ASSERT(regs_acl.eax == 0, "SYS_SET_PROFILE cambia el perfil activo con permisos de administracion");
     TEST_ASSERT(task_get_current()->profile == PROFILE_STUDENT, "Perfil de proceso verificado tras SYS_SET_PROFILE");
 
-    // Auditoría v16: Aislamiento estricto de perfiles.
-    // Comprobar que SYS_SET_PROFILE de una tarea NO altera el perfil global de ACL
-    TEST_ASSERT(acl_get_active_profile() == PROFILE_IOT_HARDWARE,
-                "Aislamiento de perfiles: SYS_SET_PROFILE de una tarea no altera el perfil global del sistema");
+    // Auditoría v16/v17: Aislamiento estricto de perfiles.
+    // Comprobar que ni task_set_current_profile ni SYS_SET_PROFILE alteran el perfil global de ACL
+    TEST_ASSERT(acl_get_active_profile() == PROFILE_GENERAL,
+                "Aislamiento de perfiles: task_set_current_profile y SYS_SET_PROFILE no alteran el perfil global de ACL");
+
+    // Auditoría v17: Modificar perfil de tarea con helper y comprobar que ACL global permanece inalterado
+    task_set_current_profile(PROFILE_FRONTEND);
+    TEST_ASSERT(task_get_current()->profile == PROFILE_FRONTEND, "task_set_current_profile actualiza perfil de la tarea");
+    TEST_ASSERT(acl_get_active_profile() == PROFILE_GENERAL, "task_set_current_profile no altera el perfil global de ACL");
+    task_set_current_profile(PROFILE_STUDENT);
 
     // Probar aislamiento de credenciales creando una tarea concurrente con perfil Backend
     int pid_iso = task_create_with_profile("task_iso_b", exiting_worker, PROFILE_BACKEND);
@@ -657,6 +663,26 @@ void test_syscall_boundary_and_abi(void) {
     syscall_dispatcher(&regs_r);
     TEST_ASSERT(regs_r.eax == 3, "Lectura posterior con buffer valido recupera los datos intactos");
     TEST_ASSERT(k_strncmp(safe_read_buf, "KEY", 3) == 0, "Caracteres recuperados intactos de la cola");
+
+    // Auditoría v17: Lectura Transaccional de SYS_READ
+    // Inyectar teclas, invocar SYS_READ hacia memoria de kernel (falla copy_to_user)
+    keyboard_enqueue_char('T');
+    keyboard_enqueue_char('R');
+    keyboard_enqueue_char('X');
+    regs_r.eax = SYS_READ;
+    regs_r.ebx = (uintptr_t)(USER_MEMORY_LIMIT + 0x100); // Dirección en kernel
+    regs_r.ecx = 3;
+    syscall_dispatcher(&regs_r);
+    TEST_ASSERT(regs_r.eax == (uint32_t)-EFAULT, "SYS_READ hacia memoria de kernel retorna -EFAULT");
+    TEST_ASSERT(keyboard_queue_length() == 3, "Lectura transaccional: cola conserva los 3 caracteres intactos tras fallo");
+
+    // Probar inspección no destructiva peek_queue y consumo diferido discard_chars
+    char peek_buf[8];
+    size_t pk = keyboard_peek_queue(peek_buf, 3);
+    TEST_ASSERT(pk == 3 && k_strncmp(peek_buf, "TRX", 3) == 0, "keyboard_peek_queue inspecciona sin extraer");
+    TEST_ASSERT(keyboard_queue_length() == 3, "Cola conserva su longitud tras peek");
+    keyboard_discard_chars(3);
+    TEST_ASSERT(keyboard_queue_length() == 0, "keyboard_discard_chars descarta los caracteres consumidos tras confirmacion");
 
     // Auditoría v15: Prevención de desbordamiento de la cola de teclado
     keyboard_queue_clear();

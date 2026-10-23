@@ -1,10 +1,12 @@
 /**
- * ZENTHRA OS — DESKTOP PROTOTYPE & JARVIS AI HUB
+ * ZENTHRA OS — DESKTOP PROTOTYPE & JARVIS AI HUB (v17)
  * Orquestador Multi-Agente, Shell Gráfico y Simulación de Entorno
  * 
- * NOTA DE SEGURIDAD:
- * Todas las métricas y respuestas externas son simuladas [DEMO].
- * Cero secretos o API keys embebidas en el cliente.
+ * NOTA DE SEGURIDAD (Auditoría Técnica v17):
+ * - Cero uso de innerHTML con entradas dinámicas de usuario o modelo (Protección Anti-XSS).
+ * - Modal de aprobación humana cancelable en todo momento.
+ * - Todas las métricas y respuestas son simuladas [DEMO].
+ * - Cero secretos o API keys embebidas en el cliente.
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -42,7 +44,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // 3. Gestor de Ventanas (Drag, Focus, Minimize, Maximize, Close)
+    // 3. Gestor de Ventanas (Drag, Focus, Minimize, Maximize, Close, Resize Clamp)
+    const windowContainer = document.getElementById('window-container') || document.body;
     let highestZ = 10;
     const windows = document.querySelectorAll('.glass-window');
 
@@ -51,6 +54,7 @@ document.addEventListener('DOMContentLoaded', () => {
         win.style.zIndex = highestZ;
         windows.forEach(w => w.classList.remove('focused'));
         win.classList.add('focused');
+
         const activeTitleEl = document.getElementById('active-app-title');
         const winTitle = win.querySelector('.window-title span:last-child');
         if (activeTitleEl && winTitle) {
@@ -58,11 +62,34 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function clampWindowToContainer(win) {
+        const cRect = windowContainer.getBoundingClientRect();
+        const wWidth = win.offsetWidth;
+        const wHeight = win.offsetHeight;
+        
+        let left = win.offsetLeft;
+        let top = win.offsetTop;
+
+        const maxLeft = Math.max(0, cRect.width - wWidth);
+        const maxTop = Math.max(0, cRect.height - wHeight - 70); // Descontar dock
+
+        if (left > maxLeft) win.style.left = `${Math.max(10, maxLeft)}px`;
+        if (top > maxTop) win.style.top = `${Math.max(10, maxTop)}px`;
+    }
+
+    window.addEventListener('resize', () => {
+        windows.forEach(win => {
+            if (win.style.display !== 'none') {
+                clampWindowToContainer(win);
+            }
+        });
+    });
+
     windows.forEach(win => {
         const titlebar = win.querySelector('.window-titlebar');
         win.addEventListener('mousedown', () => bringToFront(win));
 
-        // Drag & Drop
+        // Drag & Drop con delimitación estricta al contenedor
         if (titlebar) {
             let isDragging = false;
             let startX, startY, initialX, initialY;
@@ -78,10 +105,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 function onMouseMove(e) {
                     if (!isDragging) return;
+                    const cRect = windowContainer.getBoundingClientRect();
                     const dx = e.clientX - startX;
                     const dy = e.clientY - startY;
-                    win.style.left = `${Math.max(10, initialX + dx)}px`;
-                    win.style.top = `${Math.max(45, initialY + dy)}px`;
+
+                    const newLeft = Math.max(0, Math.min(cRect.width - win.offsetWidth, initialX + dx));
+                    const newTop = Math.max(0, Math.min(cRect.height - 60, initialY + dy));
+
+                    win.style.left = `${newLeft}px`;
+                    win.style.top = `${newTop}px`;
                 }
 
                 function onMouseUp() {
@@ -103,13 +135,19 @@ document.addEventListener('DOMContentLoaded', () => {
         if (btnClose) {
             btnClose.addEventListener('click', () => {
                 win.style.display = 'none';
+                win.classList.remove('focused');
                 updateDockDot(win.dataset.winId, false);
+                const activeTitleEl = document.getElementById('active-app-title');
+                if (activeTitleEl) activeTitleEl.textContent = 'Escritorio';
             });
         }
 
         if (btnMin) {
             btnMin.addEventListener('click', () => {
                 win.style.display = 'none';
+                win.classList.remove('focused');
+                const activeTitleEl = document.getElementById('active-app-title');
+                if (activeTitleEl) activeTitleEl.textContent = 'Escritorio';
             });
         }
 
@@ -117,6 +155,7 @@ document.addEventListener('DOMContentLoaded', () => {
             let isMaximized = false;
             let prevRect = {};
             btnMax.addEventListener('click', () => {
+                const cRect = windowContainer.getBoundingClientRect();
                 if (!isMaximized) {
                     prevRect = {
                         top: win.style.top,
@@ -124,10 +163,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         width: win.style.width,
                         height: win.style.height
                     };
-                    win.style.top = '44px';
-                    win.style.left = '10px';
-                    win.style.width = 'calc(100vw - 20px)';
-                    win.style.height = 'calc(100vh - 120px)';
+                    win.style.top = '8px';
+                    win.style.left = '8px';
+                    win.style.width = `${Math.max(300, cRect.width - 16)}px`;
+                    win.style.height = `${Math.max(200, cRect.height - 84)}px`;
                     isMaximized = true;
                 } else {
                     win.style.top = prevRect.top;
@@ -140,7 +179,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // 4. Dock Flotante
+    // 4. Dock Flotante Centralizado
     const dockItems = document.querySelectorAll('.dock-item');
     dockItems.forEach(item => {
         item.addEventListener('click', () => {
@@ -148,13 +187,19 @@ document.addEventListener('DOMContentLoaded', () => {
             const targetWin = document.getElementById(`win-${appId}`);
             if (targetWin) {
                 if (targetWin.style.display === 'none') {
+                    // Restaurar desde cerrado o minimizado
                     targetWin.style.display = 'flex';
                     bringToFront(targetWin);
                     item.classList.add('active');
                 } else {
+                    // Si ya está visible y en primer plano -> minimizar
                     if (targetWin.classList.contains('focused')) {
                         targetWin.style.display = 'none';
+                        targetWin.classList.remove('focused');
+                        const activeTitleEl = document.getElementById('active-app-title');
+                        if (activeTitleEl) activeTitleEl.textContent = 'Escritorio';
                     } else {
+                        // Traer al frente
                         bringToFront(targetWin);
                     }
                 }
@@ -179,7 +224,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const planProgressFill = document.getElementById('plan-progress-fill');
     const btnCancelPlan = document.getElementById('btn-cancel-plan');
 
-    // Modal de Aprobación
+    // Modal de Aprobación Humana Cancelable
     const modal = document.getElementById('approval-modal');
     const btnModalApprove = document.getElementById('btn-modal-approve');
     const btnModalReject = document.getElementById('btn-modal-reject');
@@ -187,9 +232,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function requestUserApproval(opName, target, desc) {
         return new Promise((resolve) => {
-            document.getElementById('modal-operation').textContent = opName;
-            document.getElementById('modal-target').textContent = target;
-            document.getElementById('modal-desc').innerHTML = desc;
+            const opEl = document.getElementById('modal-operation');
+            const targetEl = document.getElementById('modal-target');
+            const descEl = document.getElementById('modal-desc');
+
+            if (opEl) opEl.textContent = opName;
+            if (targetEl) targetEl.textContent = target;
+            if (descEl) descEl.textContent = desc;
+
             modal.style.display = 'flex';
             modalResolver = resolve;
         });
@@ -198,38 +248,64 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnModalApprove) {
         btnModalApprove.addEventListener('click', () => {
             modal.style.display = 'none';
-            if (modalResolver) modalResolver(true);
+            if (modalResolver) {
+                const res = modalResolver;
+                modalResolver = null;
+                res(true);
+            }
         });
     }
     if (btnModalReject) {
         btnModalReject.addEventListener('click', () => {
             modal.style.display = 'none';
-            if (modalResolver) modalResolver(false);
+            if (modalResolver) {
+                const res = modalResolver;
+                modalResolver = null;
+                res(false);
+            }
         });
     }
 
     let isPlanExecuting = false;
     let cancelRequested = false;
 
+    // Cancelación limpia e inmediata: desbloquea el modal si estaba abierto
     if (btnCancelPlan) {
         btnCancelPlan.addEventListener('click', () => {
             if (isPlanExecuting) {
                 cancelRequested = true;
                 addJarvisMessage('system', '⏹ Cancelación solicitada por el usuario. Abortando tareas activas...');
+
+                // Cerrar modal y resolver la promesa pendiente si estaba en espera de confirmación
+                if (modalResolver) {
+                    modal.style.display = 'none';
+                    const res = modalResolver;
+                    modalResolver = null;
+                    res(false); // Resuelve inmediatamente como rechazado/cancelado
+                }
             }
         });
     }
 
-    function addJarvisMessage(type, text, author = 'Jarvis') {
+    // Inserción segura de mensajes (Prevención Anti-XSS con textContent)
+    function addJarvisMessage(type, text, author = 'Jarvis Core') {
         const msg = document.createElement('div');
         msg.className = `message ${type}-msg`;
-        if (type === 'agent') {
-            msg.innerHTML = `<span class="msg-author">${author}:</span><span>${text}</span>`;
-        } else if (type === 'user') {
-            msg.textContent = text;
+
+        if (type === 'agent' || type === 'system') {
+            const authorSpan = document.createElement('span');
+            authorSpan.className = 'msg-author';
+            authorSpan.textContent = `${author}: `;
+
+            const textSpan = document.createElement('span');
+            textSpan.textContent = text; // Asignación segura sin innerHTML
+
+            msg.appendChild(authorSpan);
+            msg.appendChild(textSpan);
         } else {
-            msg.innerHTML = `<span class="msg-author">Jarvis Core:</span><span>${text}</span>`;
+            msg.textContent = text; // Mensaje de usuario seguro
         }
+
         jarvisFeed.appendChild(msg);
         jarvisFeed.scrollTop = jarvisFeed.scrollHeight;
     }
@@ -243,7 +319,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (state === 'busy') {
             card.classList.add('busy');
             badge.className = 'agent-status-badge status-busy';
-            badge.textContent = 'En Ejecución';
+            badge.textContent = 'En Simulación';
         } else {
             card.classList.remove('busy');
             badge.className = 'agent-status-badge status-idle';
@@ -267,7 +343,7 @@ document.addEventListener('DOMContentLoaded', () => {
             name: 'Cybersecurity Agent',
             task: 'Auditar privilegios ACL e inspeccionar llamada SYS_SET_PROFILE',
             needsApproval: true,
-            approvalDesc: 'El <strong>Agente de Ciberseguridad</strong> requiere auditar y validar los límites de permisos ACL en perfiles concurrentes.'
+            approvalDesc: 'El Agente de Ciberseguridad requiere auditar y validar los límites de permisos ACL en perfiles concurrentes.'
         },
         {
             id: 'backend',
@@ -307,25 +383,35 @@ document.addEventListener('DOMContentLoaded', () => {
         addJarvisMessage('user', userPrompt);
         planTopic.textContent = userPrompt.length > 35 ? userPrompt.substring(0, 35) + '...' : userPrompt;
         planPanel.style.display = 'flex';
-        planStepsList.innerHTML = '';
+        
+        // Limpieza segura del contenedor de pasos
+        while (planStepsList.firstChild) {
+            planStepsList.removeChild(planStepsList.firstChild);
+        }
 
-        // Generar lista de pasos en el panel
+        // Generar lista de pasos mediante DOM seguro
         planSteps.forEach((step, idx) => {
             const stepEl = document.createElement('div');
             stepEl.className = 'plan-step-item';
             stepEl.id = `step-item-${step.id}`;
-            stepEl.innerHTML = `
-                <span><strong>${idx + 1}. [${step.name}]</strong>: ${step.task}</span>
-                <span class="step-status">Pendiente</span>
-            `;
+
+            const labelSpan = document.createElement('span');
+            labelSpan.textContent = `${idx + 1}. [${step.name}]: ${step.task}`;
+
+            const statusSpan = document.createElement('span');
+            statusSpan.className = 'step-status';
+            statusSpan.textContent = 'Pendiente';
+
+            stepEl.appendChild(labelSpan);
+            stepEl.appendChild(statusSpan);
             planStepsList.appendChild(stepEl);
         });
 
-        addJarvisMessage('system', `Plan estructurado en ${planSteps.length} fases coordinadas con los 6 agentes especializados.`);
+        addJarvisMessage('system', `Plan estructurado en ${planSteps.length} fases simuladas con los 6 agentes especializados.`);
 
         for (let i = 0; i < planSteps.length; i++) {
             if (cancelRequested) {
-                addJarvisMessage('system', '⚠️ Plan abortado satisfactoriamente por el usuario. No se aplicaron cambios pendientes.');
+                addJarvisMessage('system', '⚠️ Plan abortado satisfactoriamente por el operador. No se aplicaron cambios pendientes.');
                 break;
             }
 
@@ -333,7 +419,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const stepEl = document.getElementById(`step-item-${step.id}`);
             if (stepEl) {
                 stepEl.classList.add('active');
-                stepEl.querySelector('.step-status').textContent = 'Ejecutando...';
+                const st = stepEl.querySelector('.step-status');
+                if (st) st.textContent = 'Simulando...';
             }
 
             setAgentState(step.agent, 'busy', step.task);
@@ -342,11 +429,17 @@ document.addEventListener('DOMContentLoaded', () => {
             // Requerimiento de aprobación humana en pasos críticos
             if (step.needsApproval) {
                 const approved = await requestUserApproval('OP_SYSTEM_ADMIN', `/sys/acl/${step.id}`, step.approvalDesc);
+                if (cancelRequested) {
+                    addJarvisMessage('system', '⚠️ Plan cancelado durante el diálogo de aprobación.');
+                    setAgentState(step.agent, 'idle', 'Cancelado');
+                    break;
+                }
                 if (!approved) {
                     addJarvisMessage('system', `❌ Acción denegada por el operador para ${step.name}. Saltando paso crítico de forma segura.`);
                     if (stepEl) {
                         stepEl.classList.remove('active');
-                        stepEl.querySelector('.step-status').textContent = 'Denegado';
+                        const st = stepEl.querySelector('.step-status');
+                        if (st) st.textContent = 'Denegado';
                     }
                     setAgentState(step.agent, 'idle', 'Acción denegada por usuario');
                     continue;
@@ -354,19 +447,20 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             // Simulación de latencia de cómputo del modelo / agente
-            await new Promise(r => setTimeout(r, 1200));
+            await new Promise(r => setTimeout(r, 1000));
 
             if (cancelRequested) {
-                setAgentState(step.agent, 'idle');
+                setAgentState(step.agent, 'idle', 'Cancelado');
                 break;
             }
 
-            // Paso completado
-            setAgentState(step.agent, 'idle', 'Completado');
+            // Paso completado de forma simulada
+            setAgentState(step.agent, 'idle', 'Completado [SIMULADO]');
             if (stepEl) {
                 stepEl.classList.remove('active');
                 stepEl.classList.add('completed');
-                stepEl.querySelector('.step-status').textContent = '✓ Hecho';
+                const st = stepEl.querySelector('.step-status');
+                if (st) st.textContent = '✓ Simulado';
             }
 
             const progressPct = Math.round(((i + 1) / planSteps.length) * 100);
@@ -374,9 +468,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (!cancelRequested) {
-            addJarvisMessage('system', '🎉 ¡Plan completado con éxito! Todos los agentes retornaron a estado Idle.');
+            addJarvisMessage('system', 'ℹ️ Simulación completada [DEMO]: no se modificaron archivos ni se ejecutaron agentes reales. Todos los agentes retornaron a estado Idle.');
         }
 
+        // Restablecer estados de todos los agentes
+        planSteps.forEach(s => setAgentState(s.agent, 'idle', 'Idle'));
         isPlanExecuting = false;
     }
 
@@ -391,7 +487,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // 6. Mini Gráfico del Monitor de Sistema [DEMO]
+    // 6. Mini Gráfico del Monitor de Sistema [SIMULADA]
     const miniChart = document.getElementById('mini-chart');
     if (miniChart) {
         for (let i = 0; i < 24; i++) {
@@ -413,7 +509,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 3000);
     }
 
-    // 7. Simulación de Shell en Terminal
+    // 7. Simulación de Shell en Terminal (Segura contra XSS)
     const termInput = document.getElementById('term-input');
     const termOutput = document.getElementById('term-output');
 
@@ -423,8 +519,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 const cmd = termInput.value.trim();
                 termInput.value = '';
 
+                // Inserción segura mediante textContent (Auditoría v17)
                 const line = document.createElement('div');
-                line.innerHTML = `<span style="color: #22c55e;">zenthra@core:~$</span> ${cmd}`;
+                const promptSpan = document.createElement('span');
+                promptSpan.style.color = '#22c55e';
+                promptSpan.textContent = 'zenthra@core:~$ ';
+
+                const cmdSpan = document.createElement('span');
+                cmdSpan.textContent = cmd; // Literal seguro sin interpretación HTML
+
+                line.appendChild(promptSpan);
+                line.appendChild(cmdSpan);
                 termOutput.appendChild(line);
 
                 handleTerminalCommand(cmd);
@@ -436,42 +541,45 @@ document.addEventListener('DOMContentLoaded', () => {
     function handleTerminalCommand(cmd) {
         const out = document.createElement('div');
         out.style.color = '#94a3b8';
+        out.style.whiteSpace = 'pre-wrap';
 
         switch (cmd.toLowerCase()) {
             case 'help':
-                out.innerHTML = `Comandos disponibles:<br>
-  - tasks: Lista procesos del scheduler Round-Robin<br>
-  - sysinfo: Información de memoria VMM e identidad 64 MiB<br>
-  - agents: Estado de los 6 agentes autónomos<br>
-  - clear: Limpiar pantalla<br>
+                out.textContent = `Comandos disponibles:
+  - tasks: Lista procesos del scheduler Round-Robin
+  - sysinfo: Información de memoria VMM e identidad 64 MiB
+  - agents: Estado de los 6 agentes autónomos
+  - clear: Limpiar pantalla
   - version: Información de release`;
                 break;
             case 'tasks':
-                out.innerHTML = `PID  NAME             STATE    PROFILE     QUANTUM<br>
- 1   kernel_shell     RUNNING  General     5 ticks<br>
- 2   jarvis_runtime   READY    SysAdmin    5 ticks<br>
+                out.textContent = `PID  NAME             STATE    PROFILE     QUANTUM
+ 1   kernel_shell     RUNNING  General     5 ticks
+ 2   jarvis_runtime   READY    SysAdmin    5 ticks
  3   iot_telemetry    SLEEP    Hardware    5 ticks`;
                 break;
             case 'sysinfo':
-                out.innerHTML = `Arquitectura: x86 (i686 Protected Mode, 32-bit)<br>
-Paginación: VMM 2-niveles (64 MiB Identity Map activo)<br>
-Scheduler: Round-Robin Preemptivo UP con PIT IRQ0<br>
+                out.textContent = `Arquitectura: x86 (i686 Protected Mode, 32-bit)
+Paginación: VMM 2-niveles (64 MiB Identity Map activo)
+Scheduler: Round-Robin Preemptivo UP con PIT IRQ0
 Gráficos: VESA LFB 32 bpp con Double Buffering`;
                 break;
             case 'agents':
-                out.innerHTML = `Centro de 6 Agentes:<br>
-  1. Backend Agent (Idle)<br>
-  2. Cybersecurity Agent (Idle)<br>
-  3. Kernel/OS Agent (Idle)<br>
-  4. Data & IoT Agent (Idle)<br>
-  5. Creative/UI Agent (Idle)<br>
+                out.textContent = `Centro de 6 Agentes:
+  1. Backend Agent (Idle)
+  2. Cybersecurity Agent (Idle)
+  3. Kernel/OS Agent (Idle)
+  4. Data & IoT Agent (Idle)
+  5. Creative/UI Agent (Idle)
   6. Automation Agent (Idle)`;
                 break;
             case 'clear':
-                termOutput.innerHTML = '';
+                while (termOutput.firstChild) {
+                    termOutput.removeChild(termOutput.firstChild);
+                }
                 return;
             case 'version':
-                out.textContent = 'Zenthra OS v16.0 — Multi-Agent Desktop Prototype [DEMO]';
+                out.textContent = 'Zenthra OS Desktop Prototype DEMO v17 (i686-pc-zenthra)';
                 break;
             case '':
                 return;

@@ -214,7 +214,6 @@ void task_set_current_profile(enum nova_profile profile) {
     if (current_task_idx >= 0 && current_task_idx < MAX_TASKS) {
         task_table[current_task_idx].profile = profile;
     }
-    acl_set_active_profile(profile);
 }
 
 void task_exit(void) {

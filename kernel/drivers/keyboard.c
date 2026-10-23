@@ -144,6 +144,32 @@ ssize_t keyboard_read_queue(char* dest, size_t count) {
     return (ssize_t)read_bytes;
 }
 
+/*
+ * Inspección no destructiva de la cola de teclado (Lectura Transaccional - Auditoría v17).
+ * Copia hasta 'count' caracteres disponibles hacia 'dest' sin avanzar la cabeza de la cola.
+ */
+size_t keyboard_peek_queue(char* dest, size_t count) {
+    if (!dest || count == 0 || q_count == 0) return 0;
+    size_t peeked = 0;
+    size_t idx = q_head;
+    while (peeked < count && peeked < q_count) {
+        dest[peeked++] = keyboard_queue[idx];
+        idx = (idx + 1) % KEYBOARD_QUEUE_CAPACITY;
+    }
+    return peeked;
+}
+
+/*
+ * Descarta 'count' caracteres de la cola tras confirmación de copia exitosa a userland.
+ */
+void keyboard_discard_chars(size_t count) {
+    if (count > q_count) {
+        count = q_count;
+    }
+    q_head = (q_head + count) % KEYBOARD_QUEUE_CAPACITY;
+    q_count -= count;
+}
+
 /* Procesamiento integral de scan codes con modificadores Shift y Caps Lock */
 void keyboard_process_scancode(uint8_t scancode) {
     // 1. Detección de teclas modificadoras Make/Break

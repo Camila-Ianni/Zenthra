@@ -1,7 +1,7 @@
-# Zenthra OS — Hoja de Ruta de Desarrollo (Roadmap v16)
+# Zenthra OS — Hoja de Ruta de Desarrollo (Roadmap v17)
 
 > **Plan Maestro de Evolución hacia un Sistema Operativo de PC**  
-> Formulado para el proyecto académico de grado de Camila Ianni (2026), estructurado con base en la **Auditoría Técnica v16**.
+> Formulado para el proyecto académico de grado de Camila Ianni (2026), estructurado con base en la **Auditoría Técnica v17**.
 
 ---
 
@@ -12,7 +12,8 @@ flowchart TD
     F0["Fase 0: Congelar Base y Hashes Criptográficos"] --> F1["Fase 1: Arranque Confiable CI test-complete y boot-smoke"]
     F1 --> F2["Fase 2: SYS_READ Funcional, Fail-Closed, errno.h y VMM 64 MiB"]
     F2 --> F2B["Fase 2.5 (v16): Reentrancia, Aislamiento Perfiles, Teclado ES y Prototipo Jarvis"]
-    F2B --> F3["Fase 3: Proceso Ring 3 Aislado y Cargador ELF"]
+    F2B --> F2C["Fase 2.6 (v17): SYS_READ Transaccional, Prevención XSS y Cancelación Modal en Jarvis"]
+    F2C --> F3["Fase 3: Proceso Ring 3 Aislado y Cargador ELF"]
     F3 --> F4["Fase 4: Userland Nativo (Terminal, Monitor, Editor)"]
     F4 --> F5["Fase 5: Persistencia en Disco Virtual (ATA/IDE y FS)"]
     F5 --> F6["Fase 6: GUI Usable y Validación Visual en Emulador"]
@@ -32,7 +33,7 @@ flowchart TD
 - [x] Criterio de salida: Manifiesto reproducible con SHA-256 de binarios ELF e ISO.
 
 ### Fase 1 — Arranque Confiable e Integración Continua (COMPLETADA EN CI)
-- [x] Flujo de compilación determinista y reproducible con `make clean`, `make check-env` y `make test` (416 tests).
+- [x] Flujo de compilación determinista y reproducible con `make clean`, `make check-env` y `make test` (423 tests).
 - [x] Validación estricta de cabecera con `grub-file --is-x86-multiboot` en CI (Ubuntu runner).
 - [x] Generación de ISO con `grub-mkrescue` y hash SHA-256 verificado en CI.
 - [x] Separación estricta de pruebas en QEMU:
@@ -56,7 +57,13 @@ flowchart TD
 - [x] **ABI de `SYS_READ` Completa**: Validación de flags en EDX (`SYS_READ_NONBLOCK`, `SYS_READ_BLOCKING` documentado con `-ENOSYS`, flags inválidos con `-EINVAL`), buffers acotados a `to_read` bytes con validación de punteros fail-closed.
 - [x] **Driver de Teclado PS/2 Ampliado**: Modificadores Shift make/break, Caps Lock con inversión XOR de glifos, tablas completas US y Español/LatAm (`KEYBOARD_LAYOUT_ES`), y telemetría de eventos de saturación (`keyboard_get_overflow_count`).
 - [x] **Prototipo Independiente de Escritorio & Jarvis Multi-Agente (`desktop_prototype/`)**: Glassmorphism auténtico, Dock flotante, Terminal gráfica, panel interactivo de Jarvis con planes por pasos, modal de confirmación crítica, centro de 6 agentes (Backend, Ciberseguridad, Kernel/OS, Datos, Creativo/UI, Automatización), arquitectura Gateway híbrida sin secretos hardcodeados y etiquetas `[DEMO]`.
-- [x] **Suite de Pruebas Unitarias**: Ampliada a **416 pruebas automatizadas aprobadas (0 fallos, 0 warnings)**.
+
+### Fase 2.6 — Auditoría Técnica v17: Lectura Transaccional, Aislamiento Total de `task_set_current_profile` y Seguridad DOM en Jarvis (COMPLETADA)
+- [x] **Separación Total en `task_set_current_profile()`**: Eliminada la llamada residual a `acl_set_active_profile(profile)` dentro de `kernel/drivers/task.c`, asegurando que el perfil global de ACL (`acl_get_active_profile()`) nunca sea contaminado por cambios de perfil en tareas individuales.
+- [x] **Lectura Transaccional en `SYS_READ`**: Implementadas `keyboard_peek_queue()` y `keyboard_discard_chars()` en `kernel/drivers/keyboard.c`. `SYS_READ` inspecciona los bytes sin retirarlos de la cola, copia a userland con `copy_to_user()` y solo descarta los caracteres tras confirmar que la copia tuvo éxito (`-EFAULT` preserva el 100% de la cola intacta).
+- [x] **Acotamiento y Eficiencia en `SYS_WRITE`**: Límite de transferencia por llamada (`MAX_SYSCALL_TRANSFER_SIZE = 65536` bytes) y validación única por chunk dentro de `copy_from_user()`.
+- [x] **Seguridad DOM Anti-XSS y Cancelación Modal en `desktop_prototype/`**: Eliminadas todas las asignaciones con `innerHTML` en `app.js` (reemplazadas por creación segura de nodos con `textContent`), cancelación inmediata de `requestUserApproval` al abortar un plan con el modal abierto, banner persistente de simulación `[DEMO]`, sincronización completa de foco/minimizado en el dock y delimitación al contenedor en resize/drag.
+- [x] **Suite de Pruebas Unitarias**: Ampliada a **423 pruebas automatizadas aprobadas (0 fallos, 0 warnings)**.
 
 ### Fase 3 — Proceso Ring 3 y Cargador ELF i386 (PRÓXIMO OBJETIVO)
 - [ ] Definición formal de la ABI de llamadas al sistema (Syscalls) para Ring 3 (convenciones, estructuras y códigos de error).

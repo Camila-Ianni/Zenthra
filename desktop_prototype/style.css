@@ -192,6 +192,22 @@ body {
     box-shadow: 0 0 6px var(--accent-green);
 }
 
+.status-dot.offline {
+    background: var(--accent-amber);
+    box-shadow: 0 0 6px var(--accent-amber);
+}
+
+.demo-system-banner {
+    background: rgba(245, 158, 11, 0.15);
+    border-bottom: 1px solid rgba(245, 158, 11, 0.35);
+    color: var(--accent-amber);
+    font-size: 11px;
+    padding: 3px 14px;
+    text-align: center;
+    font-weight: 500;
+    z-index: 999;
+}
+
 .top-bar-icon-btn {
     background: transparent;
     border: none;

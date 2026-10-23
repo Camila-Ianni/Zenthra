@@ -27,9 +27,9 @@
             </div>
 
             <div class="top-bar-right">
-                <div class="status-indicator" title="Conexión Gateway Local">
-                    <span class="status-dot online"></span>
-                    <span class="status-label">Gateway Activo</span>
+                <div class="status-indicator" title="Gateway Local Demo (Sin conexión a APIs externas)">
+                    <span class="status-dot offline"></span>
+                    <span class="status-label">Gateway Demo (No Conectado)</span>
                 </div>
                 <button id="btn-theme-toggle" class="top-bar-icon-btn" title="Alternar Modo Oscuro / Claro">
                     🌓
@@ -42,6 +42,10 @@
                 </button>
             </div>
         </header>
+
+        <div class="demo-system-banner" id="demo-banner">
+            ⚠️ <strong>MODO PROTOTIPO DEMO:</strong> Interfaz visual simulada. No se modifican archivos del sistema ni se ejecutan agentes reales en hardware.
+        </div>
 
         <!-- Área de Ventanas / Escritorio -->
         <main id="window-container">
@@ -231,24 +235,24 @@
                 <div class="window-content monitor-layout">
                     <div class="metric-cards-row">
                         <div class="metric-card">
-                            <div class="metric-label">Uso de CPU [DEMO]</div>
+                            <div class="metric-label">Uso de CPU [SIMULADA]</div>
                             <div class="metric-val" id="metric-cpu">8.4%</div>
                             <div class="metric-sub">Quantum PIT: 5 ticks</div>
                         </div>
                         <div class="metric-card">
-                            <div class="metric-label">RAM Ocupada [DEMO]</div>
+                            <div class="metric-label">RAM Ocupada [SIMULADA]</div>
                             <div class="metric-val" id="metric-ram">18.2 MiB</div>
                             <div class="metric-sub">de 64 MiB Identity Map</div>
                         </div>
                         <div class="metric-card">
-                            <div class="metric-label">Temperatura IoT [DEMO]</div>
+                            <div class="metric-label">Temperatura IoT [SIMULADA]</div>
                             <div class="metric-val" id="metric-temp">24.5 °C</div>
                             <div class="metric-sub">Arduino Link: Conectado</div>
                         </div>
                     </div>
                     <div class="telemetry-chart-box">
                         <div class="chart-header">
-                            <span>Actividad del Scheduler en Tiempo Real [DEMO]</span>
+                            <span>Actividad del Scheduler en Tiempo Real [SIMULADA]</span>
                             <span class="badge-tag">UP Mode (Uniprocessor)</span>
                         </div>
                         <div class="mini-chart" id="mini-chart">
@@ -274,7 +278,7 @@
                 </div>
                 <div class="window-content terminal-layout">
                     <div class="terminal-body" id="term-output">
-                        <div>Zenthra OS v16.0 (i686-pc-zenthra)</div>
+                        <div>Desktop Prototype DEMO v17 (i686-pc-zenthra)</div>
                         <div>Escriba 'help', 'tasks', 'sysinfo', 'agents' o 'clear'.</div>
                     </div>
                     <div class="terminal-prompt-line">
