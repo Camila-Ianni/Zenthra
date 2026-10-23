@@ -27,6 +27,9 @@ jobs:
       - name: Compilar Kernel ELF y Generar Imagen ISO Arrancable
         run: |
           make iso
+          echo "=== Hashes de Verificacion Criptografica SHA-256 ==="
+          sha256sum build/zenthra_kernel.elf build/zenthra_os.iso
+          cat build/BUILD_INFO.txt
 
       - name: Validar Arranque Automatizado en QEMU y Alternancia de Tareas
         run: |
@@ -40,3 +43,4 @@ jobs:
             build/zenthra_os.iso
             build/zenthra_kernel.elf
             build/serial.log
+            build/BUILD_INFO.txt

@@ -27,10 +27,12 @@ flowchart TD
 - **Arranque**: BIOS tradicional con GRUB bajo especificación Multiboot 1 / 2.
 - **Entornos Oficiales de Prueba**: QEMU para CI automatizado y Oracle VM VirtualBox para demostraciones interactivas.
 
-### Fase 1 — Arranque Repetible e Integración Continua (COMPLETADA)
-- [x] Flujo de compilación determinista y reproducible con `make clean`, `make test`, `make iso`.
-- [x] Validación estricta de cabecera con `grub-file --is-x86-multiboot`.
-- [x] Pipeline de GitHub Actions 100% en verde con generación de ISO y verificación automática.
+### Fase 1 — Arranque Repetible e Integración Continua (COMPLETADA EN CI)
+- [x] Flujo de compilación determinista y reproducible con `make clean` y `make test` en host local (221 tests).
+- [x] Validación estricta de cabecera con `grub-file --is-x86-multiboot` en pipeline CI (Ubuntu runner).
+- [x] Generación de ISO con `grub-mkrescue` y hash SHA-256 verificado en CI.
+- [x] Arranque automatizado headless en QEMU (`make verify-qemu`) verificado en GitHub Actions CI (Run ID 39983159055).
+- [ ] Reproducción local de ISO/QEMU en hosts macOS/Windows (requiere emulación o contenedor Linux).
 
 ### Fase 2 — CPU, IDT Completa e Interrupciones (COMPLETADA)
 - [x] Tabla IDT de 256 descriptores.
@@ -47,23 +49,27 @@ flowchart TD
 
 ### Fase 4 — Memoria Física y Paging x86 (COMPLETADA)
 - [x] Parseo del mapa de memoria Multiboot 1 (`mmap_addr`) y reserva de áreas críticas (1 MiB bajo, kernel ELF, heap).
-- [x] Asignador de marcos de página física (PMM) basado en bitmap de 4 KiB con reciclaje First-Fit.
+- [x] Asignador de marcos de página física (PMM) basado en bitmap de 4 KiB con reciclaje First-Fit y protección de desbordamiento en 64 bits.
 - [x] Paginación de hardware x86 de 32 bits (`CR0.PG`, `CR0.WP`, carga de CR3).
-- [x] Mapeo de identidad de 16 MiB para supervisor Ring 0 (kernel, VGA B8000, heap 4-6 MB).
+- [x] Mapeo de identidad de 64 MiB para supervisor Ring 0 (kernel, VGA B8000, heap 4-6 MB).
 - [x] Aislamiento de espacios virtuales y directorios de página por proceso (`vmm_create_process_directory`).
 - [x] Manejador de Page Faults (#PF Vector 14 en IDT) con decodificación de código de error y lectura de CR2.
 
-### Fase 5 — Primer Escritorio Gráfico (MVP Visible)
-- [ ] Petición de modo gráfico a Multiboot (1024x768 a 32 bpp, LFB).
-- [ ] Búfer de composición en RAM (Double Buffering) y función `gfx_flip()`.
-- [ ] Primitivas gráficas 2D: píxeles, rectángulos, líneas (Bresenham) y renderizado de texto con fuente de mapa de bits 8x16.
-- [ ] Puntero de ratón gráfico y gestor de eventos de cursor/botones.
-- [ ] Zenthra Window Manager: barra de tareas inferior, botón de menú, reloj y ventanas movibles.
-- [ ] Aplicación de Terminal Gráfica integrada sobre el escritorio.
+### Fase 5 — Primer Escritorio Gráfico (MVP en Código / Pruebas Host — Validación Visual VM Pendiente)
+- [x] Petición de modo gráfico a Multiboot (1024x768 a 32 bpp, LFB).
+- [x] Búfer de composición en RAM (Double Buffering) y función `gfx_flip()`.
+- [x] Primitivas gráficas 2D: píxeles, rectángulos, líneas (Bresenham) y renderizado de texto con fuente de mapa de bits 8x16.
+- [x] Puntero de ratón gráfico y gestor de eventos de cursor/botones.
+- [x] Zenthra Window Manager: barra de tareas inferior, botón de menú, reloj y ventanas movibles.
+- [x] Aplicación de Terminal Gráfica integrada sobre el escritorio.
+- [ ] Validación visual interactiva y capturas de pantalla en emulador QEMU con GUI y VirtualBox.
 
-### Fase 6 — Aplicaciones Propias y Formato de Paquetes
-- [ ] Formato de paquete binario Zenthra (`.zpkg`) con manifiesto de metadatos, binario ELF compilado y firma digital criptográfica (SHA-256 / Ed25519).
-- [ ] Reemplazo de los marcadores simulados de aplicaciones comerciales por herramientas nativas de Zenthra (Monitor de Sistema, Explorador de Archivos, Consola IoT, Editor de Texto).
+### Fase 6 — Aplicaciones Propias, Proceso Ring 3 y Formato de Paquetes
+- [ ] Definición formal de la ABI de llamadas al sistema (Syscalls) para Ring 3 (convenciones, estructuras y códigos de error).
+- [ ] Cargador de ejecutables ELF i386 para Ring 3 (`load_elf` / `task_spawn_user`).
+- [ ] Proceso userland mínimo de prueba con aislamiento estricto de memoria probado en QEMU.
+- [ ] Formato de paquete binario nativo Zenthra (`.zpkg`) con manifiesto de metadatos, binario ELF compilado y firma digital criptográfica (SHA-256 / Ed25519).
+- [ ] Suite de aplicaciones nativas esenciales de Zenthra: Terminal Gráfica, Monitor del Sistema, Explorador de Archivos y Editor de Texto.
 
 ### Fase 7 — Almacenamiento Persistente en Bloque
 - [ ] Driver de controlador de disco IDE / ATA PIO de 32 bits.

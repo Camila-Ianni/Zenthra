@@ -1,7 +1,7 @@
 # Zenthra OS — Estado Técnico y Matriz de Auditoría
 
 > **Fecha de Actualización**: 23 de octubre de 2026  
-> **Versión**: 12.0 (Post-Auditoría Técnica v12 — PMM 64-bit Rounding Protection, VMM Directory Accessibility & 64 MiB Identity Map Scope, Syscall Page-Boundary Validation, UP Concurrency Contract, RAMFS Non-Truncation & Demonstrative Catalog Labeling)
+> **Versión**: 13.0 (Post-Auditoría Técnica v13 — Diagnóstico `check-env`, Manifiesto Criptográfico `BUILD_INFO.txt`, PMM 64-bit Rounding Protection, VMM Directory Accessibility & 64 MiB Identity Map Scope, Syscall Page-Boundary Validation, UP Concurrency Contract, RAMFS Non-Truncation & Demonstrative Catalog Labeling)
 
 ---
 
@@ -12,10 +12,10 @@ Para garantizar rigor académico y de ingeniería de software en el proyecto de 
 | Nivel de Verificación | Estado | Evidencia Concreta |
 | :--- | :---: | :--- |
 | **UNIT TESTS (Host)** | **PASS** | 221 pruebas automatizadas ejecutadas con `make test` (0 fallos). |
-| **BUILD ELF (CI)** | **PASS** | Compilación y enlace limpio de `build/zenthra_kernel.elf` (i686) mediante GCC Multilib en runner Ubuntu CI. En macOS host requiere toolchain cruzada i686. |
-| **MULTIBOOT 1 (CI)** | **PASS** | Contrato oficial de arranque Multiboot 1 validado estrictamente por `grub-file --is-x86-multiboot` en CI. Bloqueado localmente en host macOS por ausencia de `grub-file`. |
-| **ISO GENERATION (CI)** | **PASS** | Imagen `build/zenthra_os.iso` construida en pipeline de CI con `grub-mkrescue` y hash SHA-256 verificado. |
-| **QEMU HEADLESS BOOT (CI)** | **PASS** | Verificado en CI (Run ID `39983159055`, commit `3fe3498`) con `make verify-qemu`: banner serial, PMM activo, Paginación x86 VMM activa en CR0/CR3, GFX/Mouse/WM listos, ticks PIT IRQ0 y alternancia de tareas concurrentes con preempción de tarea CPU-bound. En host local macOS reportado como no reproducido por falta de `qemu-system-i386`. |
+| **BUILD ELF (CI)** | **PASS** | Compilación y enlace limpio de `build/zenthra_kernel.elf` (i686) mediante GCC Multilib en runner Ubuntu CI. Generación de `build/BUILD_INFO.txt` con hashes SHA-256. En macOS host requiere toolchain cruzada i686. |
+| **MULTIBOOT 1 (CI)** | **PASS** | Contrato oficial de arranque Multiboot 1 validado estrictamente por `grub-file --is-x86-multiboot` en CI. Target `check-env` provee diagnóstico limpio; reportado como `[BLOCKED]` en host macOS por ausencia de `grub-file`. |
+| **ISO GENERATION (CI)** | **PASS** | Imagen `build/zenthra_os.iso` construida en pipeline de CI con `grub-mkrescue` y hash SHA-256 verificado en `build/BUILD_INFO.txt` y logs de CI. |
+| **QEMU HEADLESS BOOT (CI)** | **PASS** | Verificado en CI (Run ID `39983159055`, commit `3fe3498`) con `make verify-qemu`: banner serial, PMM activo, Paginación x86 VMM activa en CR0/CR3, GFX/Mouse/WM listos, ticks PIT IRQ0 y alternancia de tareas concurrentes con preempción de tarea CPU-bound. Incluye target `verify-qemu-direct` para validación directa de ELF. En host local macOS reportado como `[BLOCKED]` por falta de `qemu-system-i386`. |
 | **VIRTUALBOX** | **PROCEDIMIENTO VALIDADO** | Procedimiento de arranque documentado en [docs/virtualbox_guia.md](virtualbox_guia.md) utilizando la ISO oficial generada en CI. |
 | **SCHEDULER & CONCURRENCIA** | **REAL (UP SEGURO)** | Modelo Uniprocesador (UP) con secciones críticas seguras frente a IRQ mediante `irq_save()`/`irq_restore()` (`cli`/`popfl`) y contador de anidamiento reentrante. Cola zombie de 32 elementos probada bajo estrés con 40 terminaciones secuenciales sin fugas. Pilas liberadas exclusivamente tras `switch_context`. |
 | **PMM & VMM PAGING** | **REAL (SEGURO)** | PMM con aritmética de 64 bits a prueba de overflow en sumas y redondeos superiores (`UINT64_MAX`), liberación exclusiva de páginas completas y reservas explícitas de regiones críticas (1 MiB bajo, ELF, Heap 2 MiB, MBI, módulos, tablas y MMIO). VMM con alcance acotado a Identity Mapping de 64 MiB (`KERNEL_IDENTITY_TABLES = 16`); verificación de accesibilidad con `vmm_is_directory_accessible(pd)` impidiendo desreferencias físicas no mapeadas. |

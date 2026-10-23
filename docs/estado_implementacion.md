@@ -36,7 +36,7 @@ Este documento consolida el estado técnico del sistema operativo experimental *
 - **RAMFS (In-Memory Filesystem)**: En [`kernel/drivers/ramfs.c`](file:///Users/cami/Desktop/NOVA/kernel/drivers/ramfs.c), estructura para almacenar y consultar archivos en memoria RAM (`ramfs_create`, `ramfs_write`, `ramfs_read`, `ramfs_delete`, `ramfs_list`). Permite el registro y persistencia en sesión de telemetría de Arduino (`telemetria.log`), alertas del sistema (`alertas.log`), registros de violaciones de seguridad (`security.log`) y binarios/metadatos de aplicaciones instaladas (`app_<id>`).
 
 ### 2.4 Perfiles de Usuario y Auto-Aprovisionamiento (11 Perfiles)
-NOVA OS implementa **11 perfiles de usuario** especializados. Cada perfil cuenta con su propio lote de aplicaciones que se auto-descargan e instalan automáticamente en el sistema de archivos al seleccionarlo:
+Zenthra OS implementa **11 perfiles de usuario** especializados. Cada perfil cuenta con su propio lote de aplicaciones que se auto-descargan y registran como metadatos demostrativos en el sistema de archivos RAMFS al seleccionarlo:
 
 | # | Perfil | Herramientas Auto-Aprovisionadas | Propósito |
 |---|---|---|---|
@@ -52,12 +52,15 @@ NOVA OS implementa **11 perfiles de usuario** especializados. Cada perfil cuenta
 | **9** | **Ofimática / Oficina** | `calc-pro` (Planillas avanzadas), `invoice-mgr` (Facturación y contabilidad) | Administración comercial y gestión de documentos |
 | **10**| **Gamer / Streamer** | `game-launcher` (GameHub optimizado), `stream-obs` (Captura y streaming OBS) | Lanzador de videojuegos y transmisión de pantalla |
 
-### 2.5 Centro de Aplicaciones (NOVA Store) e Integridad Criptográfica
-- **Catálogo de Aplicaciones**: Más de 25 herramientas nativas catalogadas con firmas de verificación.
+> **Nota de Auditoría Técnica**: Las herramientas listadas corresponden a una *demostración arquitectural* de aprovisionamiento por perfiles. Registran metadatos y payloads verificados con CRC32 en RAMFS, modelando el subsistema que integrará binarios ELF nativos en la Fase 6.
+
+### 2.5 Centro de Aplicaciones (Zenthra Store) e Integridad Criptográfica
+- **Catálogo de Aplicaciones**: Más de 25 herramientas catalogadas con firmas de verificación (simulación funcional de metadatos en memoria).
 - **Verificación Criptográfica de Integridad (Punto 3 de Auditoría)**:
   - Implementación del algoritmo estándar **CRC32 (IEEE 802.3 polinomial `0xEDB88320`)** en [`kernel/drivers/pkg_manager.c`](file:///Users/cami/Desktop/NOVA/kernel/drivers/pkg_manager.c) y [`kernel/include/pkg_manager.h`](file:///Users/cami/Desktop/NOVA/kernel/include/pkg_manager.h).
   - Cada paquete contiene su firma esperada (`expected_crc32`). Al invocarse `pkg_install()`, se ejecuta obligatoriamente `pkg_verify_integrity()`. Si los datos fueron alterados o están corrompidos, la instalación es rechazada y se bloquea la escritura en RAMFS.
   - Validación contra el vector canónico estándar IEEE 802.3 (`"123456789"` -> `0xCBF43926`).
+  - Validación de escritura en RAMFS: si `ramfs_create()` o `ramfs_write()` fallan (ej. por saturación de espacio), `pkg_install()` revierte y devuelve `-1`.
 - **Auto-Aprovisionamiento**: Función `pkg_provision_profile(profile)` que instala en masa las herramientas verificadas al elegir o cambiar de perfil.
 
 ### 2.6 Automatización y Motor de Reglas
@@ -82,112 +85,37 @@ NOVA OS implementa **11 perfiles de usuario** especializados. Cada perfil cuenta
 
 ---
 
-## 3. Pruebas Automatizadas y Validación
+### 3. Pruebas Automatizadas y Validación
 
-Se ejecutó la suite de pruebas mediante `make test`:
+Se ejecutó la suite de pruebas mediante `make test` (221 pruebas automatizadas, 0 fallos):
 
 ```
 ====================================================
-      NOVA OS — SUITE DE PRUEBAS AUTOMATIZADAS      
+     ZENTHRA OS — SUITE DE PRUEBAS AUTOMATIZADAS      
 ====================================================
 
-[*] Ejecutando: test_klib_strings...
-  [PASS] k_strlen calcula longitud correcta
-  [PASS] k_strcmp igualdad
-  [PASS] k_strcmp desigualdad
-  [PASS] k_strncmp prefijo
-  [PASS] k_memset rellena buffer
-  [PASS] k_memcpy copia memoria
-  [PASS] uitoa base 10 correcta
-  [PASS] uitoa base 16 hexadecimal correcta
-[*] Ejecutando: test_kheap_allocator...
-  [PASS] Heap inicializado con memoria libre disponible
-  [PASS] kmalloc asigna 64 bytes correctamente
-  [PASS] El contador de memoria ocupada se incrementa
-  [PASS] kmalloc asigna un segundo bloque contiguo y diferenciado
-  [PASS] kfree libera y decrementa memoria ocupada
-  [PASS] Coalescencia de bloques contiguos restaura el espacio original
-[*] Ejecutando: test_syscall_security_checks...
-  [PASS] is_user_pointer rechaza puntero NULL
-  [PASS] is_user_pointer rechaza acceso a memoria del kernel
-  [PASS] is_user_pointer acepta buffer en userland
-  [PASS] copy_from_user realiza copia exitosa de buffer valido
-  [PASS] Contenido copiado de forma integra al kernel
-  [PASS] copy_from_user bloquea lectura no autorizada desde memoria kernel
-  [PASS] strnlen_user calcula longitud exacta hasta NUL
-  [PASS] strnlen_user detecta y rechaza cadena sin terminador NUL dentro del limite
-[*] Ejecutando: test_multitasking_scheduler...
-  [PASS] Obtencion de la tarea actual en ejecucion
-  [PASS] La tarea principal del kernel esta en estado RUNNING
-  [PASS] Nombre de la tarea 0 es kernel_shell
-  [PASS] Creacion exitosa de tarea worker_task con PID valido
-  [PASS] task_yield conmuta al worker_task
-  [PASS] Nueva tarea conmutada a estado RUNNING
-  [PASS] task_yield regresa a la tarea principal kernel_shell (Round-Robin)
-[*] Ejecutando: test_acl_security...
-  [PASS] Perfil Estudiante tiene denegado el control de actuadores fisicos (OP_ARDUINO_WRITE)
-  [PASS] Perfil Hardware/IoT tiene autorizacion para controlar actuadores
-  [PASS] Perfil Estudiante puede leer RAMFS
-  [PASS] Perfil Estudiante puede escribir RAMFS
-  [PASS] Violacion de seguridad incrementa contador
-  [PASS] Intento no autorizado se registra en security.log
-[*] Ejecutando: test_ramfs...
-  [PASS] Archivo bienvenida.txt existe y tiene contenido
-  [PASS] Creacion de nuevo archivo sensor_test.dat
-  [PASS] Escritura completa de datos de sensor
-  [PASS] Lectura de contenido de archivo coincide con lo escrito
-  [PASS] Integridad de los datos leidos comprobada
-  [PASS] Borrado de archivo exitoso
-  [PASS] Archivo borrado ya no puede ser leido
-[*] Ejecutando: test_profile_provisioning...
-  [PASS] Existen al menos 11 perfiles de usuario definidos
-  [PASS] Perfil Estudiante aprovisiona 3 apps de estudio
-  [PASS] App 'office' presente en RAMFS tras seleccion de perfil Estudiante
-  [PASS] Perfil Frontend aprovisiona 4 herramientas (figma, vscode, nodejs, browser)
-  [PASS] App 'figma' presente en RAMFS
-  [PASS] App 'vscode' presente en RAMFS
-  [PASS] Perfil Backend aprovisiona 4 herramientas (docker, postgres, api-postman, git)
-  [PASS] App 'docker' presente en RAMFS
-  [PASS] Perfil Gamer aprovisiona suite de juegos y OBS
-  [PASS] App 'stream-obs' presente en RAMFS
-[*] Ejecutando: test_package_manager...
-  [PASS] pkg_compute_crc32 cumple con vector de prueba IEEE 802.3 (0xCBF43926)
-  [PASS] pkg_verify_integrity aprueba payload autentico con CRC32 esperado
-  [PASS] pkg_verify_integrity detecta discrepancia de CRC32 y rechaza paquete corrompido
-  [PASS] pkg_verify_integrity rechaza puntero nulo de forma segura
-  [PASS] pkg_verify_integrity rechaza paquete no catalogado
-  [PASS] Instalacion exitosa de paquete 'arduino-ide' verificado por CRC32
-  [PASS] Paquete instalado crea entrada binaria en RAMFS (app_arduino-ide)
-  [PASS] Deteccion de aplicacion ya instalada
-  [PASS] Desinstalacion exitosa de paquete
-  [PASS] Entrada de app retirada de RAMFS tras desinstalacion
-[*] Ejecutando: test_rules_engine...
-  [PASS] Temperatura normal (25.0 C) no activa alarma
-  [PASS] Temperatura critica (32.5 C) activa actuador LED por automatizacion
-  [PASS] Registro de alerta guardado en RAMFS (alertas.log)
-[*] Ejecutando: test_bidirectional_simulation...
-  [PASS] Trama enviada inicia con MAGIC
-  [PASS] Comando enviado es LED_ON
-  [PASS] Integridad de trama de respuesta de Arduino confirmada
-  [PASS] Deteccion y rechazo exitoso de trama corrompida
-[*] Ejecutando: test_x86_structures...
-  [PASS] Descriptor GDT tiene tamano estandar x86 (8 bytes)
-  [PASS] Descriptor IDT tiene tamano estandar x86 (8 bytes)
-[*] Ejecutando: test_multiboot_and_power...
-  [PASS] multiboot_parse reconoce firma Multiboot 1 (0x2BADB002)
-  [PASS] Version detectada es Multiboot 1
-  [PASS] Memoria convencional y extendida leidas
-  [PASS] multiboot_parse reconoce firma Multiboot 2 (0x36D76289)
-  [PASS] Version detectada es Multiboot 2
-  [PASS] Etiquetas Multiboot 2 parseadas correctamente
-  [PASS] Memoria extraida de etiqueta tipo 4
-  [PASS] multiboot_parse aborta de forma segura ante tag corrupto con size=0 evitando bucle infinito
-  [PASS] Rechazo seguro de magic invalido
-  [PASS] Rechazo seguro de puntero nulo
-  [PASS] qemu_poweroff ejecuta puertos ACPI (0x604, 0x0804, 0x4004) de forma determinista
+[*] Ejecutando: test_klib_strings... (8 pruebas)
+[*] Ejecutando: test_kheap_allocator... (6 pruebas)
+[*] Ejecutando: test_syscall_security_checks... (10 pruebas: buffers, limites, multi-pagina)
+[*] Ejecutando: test_multitasking_scheduler... (10 pruebas: Round-Robin, yield, estres 40 tareas)
+[*] Ejecutando: test_acl_security... (7 pruebas: permisos granulares por proceso)
+[*] Ejecutando: test_ramfs... (9 pruebas: CRUD, rechazo de sobreflujo >1024)
+[*] Ejecutando: test_profile_provisioning... (10 pruebas: 11 perfiles, auto-aprovisionamiento)
+[*] Ejecutando: test_package_manager... (12 pruebas: CRC32 IEEE 802.3, verificacion, rollback)
+[*] Ejecutando: test_rules_engine... (3 pruebas: disparadores y logging)
+[*] Ejecutando: test_bidirectional_simulation... (4 pruebas: protocolo ZIoT serie)
+[*] Ejecutando: test_x86_structures... (3 pruebas: GDT, IDT, TSS 104 bytes)
+[*] Ejecutando: test_multiboot_and_power... (11 pruebas: firmas, tags, salvaguardas ACPI)
+[*] Ejecutando: test_pmm_physical_allocator... (22 pruebas: 64-bit, alineacion, limites)
+[*] Ejecutando: test_vmm_hardware_paging... (28 pruebas: CR0, CR3, accesibilidad, direct map)
+[*] Ejecutando: test_page_fault_handler... (8 pruebas: decodificacion #PF CR2)
+[*] Ejecutando: test_pit_and_irq_masks... (10 pruebas: 100 Hz, mascaras PIC)
+[*] Ejecutando: test_gfx_and_lfb... (25 pruebas: 1024x768x32bpp, doble buffer, clipping)
+[*] Ejecutando: test_mouse_ps2... (17 pruebas: paquetes, botones, limites de pantalla)
+[*] Ejecutando: test_window_manager_and_desktop... (18 pruebas: drag, focus, launcher, terminal)
 
 ----------------------------------------------------
-Resultados: 82 Aprobados | 0 Fallidos
+Resultados: 221 Aprobados | 0 Fallidos
 ----------------------------------------------------
 [+] Todas las pruebas pasaron satisfactoriamente.
 ```
@@ -195,4 +123,4 @@ Resultados: 82 Aprobados | 0 Fallidos
 ---
 
 ## 4. Pipeline de CI/CD
-Se configuró un flujo en [`.github/workflows/ci.yml`](file:///Users/cami/Desktop/zenthra/.github/workflows/ci.yml) para compilar en Linux, validar la especificación Multiboot con `grub-file`, generar la ISO arrancable `zenthra_os.iso` y verificar el arranque en QEMU con captura de logs en cada commit.
+Se configuró un flujo automatizado en [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) para compilar en Linux, validar la especificación Multiboot con `grub-file`, generar la imagen ISO arrancable `build/zenthra_os.iso`, calcular hashes SHA-256 en `build/BUILD_INFO.txt`, y verificar el arranque headless en QEMU con captura de logs seriales y ticks PIT IRQ0 en cada commit.

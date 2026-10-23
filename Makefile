@@ -90,19 +90,38 @@ $(BIN_NAME): $(OBJS)
 	@echo " [OK] Zenthra Kernel ELF enlazado exitosamente: $@"
 	@echo "========================================================"
 
+check-env:
+	@echo "=== Diagnostico de Herramientas de Construccion Zenthra OS ==="
+	@printf "  Compilador C Host (%s): " "$(CC_HOST)"
+	@command -v $(CC_HOST) >/dev/null 2>&1 && echo "[OK]" || echo "[FALTA]"
+	@printf "  Compilador C Kernel x86 (gcc -m32): "
+	@gcc -m32 -E -x c /dev/null -o /dev/null >/dev/null 2>&1 && echo "[OK]" || echo "[FALTA - Se requiere gcc-multilib]"
+	@printf "  Validador Multiboot 1 (grub-file): "
+	@command -v grub-file >/dev/null 2>&1 && echo "[OK]" || echo "[BLOCKED en host local - Se valida en CI]"
+	@printf "  Generador ISO (grub-mkrescue): "
+	@command -v grub-mkrescue >/dev/null 2>&1 && echo "[OK]" || echo "[BLOCKED en host local - Se valida en CI]"
+	@printf "  Herramienta ISO (xorriso): "
+	@command -v xorriso >/dev/null 2>&1 && echo "[OK]" || echo "[FALTA]"
+	@printf "  Emulador de Sistema (qemu-system-i386): "
+	@command -v qemu-system-i386 >/dev/null 2>&1 && echo "[OK]" || echo "[BLOCKED en host local - Se valida en CI]"
+	@echo "=============================================================="
+
 check-multiboot: $(BIN_NAME)
 	@if command -v grub-file >/dev/null 2>&1; then \
 		grub-file --is-x86-multiboot $(BIN_NAME) || (echo "[-] Error fatal: El binario no cumple con la especificacion Multiboot 1." && exit 1); \
 		echo "[OK] Cabecera Multiboot 1 validada estrictamente por grub-file."; \
 	else \
-		echo "[-] Error fatal: 'grub-file' no esta instalado. Se requiere validacion estricta de Multiboot 1 antes de generar la ISO."; \
+		echo "[BLOCKED] 'grub-file' no esta instalado en este host (entorno macOS / auditoria)."; \
+		echo "          La validacion Multiboot 1 y generacion de ISO se ejecutan en Ubuntu / CI."; \
+		echo "          Para instalar localmente en Linux: sudo apt-get install grub-common"; \
 		exit 1; \
 	fi
 
 # Creación de imagen ISO arrancable con GRUB (para VirtualBox / QEMU)
 $(ISO_NAME): $(BIN_NAME) check-multiboot
 	@if ! command -v grub-mkrescue >/dev/null 2>&1; then \
-		echo "[-] Error fatal: 'grub-mkrescue' no disponible para generar la ISO."; \
+		echo "[BLOCKED] 'grub-mkrescue' no disponible en este host para generar la ISO."; \
+		echo "          La ISO se genera de forma determinista y reproducible en el pipeline CI."; \
 		exit 1; \
 	fi
 	@echo "=== Preparando estructura ISO de arranque (VirtualBox / GRUB) ==="
@@ -118,6 +137,16 @@ $(ISO_NAME): $(BIN_NAME) check-multiboot
 	@echo " [OK] Imagen ISO creada exitosamente: $(ISO_NAME)"
 	@sha256sum $(ISO_NAME) 2>/dev/null || shasum -a 256 $(ISO_NAME)
 	@echo "========================================================"
+	@echo "Generando manifiesto de verificacion build/BUILD_INFO.txt..."
+	@echo "Zenthra OS Build Information" > $(BUILD_DIR)/BUILD_INFO.txt
+	@echo "Date: $$(date -u)" >> $(BUILD_DIR)/BUILD_INFO.txt
+	@echo "Commit: $$(git rev-parse HEAD 2>/dev/null || echo 'unknown')" >> $(BUILD_DIR)/BUILD_INFO.txt
+	@echo "ELF Binary: $(BIN_NAME)" >> $(BUILD_DIR)/BUILD_INFO.txt
+	@echo -n "ELF SHA-256: " >> $(BUILD_DIR)/BUILD_INFO.txt
+	@sha256sum $(BIN_NAME) 2>/dev/null | awk '{print $$1}' >> $(BUILD_DIR)/BUILD_INFO.txt || shasum -a 256 $(BIN_NAME) | awk '{print $$1}' >> $(BUILD_DIR)/BUILD_INFO.txt
+	@echo "ISO Image: $(ISO_NAME)" >> $(BUILD_DIR)/BUILD_INFO.txt
+	@echo -n "ISO SHA-256: " >> $(BUILD_DIR)/BUILD_INFO.txt
+	@sha256sum $(ISO_NAME) 2>/dev/null | awk '{print $$1}' >> $(BUILD_DIR)/BUILD_INFO.txt || shasum -a 256 $(ISO_NAME) | awk '{print $$1}' >> $(BUILD_DIR)/BUILD_INFO.txt
 
 iso: $(ISO_NAME)
 
@@ -141,7 +170,8 @@ test:
 verify-qemu: $(ISO_NAME)
 	@echo "=== Verificando arranque de Zenthra OS en QEMU (Headless) ==="
 	@if ! command -v qemu-system-i386 >/dev/null 2>&1; then \
-		echo "[-] Error: 'qemu-system-i386' no esta disponible en el sistema."; \
+		echo "[BLOCKED] 'qemu-system-i386' no esta disponible en este host."; \
+		echo "          El arranque en QEMU se valida de forma automatica en GitHub Actions CI."; \
 		exit 1; \
 	fi
 	@rm -f $(BUILD_DIR)/serial.log
@@ -173,10 +203,34 @@ verify-qemu: $(ISO_NAME)
 	@grep -q "Interrupcion IRQ0" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se registraron ticks de interrupcion de PIT IRQ0" && exit 1)
 	@echo "[+] [PASS] Arranque verificado: Banner presente, PMM detectado, Paginacion VMM activa, GFX/Mouse/WM listos, PIT IRQ0 activo y preempcion multitarea exitosa."
 
+verify-qemu-direct: $(BIN_NAME)
+	@echo "=== Verificando arranque directo de Zenthra Kernel ELF en QEMU (Headless) ==="
+	@if ! command -v qemu-system-i386 >/dev/null 2>&1; then \
+		echo "[BLOCKED] 'qemu-system-i386' no esta disponible en este host."; \
+		exit 1; \
+	fi
+	@rm -f $(BUILD_DIR)/serial.log
+	@qemu_status=0; timeout 8s qemu-system-i386 -kernel $(BIN_NAME) -serial file:$(BUILD_DIR)/serial.log -display none || qemu_status=$$?; \
+	if [ $$qemu_status -ne 0 ] && [ $$qemu_status -ne 124 ]; then \
+		echo "[-] Error fatal: QEMU aborto con fallo anomalo (exit code $$qemu_status)"; \
+		exit 1; \
+	fi
+	@if [ ! -s $(BUILD_DIR)/serial.log ]; then \
+		echo "[-] Error: QEMU no genero salida serial o el archivo serial.log esta vacio"; \
+		exit 1; \
+	fi
+	@echo "--- Contenido del Log Serial de Zenthra OS ---"
+	@cat $(BUILD_DIR)/serial.log
+	@echo "-----------------------------------------------"
+	@grep -q "ZENTHRA OS SERIAL LOG" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se encontro el banner serial del kernel" && exit 1)
+	@grep -q "PMM" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se encontro inicializacion de PMM en serial.log" && exit 1)
+	@grep -q "VMM" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se encontro activacion de Paginacion x86 en serial.log" && exit 1)
+	@echo "[+] [PASS] Arranque directo en QEMU verificado exitosamente."
+
 qemu: $(BIN_NAME)
 	qemu-system-i386 -kernel $(BIN_NAME) -serial stdio
 
 qemu-iso: iso
 	qemu-system-i386 -cdrom $(ISO_NAME) -serial stdio
 
-.PHONY: all kernel check-multiboot clean qemu qemu-iso iso test verify-qemu
+.PHONY: all kernel check-env check-multiboot clean qemu qemu-iso iso test verify-qemu verify-qemu-direct
