@@ -52,6 +52,19 @@ static void worker_task_b(void) {
     task_exit();
 }
 
+static volatile uint32_t cpu_bound_ticks = 0;
+
+/* Tarea de cálculo intensivo sin yield voluntario para demostrar preempción automática por PIT IRQ0 */
+static void worker_task_c_cpubound(void) {
+    serial_write_string("[SCHEDULER] Worker C (CPU-bound) iniciado sin llamadas a yield voluntario.\r\n");
+    for (int i = 0; i < 500000; i++) {
+        cpu_bound_ticks++;
+        // Tarea sin yield: liberada únicamente cuando el PIT IRQ0 agota su quantum de tiempo
+    }
+    serial_write_string("[SCHEDULER] Worker C (CPU-bound) preemptado y completado exitosamente.\r\n");
+    task_exit();
+}
+
 /* Tarea de fondo de diagnóstico continuo de sensores IoT */
 static void background_sensor_daemon(void) {
     while (1) {
@@ -62,6 +75,7 @@ static void background_sensor_daemon(void) {
         task_yield();
     }
 }
+
 
 void kernel_main(uint32_t magic, uintptr_t mbi_addr) {
     // 1. Inicializar pantalla VGA en modo texto
@@ -122,6 +136,7 @@ void kernel_main(uint32_t magic, uintptr_t mbi_addr) {
     scheduler_init();
     task_create("worker_a", worker_task_a);
     task_create("worker_b", worker_task_b);
+    task_create("worker_cpubound", worker_task_c_cpubound);
     task_create_with_profile("iot_daemon", background_sensor_daemon, PROFILE_IOT_HARDWARE);
     vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
     kprintf("[OK]\n");

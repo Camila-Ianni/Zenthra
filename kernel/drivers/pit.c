@@ -2,6 +2,7 @@
 #include "io.h"
 #include "idt.h"
 #include "serial.h"
+#include "task.h"
 
 static volatile uint32_t timer_ticks = 0;
 static uint32_t timer_frequency = 100; // 100 Hz por defecto (1 tick = 10ms)
@@ -13,6 +14,9 @@ static void timer_callback(struct registers* regs) {
     if (timer_ticks == 10 || timer_ticks == 100 || timer_ticks % 500 == 0) {
         serial_write_string("[PIT] Interrupcion IRQ0 recibida con exito.\r\n");
     }
+
+    // Gestionar el quantum de tiempo y despertar de tareas (Multitarea Preemptiva)
+    task_schedule_tick();
 }
 
 void pit_init(uint32_t frequency) {

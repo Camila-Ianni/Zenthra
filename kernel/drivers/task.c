@@ -20,10 +20,32 @@ static struct task task_table[MAX_TASKS];
 static int current_task_idx = 0;
 static uint32_t next_task_id = 1;
 static uint8_t main_task_stack[TASK_STACK_SIZE];
+static bool preemption_enabled = true;
+static int scheduler_lock_count = 0;
+
+void scheduler_lock(void) {
+    scheduler_lock_count++;
+}
+
+void scheduler_unlock(void) {
+    if (scheduler_lock_count > 0) {
+        scheduler_lock_count--;
+    }
+}
+
+void scheduler_set_preemptive(bool enable) {
+    preemption_enabled = enable;
+}
+
+bool scheduler_is_preemptive(void) {
+    return preemption_enabled;
+}
 
 void scheduler_init(void) {
     k_memset(task_table, 0, sizeof(task_table));
     next_task_id = 1;
+    preemption_enabled = true;
+    scheduler_lock_count = 0;
 
     // Tarea 0: Tarea Principal del Kernel / Shell
     task_table[0].id = next_task_id++;
@@ -36,6 +58,8 @@ void scheduler_init(void) {
     task_table[0].kernel_stack_top = (uint32_t)(uintptr_t)(main_task_stack + TASK_STACK_SIZE);
     task_table[0].esp = 0;
     task_table[0].profile = PROFILE_GENERAL;
+    task_table[0].sleep_ticks = 0;
+    task_table[0].time_slice = TASK_DEFAULT_QUANTUM;
     task_table[0].runtime_ticks = 0;
 
     current_task_idx = 0;
@@ -60,6 +84,8 @@ int task_create_with_profile(const char* name, void (*entry_point)(void), enum n
             task_table[i].stack_size = TASK_STACK_SIZE;
             task_table[i].kernel_stack_top = (uint32_t)(uintptr_t)(stack + TASK_STACK_SIZE);
             task_table[i].profile = profile;
+            task_table[i].sleep_ticks = 0;
+            task_table[i].time_slice = TASK_DEFAULT_QUANTUM;
             task_table[i].state = TASK_READY;
             task_table[i].runtime_ticks = 0;
 
@@ -112,6 +138,47 @@ void task_exit(void) {
 #endif
 }
 
+void task_sleep(uint32_t ticks) {
+    if (ticks == 0) return;
+    scheduler_lock();
+    task_table[current_task_idx].sleep_ticks = ticks;
+    task_table[current_task_idx].state = TASK_SLEEPING;
+    scheduler_unlock();
+    task_yield();
+}
+
+void task_schedule_tick(void) {
+    // 1. Decrementar temporizadores de sueño y despertar tareas listas
+    for (int i = 0; i < MAX_TASKS; i++) {
+        if (task_table[i].state == TASK_SLEEPING) {
+            if (task_table[i].sleep_ticks > 0) {
+                task_table[i].sleep_ticks--;
+            }
+            if (task_table[i].sleep_ticks == 0) {
+                task_table[i].state = TASK_READY;
+            }
+        }
+    }
+
+    // 2. Comprobar si la preempción está habilitada y no hay bloqueo de sección crítica
+    if (!preemption_enabled || scheduler_lock_count > 0) {
+        return;
+    }
+
+    // 3. Decrementar time_slice de la tarea activa
+    if (task_table[current_task_idx].state == TASK_RUNNING) {
+        if (task_table[current_task_idx].time_slice > 0) {
+            task_table[current_task_idx].time_slice--;
+        }
+
+        // Si expiró el quantum de tiempo (50ms por defecto), forzar preempción
+        if (task_table[current_task_idx].time_slice == 0) {
+            task_table[current_task_idx].time_slice = TASK_DEFAULT_QUANTUM;
+            task_yield();
+        }
+    }
+}
+
 void task_yield(void) {
     // Si quedó una pila pendiente de liberar de una tarea terminada previamente,
     // la liberamos si no es la pila que estamos ejecutando actualmente
@@ -120,18 +187,31 @@ void task_yield(void) {
         zombie_stack_to_free = NULL;
     }
 
-    // Round-Robin simple: buscar siguiente tarea lista
+    // Round-Robin: buscar la siguiente tarea en estado TASK_READY (ignora TASK_SLEEPING)
     int next_idx = -1;
     for (int i = 1; i <= MAX_TASKS; i++) {
         int idx = (current_task_idx + i) % MAX_TASKS;
-        if (task_table[idx].state == TASK_READY || task_table[idx].state == TASK_RUNNING) {
+        if (task_table[idx].state == TASK_READY) {
             next_idx = idx;
             break;
         }
     }
 
-    if (next_idx == -1 || next_idx == current_task_idx) {
-        return; // No hay otra tarea esperando
+    if (next_idx == -1) {
+        // Si no hay otra tarea en READY, mantener la actual si sigue en RUNNING
+        if (task_table[current_task_idx].state == TASK_RUNNING) {
+            return;
+        }
+        // Si la actual está en SLEEPING o TERMINATED, intentar volver a kernel_shell (tarea 0)
+        if (task_table[0].state == TASK_READY || task_table[0].state == TASK_RUNNING) {
+            next_idx = 0;
+        } else {
+            return;
+        }
+    }
+
+    if (next_idx == current_task_idx && task_table[current_task_idx].state == TASK_RUNNING) {
+        return; // No hay necesidad de conmutar hacia la misma tarea
     }
 
     int prev_idx = current_task_idx;
@@ -142,6 +222,7 @@ void task_yield(void) {
     current_task_idx = next_idx;
     task_table[current_task_idx].state = TASK_RUNNING;
     task_table[current_task_idx].runtime_ticks++;
+    task_table[current_task_idx].time_slice = TASK_DEFAULT_QUANTUM;
     tss_set_kernel_stack(task_table[current_task_idx].kernel_stack_top);
 
     switch_context(&task_table[prev_idx].esp, task_table[current_task_idx].esp);

@@ -26,7 +26,7 @@ Para máxima transparencia técnica, el estado del código se clasifica rigurosa
 | **Interrupciones y PIC (IDT)** | **REAL** | 256 descriptores. Stubs assembly para 32 excepciones y 16 IRQs. Máscara PIC granular (todas enmascaradas por defecto salvo cascada IRQ2; IRQ0 desmascarada selectivamente en `pit_init`). |
 | **Temporizador del Sistema (PIT)** | **REAL** | Intel 8253/8254 programado a 100 Hz (IRQ 0 / Vector 32) con ticks periódicos y sleep por `hlt`. |
 | **Puerto Serie (COM1 UART 16550A)** | **REAL** | Inicialización con divisor de baudios (38400), FIFOs y salida serie para diagnóstico de depuración. |
-| **Planificador y Multitarea** | **REAL (Cooperativa)** | Scheduler Round-Robin con cambio de contexto en ensamblador (`switch_context`), pilas dedicadas (incluida pila propia para tarea 0 principal), separación estricta entre `saved_esp` y `kernel_stack_top` cargado en `tss.esp0`, marco de pila `[EFLAGS, EDI, ESI, EBX, EBP, entry_point, task_exit]`, y liberación diferida sin use-after-free. |
+| **Planificador y Multitarea** | **REAL (Preemptiva & Cooperativa)** | Scheduler Round-Robin con quantum (`TASK_DEFAULT_QUANTUM 5`), preempción forzada por temporizador PIT IRQ0 (`task_schedule_tick`), soporte de sueño/despertar (`task_sleep`), protección de sección crítica (`scheduler_lock`/`scheduler_unlock`), tarea CPU-bound (`worker_cpubound`) preemptada exitosamente. Cambio de contexto en ensamblador (`switch_context`), pilas dedicadas (incluida pila propia para tarea 0 principal), separación estricta entre `saved_esp` y `kernel_stack_top` cargado en `tss.esp0`, marco de pila `[EFLAGS, EDI, ESI, EBX, EBP, entry_point, task_exit]`, y liberación diferida sin use-after-free. |
 | **Gestión de Memoria Dinámica (Heap)** | **REAL** | Asignador `kmalloc`/`kfree` de bloques con cabeceras de tamaño, flag de ocupado y coalescencia de fragmentos contiguos (2 MiB iniciales en 0x00400000). |
 | **Sistema de Archivos (RAMFS)** | **REAL (Volátil)** | Sistema de archivos en RAM con inodos, operaciones de creación, lectura, escritura y borrado. Almacenamiento persistente en disco pendiente. |
 | **Llamadas al Sistema (Syscalls)** | **PROTOTIPO** | Despachador `int 0x80` mediante stub assembly `isr128` con marco `struct registers` e `iret`. Autorización ACL obligatoria asociada al proceso en `SYS_ARDUINO_CMD` (-13 EACCES en accesos no autorizados) y gestión de perfiles (`SYS_GET_PROFILE`, `SYS_SET_PROFILE`). |
@@ -62,7 +62,7 @@ make test
 # Limpiar binarios y objetos anteriores
 make clean
 
-# Ejecutar suite de pruebas unitarias automatizadas (92 tests)
+# Ejecutar suite de pruebas unitarias automatizadas (105 tests)
 make test
 
 # Compilar kernel ELF y generar la imagen ISO arrancable

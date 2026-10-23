@@ -460,6 +460,52 @@ void test_syscall_boundary_and_abi(void) {
     TEST_ASSERT(task_get_current()->profile == PROFILE_STUDENT, "Perfil de proceso verificado tras SYS_SET_PROFILE");
 }
 
+/* Test 15: Multitarea Preemptiva, Quantum y Estados Sleep / Wakeup (Fase 3) */
+void test_preemptive_scheduling_and_sleep(void) {
+    printf("[*] Ejecutando: test_preemptive_scheduling_and_sleep...\n");
+    scheduler_init();
+
+    int pid = task_create("sleepy_worker", dummy_worker);
+    TEST_ASSERT(pid > 0, "Creacion exitosa de sleepy_worker");
+
+    // Conmutar a la tarea creada
+    task_yield();
+    struct task* cur = task_get_current();
+    TEST_ASSERT(cur->id == (uint32_t)pid, "Tarea sleepy_worker en ejecucion");
+
+    // Poner a dormir la tarea por 3 ticks
+    task_sleep(3);
+    // Tras task_sleep(), el scheduler debió conmutar de regreso a kernel_shell
+    struct task* main_task = task_get_current();
+    TEST_ASSERT(main_task->id == 1, "task_sleep conmuta de vuelta a la tarea principal");
+
+    // task_schedule_tick tick 1: no despierta aun
+    task_schedule_tick();
+    task_yield();
+    TEST_ASSERT(task_get_current()->id == 1, "sleepy_worker no es planificada mientras duerme (tick 1/3)");
+
+    task_schedule_tick(); // tick 2
+    task_yield();
+    TEST_ASSERT(task_get_current()->id == 1, "sleepy_worker no es planificada mientras duerme (tick 2/3)");
+
+    task_schedule_tick(); // tick 3: debe despertar a TASK_READY
+    task_yield();
+    TEST_ASSERT(task_get_current()->id == (uint32_t)pid, "sleepy_worker despierta automaticamente a TASK_READY y se planifica");
+
+    // Verificación de preempción por agotamiento de quantum
+    scheduler_set_preemptive(true);
+    task_get_current()->time_slice = 1;
+    task_schedule_tick(); // Agota quantum y conmuta automáticamente
+    TEST_ASSERT(task_get_current()->id == 1, "Preempcion automatica: expiracion de quantum conmuta tarea sin yield voluntario");
+
+    // Verificación de bloqueo de scheduler en secciones críticas
+    scheduler_lock();
+    task_get_current()->time_slice = 1;
+    task_schedule_tick(); // No debe conmutar porque scheduler_lock_count > 0
+    TEST_ASSERT(task_get_current()->id == 1, "scheduler_lock protege secciones criticas impidiendo preempcion no deseada");
+    scheduler_unlock();
+}
+
 int main(void) {
     printf("====================================================\n");
     printf("    ZENTHRA OS — SUITE DE PRUEBAS AUTOMATIZADAS     \n");
@@ -479,6 +525,8 @@ int main(void) {
     test_multiboot_and_power();
     test_task_lifecycle_and_cleanup();
     test_syscall_boundary_and_abi();
+    test_preemptive_scheduling_and_sleep();
+
 
     printf("\n----------------------------------------------------\n");
     printf("Resultados: %d Aprobados | %d Fallidos\n", tests_passed, tests_failed);
