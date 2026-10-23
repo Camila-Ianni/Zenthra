@@ -4,7 +4,8 @@
 #include "serial.h"
 #include "vga.h"
 
-#define KERNEL_IDENTITY_TABLES 4 // 4 tablas de 1024 entradas = 16 MiB mapeados 1:1
+#define KERNEL_IDENTITY_TABLES 16 // 16 tablas de 1024 entradas = 64 MiB mapeados 1:1
+#define KERNEL_IDENTITY_LIMIT  ((uintptr_t)KERNEL_IDENTITY_TABLES * ENTRIES_PER_PAGE_TABLE * PAGE_SIZE)
 
 static struct page_directory kernel_pdir __attribute__((aligned(4096)));
 static struct page_table kernel_pts[KERNEL_IDENTITY_TABLES] __attribute__((aligned(4096)));
@@ -20,7 +21,16 @@ static void* host_user_tables[ENTRIES_PER_PAGE_DIR];
 static inline struct page_table* vmm_get_pt(struct page_directory* pd, size_t pde_idx) {
 #if defined(__KERNEL__)
     (void)pd;
-    return (struct page_table*)(uintptr_t)(pd->entries[pde_idx] & PDE_FRAME_MASK);
+    uintptr_t pt_phys = pd->entries[pde_idx] & PDE_FRAME_MASK;
+    // Si la tabla de páginas está dentro del Identity Mapping (primeros 64 MiB), su puntero físico es virtualmente válido
+    if (pt_phys < KERNEL_IDENTITY_LIMIT) {
+        return (struct page_table*)pt_phys;
+    }
+    // Fallback de seguridad para tablas del kernel
+    if (pde_idx < KERNEL_IDENTITY_TABLES) {
+        return &kernel_pts[pde_idx];
+    }
+    return (struct page_table*)pt_phys;
 #else
     (void)pd;
     if (pde_idx < KERNEL_IDENTITY_TABLES) {
@@ -133,6 +143,27 @@ int vmm_map_range(struct page_directory* pd, uintptr_t virt_start, uintptr_t phy
         int res = vmm_map_page(pd, v + offset, p + offset, flags);
         if (res != 0) return res;
     }
+    return 0;
+}
+
+int vmm_map_physical_range(struct page_directory* pd, uint64_t phys_addr, size_t size, uint32_t flags, uintptr_t* out_virt_addr) {
+    if (!pd || size == 0 || !out_virt_addr) return -1;
+
+    // Validación estricta contra overflow y límites de arquitectura de 32 bits (i686)
+    if (phys_addr + (uint64_t)size < phys_addr || phys_addr + (uint64_t)size > 0x100000000ULL) {
+        return -1; // Dirección física fuera del espacio direccionable de 32 bits
+    }
+
+    uintptr_t p_addr = (uintptr_t)phys_addr;
+    uintptr_t page_offset = p_addr & (PAGE_SIZE - 1);
+    uintptr_t phys_page_start = p_addr & PTE_FRAME_MASK;
+    size_t total_span = (size_t)((p_addr + size + PAGE_SIZE - 1) - phys_page_start);
+
+    // Mapear identity la región física en el espacio virtual del kernel
+    int res = vmm_map_range(pd, phys_page_start, phys_page_start, total_span, flags);
+    if (res != 0) return res;
+
+    *out_virt_addr = phys_page_start + page_offset;
     return 0;
 }
 
@@ -267,5 +298,5 @@ void vmm_init(void) {
     paging_enabled = true;
 
     serial_write_string("[VMM] Paginacion x86 (CR0.PG y CR0.WP) activada exitosamente.\r\n");
-    serial_write_string("[VMM] Directorio maestro cargado en CR3 con 16 MiB en Identity Mapping.\r\n");
+    serial_write_string("[VMM] Directorio maestro cargado en CR3 con 64 MiB en Identity Mapping.\r\n");
 }

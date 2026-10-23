@@ -56,6 +56,14 @@ struct multiboot_mmap_entry {
     uint32_t type;
 } __attribute__((packed));
 
+/* Lista de módulos Multiboot 1 (initrd, drivers, etc.) */
+struct multiboot_mod_list {
+    uint32_t mod_start;
+    uint32_t mod_end;
+    uint32_t cmdline;
+    uint32_t pad;
+};
+
 #define MULTIBOOT_MEMORY_AVAILABLE        1
 #define MULTIBOOT_MEMORY_RESERVED         2
 #define MULTIBOOT_MEMORY_ACPI_RECLAIMABLE 3

@@ -27,7 +27,12 @@ bool gfx_init(uint32_t magic, uintptr_t mbi_addr) {
         return false;
     }
 
-    current_fb.address = (uint32_t*)(uintptr_t)mbi->framebuffer_addr;
+    // Comprobar que la dirección física del Framebuffer sea direccionable en arquitectura de 32 bits (i686)
+    if (mbi->framebuffer_addr > 0xFFFFFFFFULL) {
+        serial_write_string("[GFX] Framebuffer fisico por encima de 4 GiB no soportado en i686. Modo VGA activo.\r\n");
+        return false;
+    }
+
     current_fb.width = mbi->framebuffer_width;
     current_fb.height = mbi->framebuffer_height;
     current_fb.pitch = mbi->framebuffer_pitch;
@@ -59,18 +64,22 @@ bool gfx_init(uint32_t magic, uintptr_t mbi_addr) {
     size_t buffer_size = (size_t)total_size;
 
 #if defined(__KERNEL__)
-    // Mapear la región física del Linear Framebuffer en el VMM si la paginación está activa
-    uintptr_t fb_phys = (uintptr_t)mbi->framebuffer_addr;
+    // Mapear la región física del Linear Framebuffer alineada por páginas en VMM
+    uintptr_t fb_virt_ptr = 0;
     if (vmm_is_paging_enabled()) {
-        int map_err = vmm_map_range(vmm_get_kernel_directory(), fb_phys, fb_phys, buffer_size, PTE_PRESENT | PTE_WRITABLE);
+        int map_err = vmm_map_physical_range(vmm_get_kernel_directory(), mbi->framebuffer_addr, buffer_size, PTE_PRESENT | PTE_WRITABLE, &fb_virt_ptr);
         if (map_err != 0) {
             serial_write_string("[GFX] Error: no se pudo mapear la region MMIO del Framebuffer en VMM.\r\n");
             return false;
         }
+        current_fb.address = (uint32_t*)fb_virt_ptr;
+    } else {
+        current_fb.address = (uint32_t*)(uintptr_t)mbi->framebuffer_addr;
     }
 
     current_fb.backbuffer = (uint32_t*)kmalloc(buffer_size);
 #else
+    current_fb.address = (uint32_t*)(uintptr_t)mbi->framebuffer_addr;
     current_fb.backbuffer = (uint32_t*)malloc(buffer_size);
 #endif
 

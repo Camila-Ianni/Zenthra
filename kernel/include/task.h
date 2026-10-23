@@ -42,6 +42,13 @@ struct task {
     uint32_t runtime_ticks;
 };
 
+struct task_info {
+    uint32_t id;
+    char name[24];
+    enum task_state state;
+    uint32_t runtime_ticks;
+};
+
 void scheduler_init(void);
 int task_create(const char* name, void (*entry_point)(void));
 int task_create_with_profile(const char* name, void (*entry_point)(void), enum nova_profile profile);
@@ -56,5 +63,6 @@ bool scheduler_is_preemptive(void);
 void task_exit(void);
 void task_list(void);
 struct task* task_get_current(void);
+bool task_get_info_at(int idx, struct task_info* out_info);
 
 #endif

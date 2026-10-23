@@ -113,7 +113,39 @@ int task_create(const char* name, void (*entry_point)(void)) {
     return task_create_with_profile(name, entry_point, inherited);
 }
 
-static uint8_t* pending_free_stack = NULL;
+#define MAX_ZOMBIE_STACKS 16
+static uint8_t* zombie_stacks[MAX_ZOMBIE_STACKS];
+static size_t zombie_stack_count = 0;
+
+static void enqueue_zombie_stack(uint8_t* stack) {
+    if (!stack) return;
+    if (zombie_stack_count < MAX_ZOMBIE_STACKS) {
+        zombie_stacks[zombie_stack_count++] = stack;
+    } else {
+        kfree(zombie_stacks[0]);
+        for (size_t i = 1; i < MAX_ZOMBIE_STACKS; i++) {
+            zombie_stacks[i - 1] = zombie_stacks[i];
+        }
+        zombie_stacks[MAX_ZOMBIE_STACKS - 1] = stack;
+    }
+}
+
+static void drain_zombie_stacks(uint8_t* active_stack) {
+    for (size_t i = 0; i < zombie_stack_count; i++) {
+        uint8_t* s = zombie_stacks[i];
+        if (s != NULL && s != active_stack) {
+            kfree(s);
+            zombie_stacks[i] = NULL;
+        }
+    }
+    size_t new_count = 0;
+    for (size_t i = 0; i < zombie_stack_count; i++) {
+        if (zombie_stacks[i] != NULL) {
+            zombie_stacks[new_count++] = zombie_stacks[i];
+        }
+    }
+    zombie_stack_count = new_count;
+}
 
 struct task* task_get_current(void) {
     return &task_table[current_task_idx];
@@ -210,10 +242,11 @@ void task_yield(void) {
     if (task_table[prev_idx].state == TASK_RUNNING) {
         task_table[prev_idx].state = TASK_READY;
     } else if (task_table[prev_idx].state == TASK_TERMINATED) {
-        // La tarea previa ha terminado: registrar su pila para liberarla sólo después
-        // de que switch_context haya conmutado de forma segura a otra pila.
-        pending_free_stack = task_table[prev_idx].stack;
-        task_table[prev_idx].stack = NULL;
+        // Encolar pila de la tarea que termina para liberación diferida segura
+        if (task_table[prev_idx].stack != NULL) {
+            enqueue_zombie_stack(task_table[prev_idx].stack);
+            task_table[prev_idx].stack = NULL;
+        }
     }
 
     current_task_idx = next_idx;
@@ -225,11 +258,8 @@ void task_yield(void) {
     switch_context(&task_table[prev_idx].esp, task_table[current_task_idx].esp);
 
     // Al retornar a este punto, la CPU está ejecutando en el contexto de la nueva tarea activa.
-    // Es completamente seguro liberar la pila de la tarea que acaba de terminar.
-    if (pending_free_stack != NULL && pending_free_stack != task_table[current_task_idx].stack) {
-        kfree(pending_free_stack);
-        pending_free_stack = NULL;
-    }
+    // Drenar de forma segura la cola de pilas zombies pendientes de liberación.
+    drain_zombie_stacks(task_table[current_task_idx].stack);
 }
 
 void task_list(void) {
@@ -250,3 +280,15 @@ void task_list(void) {
         }
     }
 }
+
+bool task_get_info_at(int idx, struct task_info* out_info) {
+    if (idx < 0 || idx >= MAX_TASKS || !out_info) return false;
+    if (task_table[idx].state == TASK_UNUSED) return false;
+
+    out_info->id = task_table[idx].id;
+    k_memcpy(out_info->name, task_table[idx].name, sizeof(out_info->name));
+    out_info->state = task_table[idx].state;
+    out_info->runtime_ticks = task_table[idx].runtime_ticks;
+    return true;
+}
+

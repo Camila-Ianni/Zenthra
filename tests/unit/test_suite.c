@@ -423,6 +423,22 @@ void test_task_lifecycle_and_cleanup(void) {
     TEST_ASSERT(cur->id == 1, "Scheduler conmuta de regreso a tarea principal tras task_exit sin fallos");
     task_yield(); // Ejecuta ciclo adicional para comprobar liberación segura sin fallar
     TEST_ASSERT(task_get_current()->state == TASK_RUNNING, "Pila liberada de forma diferida sin corrupcion de heap ni use-after-free");
+
+    // Probar terminación secuencial múltiple para validar cola zombie_stacks y task_get_info_at
+    int pid2 = task_create("exit_worker2", exiting_worker);
+    int pid3 = task_create("exit_worker3", exiting_worker);
+    TEST_ASSERT(pid2 > 0 && pid3 > 0, "Tareas adicionales creadas para validar cola zombie");
+
+    struct task_info tinfo;
+    bool has_info = task_get_info_at(0, &tinfo);
+    TEST_ASSERT(has_info == true && tinfo.id == 1, "task_get_info_at retorna informacion real de la tarea kernel activa");
+
+    task_yield(); // Pasa a exit_worker2
+    task_exit();
+    task_yield(); // Pasa a exit_worker3
+    task_exit();
+    task_yield(); // Drena cola zombie_stacks
+    TEST_ASSERT(task_get_current()->state == TASK_RUNNING, "Cola zombie_stacks drena multiples tareas terminadas en cascada sin corrupcion");
 }
 
 void test_syscall_boundary_and_abi(void) {
@@ -598,6 +614,21 @@ void test_virtual_memory_paging(void) {
     int range_res = vmm_map_range(pdir, range_virt, range_phys, 16384, PTE_PRESENT | PTE_WRITABLE);
     TEST_ASSERT(range_res == 0, "vmm_map_range mapea rango contiguo de 16 KiB (4 paginas) exitosamente");
     TEST_ASSERT(vmm_virt_to_phys(pdir, range_virt + 8192) == range_phys + 8192, "Traduccion virtual a fisica en medio del rango mapeado");
+
+    // Prueba de vmm_map_physical_range con offset intra-pagina y validaciones 64-bit (Auditoria v9)
+    void* virt_mapped = NULL;
+    int map_res = vmm_map_physical_range(pdir, 0xE0000120ULL, 8000, PTE_PRESENT | PTE_WRITABLE, &virt_mapped);
+    TEST_ASSERT(map_res == 0, "vmm_map_physical_range mapea exitosamente rango fisico con offset intra-pagina");
+    TEST_ASSERT(((uintptr_t)virt_mapped & 0xFFF) == 0x120, "Puntero virtual retornado preserva el desplazamiento intra-pagina (0x120)");
+    TEST_ASSERT(vmm_virt_to_phys(pdir, (uintptr_t)virt_mapped) == 0xE0000120, "Traduccion virtual a fisica del puntero mapeado coincide exactamente");
+
+    // Rechazo de direcciones por encima del espacio de 32 bits (4 GiB)
+    void* invalid_ptr = NULL;
+    int ovf_res = vmm_map_physical_range(pdir, 0x100000000ULL, 4096, PTE_PRESENT | PTE_WRITABLE, &invalid_ptr);
+    TEST_ASSERT(ovf_res == -1, "vmm_map_physical_range rechaza direcciones fisicas >= 4 GiB en arquitectura de 32 bits");
+
+    int ovf_len = vmm_map_physical_range(pdir, 0xFFFFF000ULL, 8192, PTE_PRESENT | PTE_WRITABLE, &invalid_ptr);
+    TEST_ASSERT(ovf_len == -1, "vmm_map_physical_range rechaza rangos que desbordan el limite de 32 bits");
 
     // Destrucción de directorio de proceso
     vmm_destroy_process_directory(pdir);
@@ -797,7 +828,26 @@ void test_window_manager_and_desktop(void) {
     wm_handle_keyboard('l');
     wm_handle_keyboard('p');
     wm_handle_keyboard('\n');
-    TEST_ASSERT(wm_needs_redraw() == true, "Entrada de comando en terminal grafica procesada y solicita redibujado");
+    TEST_ASSERT(wm_needs_redraw() == true, "Entrada de comando help en terminal grafica procesada y solicita redibujado");
+
+    // Probar comandos dinamicos tasks y sysinfo con scheduler y PMM reales
+    wm_handle_keyboard('t');
+    wm_handle_keyboard('a');
+    wm_handle_keyboard('s');
+    wm_handle_keyboard('k');
+    wm_handle_keyboard('s');
+    wm_handle_keyboard('\n');
+    TEST_ASSERT(wm_needs_redraw() == true, "Comando tasks en terminal procesado con scheduler de tareas real");
+
+    wm_handle_keyboard('s');
+    wm_handle_keyboard('y');
+    wm_handle_keyboard('s');
+    wm_handle_keyboard('i');
+    wm_handle_keyboard('n');
+    wm_handle_keyboard('f');
+    wm_handle_keyboard('o');
+    wm_handle_keyboard('\n');
+    TEST_ASSERT(wm_needs_redraw() == true, "Comando sysinfo en terminal procesado con telemetria de memoria real");
 
     // Simular clic en Launcher Zenthra en la Taskbar (abrir menu)
     // Barra de tareas: y = 564 a 600, Boton Zenthra: x in [8, 96], y in [569, 595]

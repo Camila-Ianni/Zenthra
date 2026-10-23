@@ -1,7 +1,7 @@
 # Zenthra OS — Estado Técnico y Matriz de Auditoría
 
 > **Fecha de Actualización**: 23 de octubre de 2026  
-> **Versión**: 8.0 (Post-Auditoría Técnica v8 — Correcciones Críticas de Seguridad y Estabilidad)
+> **Versión**: 9.0 (Post-Auditoría Técnica v9 — VMM Identity 64 MiB, vmm_map_physical_range, Stacks Zombie Queue & Dynamic Terminal)
 
 ---
 
@@ -11,15 +11,15 @@ Para garantizar rigor académico y de ingeniería de software en el proyecto de 
 
 | Nivel de Verificación | Estado | Evidencia Concreta |
 | :--- | :---: | :--- |
-| **UNIT TESTS** | **PASS** | 182 pruebas automatizadas ejecutadas con `make test` (0 fallos). |
+| **UNIT TESTS** | **PASS** | 192 pruebas automatizadas ejecutadas con `make test` (0 fallos). |
 | **BUILD ELF** | **PASS** | Compilación y enlace limpio de `build/zenthra_kernel.elf` (i686). |
 | **MULTIBOOT 1 VALIDATION** | **PASS** | Contrato oficial de arranque Multiboot 1 validado estrictamente por `grub-file --is-x86-multiboot`. |
 | **ISO GENERATION** | **PASS** | Imagen `build/zenthra_os.iso` construida en pipeline de CI con `grub-mkrescue` y hash SHA-256 verificado. |
 | **QEMU HEADLESS BOOT** | **PASS** | Verificado en CI con `make verify-qemu`: banner serial, PMM activo, Paginación x86 VMM activa en CR0/CR3, GFX/Mouse/WM listos, ticks PIT IRQ0 y alternancia de tareas concurrentes con preempción de tarea CPU-bound. |
 | **VIRTUALBOX** | **PROCEDIMIENTO VALIDADO** | Procedimiento de arranque documentado en [docs/virtualbox_guia.md](virtualbox_guia.md) utilizando la ISO oficial. |
-| **SCHEDULER & STACKS** | **REAL (SEGURO)** | Pila de tarea terminada liberada estrictamente después de conmutar la CPU con `switch_context`, eliminando cualquier use-after-free. |
-| **PMM & VMM PAGING** | **REAL (SEGURO)** | PMM procesa mapas de 64 bits (`addr_high`/`len_high`) con protección de overflow y recorte a 1 GiB. VMM rechaza mapeos `PTE_USER` en los 16 MiB del kernel, provee `vmm_map_range` para Framebuffer MMIO y libera marcos de usuario en `vmm_destroy_process_directory`. |
-| **DESKTOP GUI & INPUT** | **REAL (MVP FUNCIONAL)** | VESA LFB mapeado con `vmm_map_range`, exclusivamente 32 bpp validado contra desbordamiento. Driver de ratón PS/2 con ACK y timeout opcional. Terminal gráfica editable conectada al teclado con comandos ejecutables (`help`, `sysinfo`, `mem`, `tasks`), launcher popup en botón Zenthra y redibujado bajo demanda (`needs_redraw`). |
+| **SCHEDULER & STACKS** | **REAL (SEGURO)** | Cola atómica/circular de pilas zombies (`zombie_stacks[16]`) drenada exclusivamente tras `switch_context` cuando la CPU corre en la pila activa de la nueva tarea, eliminando cualquier use-after-free o vulnerabilidad ante ráfagas de terminación. |
+| **PMM & VMM PAGING** | **REAL (SEGURO)** | Identity Mapping ampliado a 64 MiB (`KERNEL_IDENTITY_TABLES = 16`). `vmm_get_pt()` verifica `pt_phys < KERNEL_IDENTITY_LIMIT`. Nueva API `vmm_map_physical_range` con soporte para direcciones base de 64 bits (validando no superar 4 GiB), alineación de página hacia abajo y preservación de offset intra-página para MMIO. PMM endurecido con validación estricta de límites de entrada Multiboot mmap (`entry->size + sizeof(uint32_t) <= mmap_end`) y reserva de módulos bootloader. |
+| **DESKTOP GUI & INPUT** | **REAL (MVP FUNCIONAL)** | VESA LFB mapeado con `vmm_map_physical_range`, exclusivamente 32 bpp validado contra desbordamiento. Driver de ratón PS/2 con ACK y timeout opcional. Terminal gráfica editable conectada a telemetría del sistema y scheduler de tareas real (`task_get_info_at`), comandos interactivos (`help`, `sysinfo`, `mem`, `tasks`), launcher popup en botón Zenthra y redibujado bajo demanda (`needs_redraw`). |
 
 ---
 

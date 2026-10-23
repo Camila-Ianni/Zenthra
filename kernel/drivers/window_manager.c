@@ -61,7 +61,21 @@ static void term_execute_command(const char* cmd) {
     if (k_strcmp(cmd, "help") == 0) {
         term_add_line("Comandos: help, sysinfo, mem, tasks, clear");
     } else if (k_strcmp(cmd, "sysinfo") == 0) {
-        term_add_line("Zenthra x86 i686 Ring 0/3 - Paging CR0.PG Activo");
+        term_add_line("Zenthra OS 9.0 (i686 Ring 0/3)");
+        char buf[32];
+        char line[TERM_LINE_LEN];
+        size_t pos = 0;
+        k_memcpy(&line[pos], "RAM: ", 5); pos += 5;
+        uitoa((uint32_t)pmm_get_free_memory_kib(), buf, 10);
+        size_t blen = k_strlen(buf);
+        k_memcpy(&line[pos], buf, blen); pos += blen;
+        k_memcpy(&line[pos], " / ", 3); pos += 3;
+        uitoa((uint32_t)pmm_get_total_memory_kib(), buf, 10);
+        blen = k_strlen(buf);
+        k_memcpy(&line[pos], buf, blen); pos += blen;
+        k_memcpy(&line[pos], " KiB", 4); pos += 4;
+        line[pos] = '\0';
+        term_add_line(line);
     } else if (k_strcmp(cmd, "mem") == 0) {
         char buf[32];
         uitoa((uint32_t)pmm_get_free_memory_kib(), buf, 10);
@@ -72,7 +86,39 @@ static void term_execute_command(const char* cmd) {
         k_memcpy(&out[11 + blen], " KiB", 5);
         term_add_line(out);
     } else if (k_strcmp(cmd, "tasks") == 0) {
-        term_add_line("Tareas: kernel_shell, worker_a/b, iot_daemon");
+        int count = 0;
+        for (int i = 0; i < MAX_TASKS; i++) {
+            struct task_info info;
+            if (task_get_info_at(i, &info)) {
+                count++;
+                const char* st = "UNK";
+                if (info.state == TASK_READY) st = "RDY";
+                else if (info.state == TASK_RUNNING) st = "RUN";
+                else if (info.state == TASK_SLEEPING) st = "SLP";
+                else if (info.state == TASK_TERMINATED) st = "TRM";
+
+                char line[TERM_LINE_LEN];
+                char pid_buf[16];
+                uitoa(info.id, pid_buf, 10);
+                size_t pos = 0;
+                k_memcpy(&line[pos], "T", 1); pos += 1;
+                size_t plen = k_strlen(pid_buf);
+                k_memcpy(&line[pos], pid_buf, plen); pos += plen;
+                line[pos++] = ':'; line[pos++] = ' ';
+                size_t nlen = k_strlen(info.name);
+                if (nlen > 18) nlen = 18;
+                k_memcpy(&line[pos], info.name, nlen); pos += nlen;
+                line[pos++] = ' '; line[pos++] = '[';
+                size_t slen = k_strlen(st);
+                k_memcpy(&line[pos], st, slen); pos += slen;
+                line[pos++] = ']';
+                line[pos] = '\0';
+                term_add_line(line);
+            }
+        }
+        if (count == 0) {
+            term_add_line("Sin tareas activas.");
+        }
     } else if (k_strcmp(cmd, "clear") == 0) {
         term_hist_count = 0;
     } else {

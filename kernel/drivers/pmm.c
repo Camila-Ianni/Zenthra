@@ -85,8 +85,16 @@ void pmm_init(uint32_t magic, uintptr_t mbi_addr) {
             uintptr_t mmap_curr = mbi->mmap_addr;
             uintptr_t mmap_end = mbi->mmap_addr + mbi->mmap_length;
 
-            while (mmap_curr < mmap_end) {
+            while (mmap_curr + sizeof(uint32_t) <= mmap_end) {
                 struct multiboot_mmap_entry* entry = (struct multiboot_mmap_entry*)mmap_curr;
+                uint32_t entry_total_size = entry->size + sizeof(uint32_t);
+
+                // Validar que el tamaño de la entrada sea consistente y no desborde mmap_end
+                if (entry->size < (sizeof(struct multiboot_mmap_entry) - sizeof(uint32_t)) ||
+                    mmap_curr + entry_total_size > mmap_end ||
+                    mmap_curr + entry_total_size < mmap_curr) {
+                    break;
+                }
 
                 if (entry->type == MULTIBOOT_MEMORY_AVAILABLE) {
                     uint64_t base64 = ((uint64_t)entry->addr_high << 32) | (uint64_t)entry->addr_low;
@@ -95,13 +103,13 @@ void pmm_init(uint32_t magic, uintptr_t mbi_addr) {
 
                     // Ignorar rangos corruptos o con overflow
                     if (base64 + len64 < base64 || len64 == 0) {
-                        mmap_curr += entry->size + sizeof(uint32_t);
+                        mmap_curr += entry_total_size;
                         continue;
                     }
 
                     // Ignorar memoria física ubicada íntegramente por encima de 1 GiB
                     if (base64 >= max_limit) {
-                        mmap_curr += entry->size + sizeof(uint32_t);
+                        mmap_curr += entry_total_size;
                         continue;
                     }
 
@@ -125,7 +133,7 @@ void pmm_init(uint32_t magic, uintptr_t mbi_addr) {
                     mmap_found = true;
                 }
 
-                mmap_curr += entry->size + sizeof(uint32_t);
+                mmap_curr += entry_total_size;
             }
         } else if (mbi->flags & (1 << 0)) {
             // Fallback: usar mem_lower y mem_upper de Multiboot 1
@@ -159,12 +167,21 @@ void pmm_init(uint32_t magic, uintptr_t mbi_addr) {
     // 3. Reservar la región asignada para el Kernel Heap (0x00400000 - 0x00600000: 2 MiB)
     pmm_mark_region_used(0x00400000, 2 * 1024 * 1024);
 
-    // 4. Reservar las estructuras de Multiboot
+    // 4. Reservar las estructuras de Multiboot y módulos
     if (mbi_addr != 0) {
         pmm_mark_region_used(mbi_addr, sizeof(struct multiboot1_info));
         struct multiboot1_info* mbi = (struct multiboot1_info*)mbi_addr;
-        if ((mbi->flags & (1 << 6)) && mbi->mmap_addr != 0) {
+        if ((mbi->flags & (1 << 6)) && mbi->mmap_addr != 0 && mbi->mmap_length > 0) {
             pmm_mark_region_used(mbi->mmap_addr, mbi->mmap_length);
+        }
+        if ((mbi->flags & (1 << 3)) && mbi->mods_count > 0 && mbi->mods_addr != 0) {
+            pmm_mark_region_used(mbi->mods_addr, mbi->mods_count * sizeof(struct multiboot_mod_list));
+            struct multiboot_mod_list* mods = (struct multiboot_mod_list*)mbi->mods_addr;
+            for (uint32_t m = 0; m < mbi->mods_count; m++) {
+                if (mods[m].mod_end > mods[m].mod_start) {
+                    pmm_mark_region_used(mods[m].mod_start, mods[m].mod_end - mods[m].mod_start);
+                }
+            }
         }
     }
 

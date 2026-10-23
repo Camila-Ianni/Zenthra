@@ -41,6 +41,9 @@ int vmm_map_page(struct page_directory* pd, uintptr_t virt_addr, uintptr_t phys_
 /* Mapear un rango contiguo de páginas virtuales hacia páginas físicas */
 int vmm_map_range(struct page_directory* pd, uintptr_t virt_start, uintptr_t phys_start, size_t size, uint32_t flags);
 
+/* Mapear una región física arbitraria (e.g. Framebuffer MMIO) alineando base y longitud a páginas */
+int vmm_map_physical_range(struct page_directory* pd, uint64_t phys_addr, size_t size, uint32_t flags, uintptr_t* out_virt_addr);
+
 /* Desasociar una página virtual */
 void vmm_unmap_page(struct page_directory* pd, uintptr_t virt_addr);
 
