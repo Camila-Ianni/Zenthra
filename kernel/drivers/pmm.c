@@ -48,20 +48,41 @@ static inline bool test_bit(size_t frame) {
 
 void pmm_mark_region_used(uintptr_t base, size_t length) {
     if (length == 0) return;
-    size_t start_frame = base / PAGE_SIZE;
-    size_t end_frame = (base + length + PAGE_SIZE - 1) / PAGE_SIZE;
+    uint64_t base64 = (uint64_t)base;
+    uint64_t len64 = (uint64_t)length;
+    uint64_t end64 = base64 + len64;
+    if (end64 < base64) return; // Rechazo estricto de desbordamiento
 
-    for (size_t frame = start_frame; frame < end_frame && frame < total_frames; frame++) {
+    size_t start_frame = (size_t)(base64 / PAGE_SIZE);
+    size_t end_frame = (size_t)((end64 + PAGE_SIZE - 1) / PAGE_SIZE);
+
+    if (start_frame >= total_frames) return;
+    if (end_frame > total_frames) end_frame = total_frames;
+
+    for (size_t frame = start_frame; frame < end_frame; frame++) {
         set_bit(frame);
     }
 }
 
 void pmm_mark_region_free(uintptr_t base, size_t length) {
     if (length == 0) return;
-    size_t start_frame = base / PAGE_SIZE;
-    size_t end_frame = (base + length) / PAGE_SIZE;
+    uint64_t base64 = (uint64_t)base;
+    uint64_t len64 = (uint64_t)length;
+    uint64_t end64 = base64 + len64;
+    if (end64 < base64) return; // Rechazo estricto de desbordamiento
 
-    for (size_t frame = start_frame; frame < end_frame && frame < total_frames; frame++) {
+    // Alinear inicio hacia arriba si no es múltiplo de página: solo se liberan páginas completamente contenidas
+    uint64_t aligned_start = (base64 + PAGE_SIZE - 1) & ~(uint64_t)(PAGE_SIZE - 1);
+    uint64_t aligned_end = end64 & ~(uint64_t)(PAGE_SIZE - 1);
+    if (aligned_start >= aligned_end) return; // Menos de una página completa dentro del rango
+
+    size_t start_frame = (size_t)(aligned_start / PAGE_SIZE);
+    size_t end_frame = (size_t)(aligned_end / PAGE_SIZE);
+
+    if (start_frame >= total_frames) return;
+    if (end_frame > total_frames) end_frame = total_frames;
+
+    for (size_t frame = start_frame; frame < end_frame; frame++) {
         clear_bit(frame);
     }
 }
@@ -249,10 +270,18 @@ uintptr_t pmm_alloc_frame_below(uintptr_t max_limit) {
 
 bool pmm_is_region_reserved(uintptr_t base, size_t length) {
     if (length == 0) return true;
-    size_t start_frame = base / PAGE_SIZE;
-    size_t end_frame = (base + length + PAGE_SIZE - 1) / PAGE_SIZE;
+    uint64_t base64 = (uint64_t)base;
+    uint64_t len64 = (uint64_t)length;
+    uint64_t end64 = base64 + len64;
+    if (end64 < base64) return false; // Desbordamiento no representable
 
-    for (size_t frame = start_frame; frame < end_frame && frame < total_frames; frame++) {
+    size_t start_frame = (size_t)(base64 / PAGE_SIZE);
+    size_t end_frame = (size_t)((end64 + PAGE_SIZE - 1) / PAGE_SIZE);
+
+    if (start_frame >= total_frames) return true;
+    if (end_frame > total_frames) end_frame = total_frames;
+
+    for (size_t frame = start_frame; frame < end_frame; frame++) {
         if (!test_bit(frame)) {
             return false;
         }

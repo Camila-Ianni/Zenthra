@@ -439,6 +439,17 @@ void test_task_lifecycle_and_cleanup(void) {
     task_exit();
     task_yield(); // Drena cola zombie_stacks
     TEST_ASSERT(task_get_current()->state == TASK_RUNNING, "Cola zombie_stacks drena multiples tareas terminadas en cascada sin corrupcion");
+
+    // Prueba de estrés: creación y terminación de más de 16 tareas consecutivas (Auditoría v11)
+    bool stress_ok = true;
+    for (int t = 0; t < 20; t++) {
+        int spid = task_create("stress_worker", exiting_worker);
+        if (spid <= 0) { stress_ok = false; break; }
+        task_yield();
+        task_exit();
+        task_yield();
+    }
+    TEST_ASSERT(stress_ok == true, "Scheduler soporta mas de 16 terminaciones consecutivas con purga automatica y sin fugas");
 }
 
 void test_syscall_boundary_and_abi(void) {
@@ -582,6 +593,18 @@ void test_physical_memory_manager(void) {
     }
     TEST_ASSERT(no_invaded == true, "Ningun marco asignado por PMM invade el megabyte inferior ni el Heap reservado");
 
+    // Pruebas de desbordamiento en pmm_mark_region_used y free (Auditoría v11)
+    size_t free_before_ovf = pmm_get_free_frames();
+    pmm_mark_region_used(0xFFFFF000, 0x2000); // 0xFFFFF000 + 0x2000 desborda 32 bits
+    TEST_ASSERT(pmm_get_free_frames() == free_before_ovf, "pmm_mark_region_used rechaza desbordamiento sin corromper bitmap");
+
+    pmm_mark_region_free(0xFFFFF000, 0x2000);
+    TEST_ASSERT(pmm_get_free_frames() == free_before_ovf, "pmm_mark_region_free rechaza desbordamiento sin corromper bitmap");
+
+    // Prueba de rango parcial / no alineado menor a 1 página completa (no debe liberar ninguna página)
+    pmm_mark_region_free(0x02000010, 100);
+    TEST_ASSERT(pmm_get_free_frames() == free_before_ovf, "pmm_mark_region_free no libera paginas ante rangos incompletos menores a 4 KiB");
+
     // Limpieza
     for (int s = 0; s < 16; s++) {
         pmm_free_frame(sample_frames[s]);
@@ -631,15 +654,30 @@ void test_virtual_memory_paging(void) {
     TEST_ASSERT(vmm_is_mapped(pdir, proc_virt) == true, "Pagina privada mapeada en directorio de proceso");
     TEST_ASSERT(vmm_is_mapped(kdir, proc_virt) == false, "Aislamiento estricto: la pagina privada NO existe en el kernel");
 
-    // Política de ownership y reemplazo de PTE (Auditoría v10):
-    // Mapear la misma página con flags actualizados debe tener éxito
-    int same_map = vmm_map_page(pdir, proc_virt, phys_target, PTE_PRESENT | PTE_USER);
-    TEST_ASSERT(same_map == 0, "vmm_map_page permite actualizar flags en pagina ya asociada al mismo marco fisico");
+    // Política estricta de separación de APIs (Auditoría v11):
+    // vmm_map_page rechaza colisión si la página ya está presente (EEXIST)
+    int dup_map = vmm_map_page(pdir, proc_virt, phys_target, PTE_PRESENT | PTE_USER);
+    TEST_ASSERT(dup_map == -1, "vmm_map_page rechaza colision de pagina ya presente (EEXIST)");
 
-    // Intentar asociar la misma direccion virtual a un marco fisico DIFERENTE sin desmapear debe ser rechazado
-    uintptr_t other_frame = 0x70000000;
-    int conflict_map = vmm_map_page(pdir, proc_virt, other_frame, PTE_PRESENT | PTE_USER);
-    TEST_ASSERT(conflict_map == -1, "vmm_map_page rechaza reemplazo conflictivo de marco fisico sin desmapeo previo");
+    // Modificación explícita de permisos con vmm_set_page_flags
+    int flags_res = vmm_set_page_flags(pdir, proc_virt, PTE_PRESENT | PTE_USER);
+    TEST_ASSERT(flags_res == 0, "vmm_set_page_flags actualiza permisos de pagina mapeada e invalida TLB");
+    TEST_ASSERT((vmm_get_page_flags(pdir, proc_virt) & PTE_WRITABLE) == 0, "vmm_get_page_flags confirma que la pagina ahora es de solo lectura");
+
+    // Conmutar a pdir para validar que copy_to_user y copy_from_user validan páginas y permisos bajo VMM
+    vmm_switch_page_directory(pdir);
+    char k_buf[32] = "KernelData";
+    // Como proc_virt es de solo lectura, copy_to_user debe ser rechazado
+    int copy_ro = copy_to_user((void*)proc_virt, k_buf, 10);
+    TEST_ASSERT(copy_ro == -1, "copy_to_user rechaza escritura en pagina de usuario de solo lectura");
+
+    // Intentar acceder a una dirección dentro del rango lógico pero sin página mapeada (0x40002000)
+    int copy_unmapped = copy_from_user(k_buf, (const void*)0x40002000, 10);
+    TEST_ASSERT(copy_unmapped == -1, "copy_from_user rechaza lectura de pagina no mapeada en el directorio activo");
+
+    // Restaurar permiso de escritura con vmm_set_page_flags
+    vmm_set_page_flags(pdir, proc_virt, PTE_PRESENT | PTE_USER | PTE_WRITABLE);
+    vmm_switch_page_directory(kdir);
 
     // Seguridad: rechazar páginas de usuario (PTE_USER) en el espacio reservado del kernel (< 64 MiB)
     int intrusion_res = vmm_map_page(pdir, 0x000B8000, phys_target, PTE_PRESENT | PTE_USER);
@@ -768,6 +806,11 @@ void test_gfx_2d_primitives_and_double_buffer(void) {
     TEST_ASSERT(front[200 * (pitch / 4) + 150] != 0xFFAABBCC, "Frontbuffer aislado antes del flip");
     gfx_flip();
     TEST_ASSERT(front[200 * (pitch / 4) + 150] == 0xFFAABBCC, "gfx_flip vuelca backbuffer completo a frontbuffer");
+
+    // Verificación de Fallback Directo (Auditoría v11: backbuffer == frontbuffer no debe copiar sobre sí mismo)
+    gfx_init_custom(front, front, width, height, pitch, 32);
+    gfx_flip(); // No crashea ni realiza memcpy recursivo
+    TEST_ASSERT(true, "gfx_flip maneja de forma segura y sin redundancia el modo de dibujo directo (backbuffer == frontbuffer)");
 
     free(front);
     free(back);

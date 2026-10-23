@@ -90,8 +90,13 @@ void scheduler_init(void) {
     tss_set_kernel_stack(task_table[0].kernel_stack_top);
 }
 
+static void drain_zombie_stacks(uint8_t* active_stack);
+
 int task_create_with_profile(const char* name, void (*entry_point)(void), enum nova_profile profile) {
     if (!name || !entry_point) return -1;
+
+    // Reciclar de inmediato cualquier pila de tareas previamente terminadas
+    drain_zombie_stacks(task_table[current_task_idx].stack);
 
     for (int i = 1; i < MAX_TASKS; i++) {
         if (task_table[i].state == TASK_UNUSED || task_table[i].state == TASK_TERMINATED) {
@@ -137,9 +142,11 @@ int task_create(const char* name, void (*entry_point)(void)) {
     return task_create_with_profile(name, entry_point, inherited);
 }
 
-#define MAX_ZOMBIE_STACKS 16
+#define MAX_ZOMBIE_STACKS 32
 static uint8_t* zombie_stacks[MAX_ZOMBIE_STACKS];
 static size_t zombie_stack_count = 0;
+
+static void drain_zombie_stacks(uint8_t* active_stack);
 
 static void enqueue_zombie_stack(uint8_t* stack) {
     if (!stack) return;
@@ -149,12 +156,16 @@ static void enqueue_zombie_stack(uint8_t* stack) {
         if (zombie_stacks[i] == stack) return;
     }
 
+    if (zombie_stack_count >= MAX_ZOMBIE_STACKS) {
+        // En un modelo UP, cualquier pila en la cola distinta a la de la tarea en ejecución es segura de liberar
+        uint8_t* cur_active = task_table[current_task_idx].stack;
+        drain_zombie_stacks(cur_active);
+    }
+
     if (zombie_stack_count < MAX_ZOMBIE_STACKS) {
         zombie_stacks[zombie_stack_count++] = stack;
     } else {
-        // En lugar de liberar ciegamente el elemento 0 (que podria estar en uso por la CPU),
-        // se rechaza la insercion para preservar la integridad de la memoria
-        serial_write_string("[SCHEDULER] Advertencia: Cola zombie llena. Evitando descarte inseguro.\r\n");
+        serial_write_string("[SCHEDULER] Advertencia: Cola zombie saturada tras purga.\r\n");
     }
 }
 

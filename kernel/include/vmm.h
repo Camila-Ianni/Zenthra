@@ -53,8 +53,17 @@ uintptr_t vmm_virt_to_phys(struct page_directory* pd, uintptr_t virt_addr);
 /* Comprobar si una dirección virtual está mapeada */
 bool vmm_is_mapped(struct page_directory* pd, uintptr_t virt_addr);
 
+/* Modificar los flags/permisos de una página virtual ya mapeada e invalidar TLB */
+int vmm_set_page_flags(struct page_directory* pd, uintptr_t virt_addr, uint32_t flags);
+
+/* Obtener los flags de una página virtual mapeada (o 0 si no presente) */
+uint32_t vmm_get_page_flags(struct page_directory* pd, uintptr_t virt_addr);
+
 /* Obtener el directorio de páginas maestro del kernel */
 struct page_directory* vmm_get_kernel_directory(void);
+
+/* Obtener el directorio de páginas actualmente activo */
+struct page_directory* vmm_get_current_directory(void);
 
 /* Crear un nuevo espacio de direcciones virtual para un proceso con kernel compartido */
 struct page_directory* vmm_create_process_directory(void);

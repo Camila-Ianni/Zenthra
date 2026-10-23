@@ -122,13 +122,10 @@ int vmm_map_page(struct page_directory* pd, uintptr_t virt_addr, uintptr_t phys_
     struct page_table* pt = vmm_get_pt(pd, pde_idx);
     if (!pt) return -1;
 
-    // Política explícita de ownership y reemplazo de PTE (Auditoría v10):
-    // Si la página ya está presente con un marco físico DIFERENTE, rechazar el reemplazo para evitar desalineación/fugas
+    // Política explícita de ownership (Auditoría v10/v11):
+    // Si la página ya está presente, rechazar colisión para forzar uso explícito de vmm_set_page_flags o vmm_unmap_page
     if (pt->entries[pte_idx] & PTE_PRESENT) {
-        uintptr_t existing_frame = pt->entries[pte_idx] & PTE_FRAME_MASK;
-        if (existing_frame != (phys_addr & PTE_FRAME_MASK)) {
-            return -1; // Conflicto de mapeo: la dirección virtual ya está asociada a otro marco físico
-        }
+        return -1; // Colisión: dirección virtual ya mapeada
     }
 
     pt->entries[pte_idx] = (phys_addr & PTE_FRAME_MASK) | (flags & 0xFFF) | PTE_PRESENT;
@@ -138,6 +135,53 @@ int vmm_map_page(struct page_directory* pd, uintptr_t virt_addr, uintptr_t phys_
     }
 
     return 0;
+}
+
+int vmm_set_page_flags(struct page_directory* pd, uintptr_t virt_addr, uint32_t flags) {
+    if (!pd) return -1;
+
+    size_t pde_idx = (virt_addr >> 22) & 0x3FF;
+    size_t pte_idx = (virt_addr >> 12) & 0x3FF;
+
+    if (!(pd->entries[pde_idx] & PDE_PRESENT)) return -1;
+
+    struct page_table* pt = vmm_get_pt(pd, pde_idx);
+    if (!pt || !(pt->entries[pte_idx] & PTE_PRESENT)) return -1;
+
+    // Proteger espacio de kernel contra permisos PTE_USER
+    if ((flags & PTE_USER) && pde_idx < KERNEL_IDENTITY_TABLES) {
+        return -1;
+    }
+
+    uintptr_t phys_frame = pt->entries[pte_idx] & PTE_FRAME_MASK;
+    pt->entries[pte_idx] = phys_frame | (flags & 0xFFF) | PTE_PRESENT;
+
+    if (flags & PTE_USER) {
+        pd->entries[pde_idx] |= PDE_USER;
+    }
+
+    if (paging_enabled && pd == current_pdir) {
+        vmm_invlpg(virt_addr);
+    }
+    return 0;
+}
+
+uint32_t vmm_get_page_flags(struct page_directory* pd, uintptr_t virt_addr) {
+    if (!pd) return 0;
+
+    size_t pde_idx = (virt_addr >> 22) & 0x3FF;
+    size_t pte_idx = (virt_addr >> 12) & 0x3FF;
+
+    if (!(pd->entries[pde_idx] & PDE_PRESENT)) return 0;
+
+    struct page_table* pt = vmm_get_pt(pd, pde_idx);
+    if (!pt || !(pt->entries[pte_idx] & PTE_PRESENT)) return 0;
+
+    return pt->entries[pte_idx] & 0xFFF;
+}
+
+struct page_directory* vmm_get_current_directory(void) {
+    return current_pdir;
 }
 
 int vmm_map_range(struct page_directory* pd, uintptr_t virt_start, uintptr_t phys_start, size_t size, uint32_t flags) {

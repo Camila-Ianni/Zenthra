@@ -4,16 +4,12 @@
 #include "nova_iot.h"
 #include "acl_security.h"
 #include "task.h"
+#include "vmm.h"
 
 /*
  * Validación de punteros de usuario:
  * Comprueba que el rango [ptr, ptr + size) esté dentro del espacio de usuario válido,
  * no sea NULL y no desborde el límite de memoria del kernel.
- * 
- * NOTA ARQUITECTURAL: Esta verificación valida el rango lógico de direcciones
- * (segmentación plana x86). El aislamiento total por proceso y protección ante
- * páginas no mapeadas requiere activar Paging (CR0.PG) y tablas de páginas en Ring 3,
- * programado en la Fase 3 del Roadmap.
  */
 bool is_user_pointer(const void* ptr, size_t size) {
     if (ptr == NULL) return false;
@@ -29,12 +25,45 @@ bool is_user_pointer(const void* ptr, size_t size) {
 }
 
 /*
+ * Validación estricta de páginas mapeadas para punteros de usuario:
+ * Comprueba no solo el límite lógico plano (USER_MEMORY_LIMIT), sino también
+ * que todas las páginas del rango [ptr, ptr + size) estén presentes en el
+ * directorio de páginas activo con permisos de usuario (PTE_USER) y, si corresponde,
+ * de escritura (PTE_WRITABLE). Previene fallos de página (#PF) en Ring 0.
+ */
+static bool is_user_pages_accessible(const void* ptr, size_t size, bool write_intent) {
+    if (!is_user_pointer(ptr, size)) return false;
+    if (size == 0) return true;
+
+    if (vmm_is_paging_enabled()) {
+        struct page_directory* cur_pd = vmm_get_current_directory();
+        if (!cur_pd) cur_pd = vmm_get_kernel_directory();
+
+        uintptr_t start = (uintptr_t)ptr;
+        uintptr_t end = start + size;
+        uintptr_t start_page = start & PTE_FRAME_MASK;
+        uintptr_t end_page = (end + PAGE_SIZE - 1) & PTE_FRAME_MASK;
+
+        for (uintptr_t page = start_page; page < end_page; page += PAGE_SIZE) {
+            uint32_t flags = vmm_get_page_flags(cur_pd, page);
+            if (!(flags & PTE_PRESENT) || !(flags & PTE_USER)) {
+                return false;
+            }
+            if (write_intent && !(flags & PTE_WRITABLE)) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+/*
  * Copia segura desde userland hacia buffer acotado en kernel:
- * Retorna 0 si fue exitosa, o -1 si el puntero o rango es inválido.
+ * Retorna 0 si fue exitosa, o -1 si el puntero, rango o páginas son inválidos.
  */
 int copy_from_user(void* kernel_dest, const void* user_src, size_t size) {
     if (!kernel_dest || !user_src) return -1;
-    if (!is_user_pointer(user_src, size)) return -1;
+    if (!is_user_pages_accessible(user_src, size, false)) return -1;
 
     k_memcpy(kernel_dest, user_src, size);
     return 0;
@@ -42,11 +71,11 @@ int copy_from_user(void* kernel_dest, const void* user_src, size_t size) {
 
 /*
  * Copia segura desde kernel hacia buffer en userland:
- * Retorna 0 si fue exitosa, o -1 si la dirección de destino de usuario es inválida.
+ * Retorna 0 si fue exitosa, o -1 si el destino de usuario o páginas son inválidos/de solo lectura.
  */
 int copy_to_user(void* user_dest, const void* kernel_src, size_t size) {
     if (!user_dest || !kernel_src) return -1;
-    if (!is_user_pointer(user_dest, size)) return -1;
+    if (!is_user_pages_accessible(user_dest, size, true)) return -1;
 
     k_memcpy(user_dest, kernel_src, size);
     return 0;
