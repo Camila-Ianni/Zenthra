@@ -29,6 +29,13 @@ typedef int32_t            intptr_t;
 #endif
 typedef uint8_t bool;
 
+#ifndef UINT64_MAX
+#define UINT64_MAX 0xFFFFFFFFFFFFFFFFULL
+#endif
+#ifndef UINT32_MAX
+#define UINT32_MAX 0xFFFFFFFFU
+#endif
+
 #else
 /* Entorno de pruebas / Host */
 #include <stdint.h>
