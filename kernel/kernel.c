@@ -17,6 +17,9 @@
 #include "shell.h"
 #include "multiboot.h"
 #include "power.h"
+#include "pmm.h"
+#include "vmm.h"
+#include "page_fault.h"
 
 #define KHEAP_START 0x00400000
 #define KHEAP_SIZE  (2 * 1024 * 1024) // 2 MiB de Heap inicial
@@ -123,14 +126,28 @@ void kernel_main(uint32_t magic, uintptr_t mbi_addr) {
     vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
     kprintf("[OK]\n");
 
-    // 8. Inicializar gestor de memoria dinámica (Heap 2MB)
+    // 8. Inicializar Administrador de Memoria Fisica (PMM)
+    vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
+    kprintf("[*] Inicializando PMM (Deteccion fisica Multiboot)... ");
+    pmm_init(magic, mbi_addr);
+    vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
+    kprintf("[OK]\n");
+
+    // 9. Inicializar Paginacion x86 de 32 bits (VMM, Identity Mapping 16 MiB y Page Faults)
+    vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
+    kprintf("[*] Activando Paginacion x86 (CR0.PG, CR3, VMM 16 MiB)... ");
+    vmm_init();
+    vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
+    kprintf("[OK]\n");
+
+    // 10. Inicializar gestor de memoria dinamica (Heap 2MB)
     vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
     kprintf("[*] Inicializando Kernel Heap en 0x%x (2 MiB)... ", KHEAP_START);
     kheap_init((void*)KHEAP_START, KHEAP_SIZE);
     vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
     kprintf("[OK]\n");
 
-    // 9. Inicializar planificador de tareas (Scheduler Round-Robin)
+    // 11. Inicializar planificador de tareas (Scheduler Round-Robin)
     vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
     kprintf("[*] Inicializando Planificador Multitarea (Scheduler)... ");
     scheduler_init();

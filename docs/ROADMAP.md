@@ -38,17 +38,20 @@ flowchart TD
 - [x] Volcado de registros y diagnóstico en serie (COM1) ante fallos no controlados.
 - [x] Timer PIT a 100 Hz con heartbeat serie e instrucción `hlt`.
 
-### Fase 3 — Paginación y Procesos Reales (EN CURSO)
-- [x] Cambio real de contexto de tarea en ensamblador (`switch_context`).
-- [x] Demostración de tareas concurrentes alternantes con contadores reales en log serial.
-- [ ] Asignador de marcos de página física (PMM - Physical Memory Manager) basado en el mapa de memoria de Multiboot.
-- [ ] Paginación de hardware (CR0.PG, Page Directory y Page Tables de 4 KiB) con protección de memoria Ring 0 / Ring 3.
-- [ ] Segmento de Estado de Tarea (TSS) para recarga automática de `ESP0` al recibir interrupciones en Ring 3.
+### Fase 3 — Multitarea Preemptiva y Planificación Real (COMPLETADA)
+- [x] Cambio real de contexto de tarea en ensamblador (`switch_context`) y pilas dedicadas.
+- [x] Segmento de Estado de Tarea (TSS) de 32 bits en hardware (DPL 0, selector 0x28, `esp0 = kernel_stack_top`).
+- [x] Planificador Round-Robin preemptivo por quantum temporal (`task_schedule_tick`).
+- [x] Soporte de suspensión y despertar automático de tareas (`task_sleep`).
+- [x] Demostración de tarea CPU-bound sin yield preemptada forzosamente por PIT IRQ0.
 
-### Fase 4 — Entrada y Consola de Recuperación
-- [ ] Driver de teclado PS/2 completo: decodificación de scancodes make/break, teclas modificadoras (Shift, Ctrl, Alt) y distribución de teclado en Español (ES / Latam).
-- [ ] Driver de ratón PS/2 (IRQ 12): máquina de estados para paquetes de 3 bytes y coordenadas de puntero.
-- [ ] Mantenimiento de la consola de texto VGA 80x25 como herramienta de diagnóstico y modo de rescate.
+### Fase 4 — Memoria Física y Paging x86 (COMPLETADA)
+- [x] Parseo del mapa de memoria Multiboot 1 (`mmap_addr`) y reserva de áreas críticas (1 MiB bajo, kernel ELF, heap).
+- [x] Asignador de marcos de página física (PMM) basado en bitmap de 4 KiB con reciclaje First-Fit.
+- [x] Paginación de hardware x86 de 32 bits (`CR0.PG`, `CR0.WP`, carga de CR3).
+- [x] Mapeo de identidad de 16 MiB para supervisor Ring 0 (kernel, VGA B8000, heap 4-6 MB).
+- [x] Aislamiento de espacios virtuales y directorios de página por proceso (`vmm_create_process_directory`).
+- [x] Manejador de Page Faults (#PF Vector 14 en IDT) con decodificación de código de error y lectura de CR2.
 
 ### Fase 5 — Primer Escritorio Gráfico (MVP Visible)
 - [ ] Petición de modo gráfico a Multiboot (1024x768 a 32 bpp, LFB).

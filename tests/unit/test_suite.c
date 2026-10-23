@@ -16,6 +16,9 @@
 #include "nova_iot.h"
 #include "multiboot.h"
 #include "power.h"
+#include "pmm.h"
+#include "vmm.h"
+#include "page_fault.h"
 
 // Variables y stubs requeridos por drivers en host
 void vga_putc(char c) {
@@ -506,6 +509,109 @@ void test_preemptive_scheduling_and_sleep(void) {
     scheduler_unlock();
 }
 
+/* Test 16: Administrador de Memoria Física (PMM - Marcos de 4 KiB) */
+void test_physical_memory_manager(void) {
+    printf("[*] Ejecutando: test_physical_memory_manager...\n");
+    pmm_init(0, 0);
+
+    size_t total = pmm_get_total_frames();
+    TEST_ASSERT(total > 0, "PMM detecta marcos fisicos totales mayores a cero");
+    size_t free_initial = pmm_get_free_frames();
+    TEST_ASSERT(free_initial > 0, "PMM reporta memoria fisica libre disponible");
+
+    // Asignar primer marco físico
+    uintptr_t f1 = pmm_alloc_frame();
+    TEST_ASSERT(f1 != 0, "pmm_alloc_frame asigna un marco fisico valido");
+    TEST_ASSERT((f1 % PAGE_SIZE) == 0, "El marco fisico asignado esta alineado a 4 KiB");
+    TEST_ASSERT(pmm_is_frame_allocated(f1) == true, "El marco f1 esta marcado como ocupado en bitmap");
+    TEST_ASSERT(pmm_get_free_frames() == free_initial - 1, "El contador de marcos libres se decrementa");
+
+    // Asignar segundo marco
+    uintptr_t f2 = pmm_alloc_frame();
+    TEST_ASSERT(f2 != 0 && f2 != f1, "pmm_alloc_frame asigna un segundo marco contiguo y diferenciado");
+    TEST_ASSERT((f2 % PAGE_SIZE) == 0, "El segundo marco fisico esta alineado a 4 KiB");
+
+    // Liberar primer marco
+    pmm_free_frame(f1);
+    TEST_ASSERT(pmm_is_frame_allocated(f1) == false, "pmm_free_frame libera el marco f1");
+    TEST_ASSERT(pmm_get_free_frames() == free_initial - 1, "El contador de marcos libres se recupera tras liberacion");
+
+    // Reasignar marco: verificación de reciclaje First-Fit
+    uintptr_t f3 = pmm_alloc_frame();
+    TEST_ASSERT(f3 == f1, "PMM recicla el marco recientemente liberado en el bitmap");
+
+    // Limpieza
+    pmm_free_frame(f2);
+    pmm_free_frame(f3);
+}
+
+/* Test 17: Paginación x86 de 32 bits, Mapeo Virtual y Aislamiento por Proceso */
+void test_virtual_memory_paging(void) {
+    printf("[*] Ejecutando: test_virtual_memory_paging...\n");
+    vmm_init();
+
+    TEST_ASSERT(vmm_is_paging_enabled() == true, "Paginacion x86 activada en VMM");
+    struct page_directory* kdir = vmm_get_kernel_directory();
+    TEST_ASSERT(kdir != NULL, "Directorio maestro de paginas del kernel existe");
+
+    // Verificar identidad de 16 MiB (Ring 0 / Supervisor)
+    TEST_ASSERT(vmm_virt_to_phys(kdir, 0x00000000) == 0x00000000, "Mapeo identidad de pagina cero (0x00000000)");
+    TEST_ASSERT(vmm_virt_to_phys(kdir, 0x000B8000) == 0x000B8000, "Mapeo identidad del buffer VGA (0x000B8000)");
+    TEST_ASSERT(vmm_virt_to_phys(kdir, 0x00100000) == 0x00100000, "Mapeo identidad del kernel ELF (1 MiB / 0x00100000)");
+    TEST_ASSERT(vmm_virt_to_phys(kdir, 0x00400000) == 0x00400000, "Mapeo identidad del Heap del kernel (4 MiB / 0x00400000)");
+
+    // Mapeo dinámico de página en espacio de usuario (Ring 3)
+    uintptr_t user_virt = 0x80000000;
+    uintptr_t phys_target = pmm_alloc_frame();
+    TEST_ASSERT(phys_target != 0, "Marco fisico para prueba de mapeo asignado por PMM");
+
+    int res = vmm_map_page(kdir, user_virt, phys_target, PTE_PRESENT | PTE_WRITABLE | PTE_USER);
+    TEST_ASSERT(res == 0, "vmm_map_page mapea direccion virtual alta exitosamente");
+    TEST_ASSERT(vmm_is_mapped(kdir, user_virt) == true, "vmm_is_mapped confirma presencia de pagina virtual");
+    TEST_ASSERT(vmm_virt_to_phys(kdir, user_virt) == phys_target, "Traduccion virtual a fisica coincide exactamente");
+
+    // Desmapeo
+    vmm_unmap_page(kdir, user_virt);
+    TEST_ASSERT(vmm_is_mapped(kdir, user_virt) == false, "vmm_unmap_page desasocia la pagina virtual");
+
+    // Creación y aislamiento de directorio de proceso
+    struct page_directory* pdir = vmm_create_process_directory();
+    TEST_ASSERT(pdir != NULL, "vmm_create_process_directory crea nuevo espacio de direcciones");
+    TEST_ASSERT(vmm_virt_to_phys(pdir, 0x00100000) == 0x00100000, "Espacio de direcciones de proceso hereda mapeo del kernel");
+
+    // Mapear página privada en el proceso
+    uintptr_t proc_virt = 0x40000000;
+    vmm_map_page(pdir, proc_virt, phys_target, PTE_PRESENT | PTE_WRITABLE | PTE_USER);
+    TEST_ASSERT(vmm_is_mapped(pdir, proc_virt) == true, "Pagina privada mapeada en directorio de proceso");
+    TEST_ASSERT(vmm_is_mapped(kdir, proc_virt) == false, "Aislamiento estricto: la pagina privada NO existe en el kernel");
+
+    // Destrucción de directorio de proceso
+    vmm_destroy_process_directory(pdir);
+    pmm_free_frame(phys_target);
+}
+
+/* Test 18: Manejador de Excepción de Page Fault (#PF Vector 14) */
+void test_page_fault_handling(void) {
+    printf("[*] Ejecutando: test_page_fault_handling...\n");
+    page_fault_init();
+
+    extern uint32_t mock_cr2_addr;
+    mock_cr2_addr = 0xDEADB000;
+
+    struct registers regs;
+    k_memset(&regs, 0, sizeof(struct registers));
+    regs.int_no = 14;
+    regs.err_code = PF_ERR_WRITE | PF_ERR_USER; // No presente, escritura, userspace
+    regs.eip = 0x08048000;
+
+    size_t count_before = page_fault_get_count();
+    page_fault_handler(&regs);
+
+    TEST_ASSERT(page_fault_get_count() == count_before + 1, "page_fault_handler procesa e incrementa contador de fallos");
+    TEST_ASSERT(page_fault_get_last_address() == 0xDEADB000, "Registro CR2 capturado como direccion causante");
+    TEST_ASSERT(page_fault_get_last_error_code() == (PF_ERR_WRITE | PF_ERR_USER), "Codigo de error (#PF) decodificado con precision");
+}
+
 int main(void) {
     printf("====================================================\n");
     printf("    ZENTHRA OS — SUITE DE PRUEBAS AUTOMATIZADAS     \n");
@@ -526,7 +632,9 @@ int main(void) {
     test_task_lifecycle_and_cleanup();
     test_syscall_boundary_and_abi();
     test_preemptive_scheduling_and_sleep();
-
+    test_physical_memory_manager();
+    test_virtual_memory_paging();
+    test_page_fault_handling();
 
     printf("\n----------------------------------------------------\n");
     printf("Resultados: %d Aprobados | %d Fallidos\n", tests_passed, tests_failed);

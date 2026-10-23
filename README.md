@@ -23,6 +23,9 @@ Para máxima transparencia técnica, el estado del código se clasifica rigurosa
 | :--- | :---: | :--- |
 | **Arranque y Bootloader** | **REAL** | Contrato Multiboot 1 oficial (`0x1BADB002`) con validación estricta por `grub-file --is-x86-multiboot`. |
 | **Segmentación de Memoria (GDT)** | **REAL** | 6 descriptores (Kernel Code/Data, User Code/Data, TSS de 32 bits disponible con DPL 0 `0x89` en selector 0x28). Task Register cargado con `ltr 0x28` (RPL 0) y aserción de tamaño (104 bytes). |
+| **Memoria Física (PMM)** | **REAL** | Asignador físico de marcos de 4 KiB basado en bitmap. Lectura y parseo del mapa de memoria Multiboot 1 (`mmap`), reserva estricta de áreas de sistema (1 MiB bajo, kernel ELF, bootloader info, heap). |
+| **Paginación x86 y Memoria Virtual (VMM)** | **REAL** | Paginación de 32 bits por hardware (`CR0.PG`, `CR0.WP`, `CR3`). Directorio de páginas y tablas alineadas a 4 KiB. Mapeo identidad de 16 MiB en Ring 0 (kernel, heap, VGA B8000), mapeo/desmapeo dinámico y creación de espacios virtuales aislados por proceso. |
+| **Manejador de Page Faults (#PF)** | **REAL** | Interrupción Vector 14 en IDT, captura de dirección causante desde `CR2`, decodificación de bits de fallo (presente, lectura/escritura, kernel/userspace). |
 | **Interrupciones y PIC (IDT)** | **REAL** | 256 descriptores. Stubs assembly para 32 excepciones y 16 IRQs. Máscara PIC granular (todas enmascaradas por defecto salvo cascada IRQ2; IRQ0 desmascarada selectivamente en `pit_init`). |
 | **Temporizador del Sistema (PIT)** | **REAL** | Intel 8253/8254 programado a 100 Hz (IRQ 0 / Vector 32) con ticks periódicos y sleep por `hlt`. |
 | **Puerto Serie (COM1 UART 16550A)** | **REAL** | Inicialización con divisor de baudios (38400), FIFOs y salida serie para diagnóstico de depuración. |
@@ -62,7 +65,7 @@ make test
 # Limpiar binarios y objetos anteriores
 make clean
 
-# Ejecutar suite de pruebas unitarias automatizadas (105 tests)
+# Ejecutar suite de pruebas unitarias automatizadas (134 tests)
 make test
 
 # Compilar kernel ELF y generar la imagen ISO arrancable
