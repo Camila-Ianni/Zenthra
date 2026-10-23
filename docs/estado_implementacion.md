@@ -113,9 +113,10 @@ Se ejecutó la suite de pruebas mediante `make test` (**251 pruebas automatizada
 [*] Ejecutando: test_gfx_and_lfb... (25 pruebas: 1024x768x32bpp, doble buffer, clipping)
 [*] Ejecutando: test_mouse_ps2... (17 pruebas: paquetes, botones, límites de pantalla)
 [*] Ejecutando: test_window_manager_and_desktop... (18 pruebas: drag, focus, launcher, terminal)
+[*] Ejecutando: test_ps2_keyboard_driver... (165 pruebas: Shift make/break, Caps Lock XOR, Layout Español/LatAm, telemetría y saturación de cola)
 
 ----------------------------------------------------
-Resultados: 251 Aprobados | 0 Fallidos
+Resultados: 416 Aprobados | 0 Fallidos
 ----------------------------------------------------
 [+] Todas las pruebas pasaron satisfactoriamente.
 ```
@@ -126,7 +127,7 @@ Resultados: 251 Aprobados | 0 Fallidos
 
 - **Flujo GitHub Actions (`.github/workflows/ci.yml`)**:
   - `make check-env`: Diagnóstico y reporte de herramientas del entorno.
-  - `make test`: Ejecución de las 251 pruebas unitarias sin dependencias externas.
+  - `make test`: Ejecución de las 416 pruebas unitarias sin dependencias externas (0 fallos, 0 warnings).
   - `make kernel`: Compilación y enlace del ELF x86 de 32 bits (`i686`).
   - `grub-file`: Verificación estricta del encabezado Multiboot 1.
   - `make iso`: Creación de la imagen arrancable `build/zenthra_os.iso` con GRUB y generación de `build/BUILD_INFO.txt` con SHA-256.
@@ -136,3 +137,12 @@ Resultados: 251 Aprobados | 0 Fallidos
 - **Portabilidad Host macOS / Darwin**:
   - Detección explícita de SO en `Makefile`.
   - En macOS emite mensajes informativos `[BLOCKED]` si faltan herramientas de cross-compilación (`i686-linux-gnu-gcc` o `grub-file`), permitiendo que el host compile y ejecute la suite de pruebas local (`make test`) limpiamente sin fallar por rutas inexistentes.
+
+---
+
+## 5. Prototipo de Escritorio & Jarvis Multi-Agente (`desktop_prototype/`)
+
+Como parte de los compromisos de la **Auditoría Técnica v16**:
+- **Aislamiento Arquitectónico**: El kernel bare-metal en `kernel/` permanece libre de código de IA, librerías de alto nivel o credenciales.
+- **Prototipo Independiente en Userland**: Se construyó en `desktop_prototype/` una interfaz gráfica con Glassmorphism auténtico (`backdrop-filter`), barra superior con selector de modo Eco (bajo consumo para hardware limitado) y temas claro/oscuro, dock flotante animado, terminal interactiva con simulación de comandos del sistema, monitor de telemetría IoT y el **Centro de 6 Agentes Especializados** (Backend, Ciberseguridad, Kernel/OS, Datos, Creativo/UI, Automatización) coordinados por **Jarvis AI Assistant**.
+- **Seguridad**: Arquitectura Gateway Híbrida sin secretos incrustados, modal de confirmación humana obligatoria ante operaciones críticas y etiquetado explícito `[DEMO]` en toda métrica simulada.

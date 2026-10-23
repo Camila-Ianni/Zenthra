@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zenthra OS — Desktop Environment & Jarvis AI Hub [DEMO]</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="desktop">
+        <!-- Barra Superior (Top Bar) -->
+        <header id="top-bar" class="glass-bar">
+            <div class="top-bar-left">
+                <button id="btn-zenthra-menu" class="top-bar-btn brand-btn" title="Menú Zenthra">
+                    <span class="brand-logo">⚡</span>
+                    <span class="brand-name">Zenthra OS</span>
+                    <span class="badge-demo">[DEMO]</span>
+                </button>
+                <div class="active-app-title" id="active-app-title">Escritorio</div>
+            </div>
+
+            <div class="top-bar-center">
+                <div class="system-time" id="system-time">12:00:00</div>
+            </div>
+
+            <div class="top-bar-right">
+                <div class="status-indicator" title="Conexión Gateway Local">
+                    <span class="status-dot online"></span>
+                    <span class="status-label">Gateway Activo</span>
+                </div>
+                <button id="btn-theme-toggle" class="top-bar-icon-btn" title="Alternar Modo Oscuro / Claro">
+                    🌓
+                </button>
+                <button id="btn-eco-toggle" class="top-bar-icon-btn" title="Modo Eco / Bajo Consumo (Sin Glassmorphism)">
+                    🌱
+                </button>
+                <button id="btn-control-center" class="top-bar-icon-btn" title="Centro de Control">
+                    ⚙️
+                </button>
+            </div>
+        </header>
+
+        <!-- Área de Ventanas / Escritorio -->
+        <main id="window-container">
+            <!-- Ventana 1: Jarvis AI Assistant (Centro Neuronal) -->
+            <div class="window glass-window" id="win-jarvis" data-win-id="jarvis" style="top: 60px; left: 80px; width: 680px; height: 540px;">
+                <div class="window-titlebar">
+                    <div class="window-traffic-lights">
+                        <button class="win-btn close" data-action="close" title="Cerrar"></button>
+                        <button class="win-btn minimize" data-action="minimize" title="Minimizar"></button>
+                        <button class="win-btn maximize" data-action="maximize" title="Maximizar"></button>
+                    </div>
+                    <div class="window-title">
+                        <span class="win-icon">🤖</span>
+                        <span>Jarvis AI Assistant — Orquestador Multi-Agente [DEMO]</span>
+                    </div>
+                    <div class="window-status-pill">Autónomo / Seguro</div>
+                </div>
+                <div class="window-content jarvis-layout">
+                    <!-- Historial y Plan de Ejecución -->
+                    <div class="jarvis-feed" id="jarvis-feed">
+                        <div class="message system-msg">
+                            <span class="msg-author">Jarvis Core:</span>
+                            <span>Bienvenido al entorno interactivo de Zenthra OS. Sistema operativo con arquitectura híbrida y 6 agentes especializados listos para coordinar tareas. Ingrese una instrucción para iniciar un plan de acción.</span>
+                        </div>
+                    </div>
+
+                    <!-- Panel de Plan Activo y Control de Flujo -->
+                    <div class="jarvis-plan-panel" id="jarvis-plan-panel" style="display: none;">
+                        <div class="plan-header">
+                            <span class="plan-title">📋 Plan de Ejecución Activo: <strong id="plan-topic">Auditoría y Despliegue</strong></span>
+                            <button id="btn-cancel-plan" class="btn btn-danger-sm">⏹ Abortar Plan</button>
+                        </div>
+                        <div class="plan-steps-list" id="plan-steps-list">
+                            <!-- Inyectado dinámicamente -->
+                        </div>
+                        <div class="plan-progress-bar">
+                            <div class="plan-progress-fill" id="plan-progress-fill" style="width: 0%;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Input de Instrucciones para Jarvis -->
+                    <form class="jarvis-input-bar" id="jarvis-form">
+                        <input type="text" id="jarvis-prompt" placeholder="Ej: 'Auditar seguridad ACL y preparar despliegue en microservicios'..." autocomplete="off">
+                        <button type="submit" class="btn btn-primary" id="btn-send-jarvis">
+                            <span>Ejecutar Plan</span>
+                            <span class="btn-arrow">➔</span>
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Ventana 2: Centro de 6 Agentes Especializados -->
+            <div class="window glass-window" id="win-agents" data-win-id="agents" style="top: 80px; left: 800px; width: 620px; height: 540px;">
+                <div class="window-titlebar">
+                    <div class="window-traffic-lights">
+                        <button class="win-btn close" data-action="close" title="Cerrar"></button>
+                        <button class="win-btn minimize" data-action="minimize" title="Minimizar"></button>
+                        <button class="win-btn maximize" data-action="maximize" title="Maximizar"></button>
+                    </div>
+                    <div class="window-title">
+                        <span class="win-icon">👥</span>
+                        <span>Centro de Agentes Especializados [DEMO]</span>
+                    </div>
+                    <div class="window-status-pill">6 Activos</div>
+                </div>
+                <div class="window-content agents-hub-layout">
+                    <div class="agents-grid">
+                        <!-- Agente 1: Backend -->
+                        <div class="agent-card" id="card-agent-backend" data-agent="backend">
+                            <div class="agent-card-header">
+                                <span class="agent-avatar">⚙️</span>
+                                <div class="agent-info">
+                                    <div class="agent-name">Agente Backend</div>
+                                    <div class="agent-role">APIs, Servicios y Persistencia</div>
+                                </div>
+                                <span class="agent-status-badge status-idle">Idle</span>
+                            </div>
+                            <div class="agent-card-body">
+                                <div class="agent-detail"><strong>Modelo:</strong> Local Qwen / Ollama [DEMO]</div>
+                                <div class="agent-detail"><strong>Permisos:</strong> OP_FS_READ, OP_FS_WRITE</div>
+                                <div class="agent-current-task">Esperando asignación...</div>
+                            </div>
+                        </div>
+
+                        <!-- Agente 2: Ciberseguridad -->
+                        <div class="agent-card" id="card-agent-security" data-agent="security">
+                            <div class="agent-card-header">
+                                <span class="agent-avatar">🛡️</span>
+                                <div class="agent-info">
+                                    <div class="agent-name">Agente Ciberseguridad</div>
+                                    <div class="agent-role">Auditorías ACL y Límites Ring 3/0</div>
+                                </div>
+                                <span class="agent-status-badge status-idle">Idle</span>
+                            </div>
+                            <div class="agent-card-body">
+                                <div class="agent-detail"><strong>Modelo:</strong> Kimi Gateway / Sandbox [DEMO]</div>
+                                <div class="agent-detail"><strong>Permisos:</strong> OP_SYSTEM_ADMIN, ACL Inspector</div>
+                                <div class="agent-current-task">Esperando asignación...</div>
+                            </div>
+                        </div>
+
+                        <!-- Agente 3: Kernel / OS -->
+                        <div class="agent-card" id="card-agent-kernel" data-agent="kernel">
+                            <div class="agent-card-header">
+                                <span class="agent-avatar">🧠</span>
+                                <div class="agent-info">
+                                    <div class="agent-name">Agente Kernel / OS</div>
+                                    <div class="agent-role">VMM, PMM, Syscalls y Drivers</div>
+                                </div>
+                                <span class="agent-status-badge status-idle">Idle</span>
+                            </div>
+                            <div class="agent-card-body">
+                                <div class="agent-detail"><strong>Modelo:</strong> Specialized Core Agent [DEMO]</div>
+                                <div class="agent-detail"><strong>Permisos:</strong> OP_SYSTEM_ADMIN, Ring 0 Bridge</div>
+                                <div class="agent-current-task">Esperando asignación...</div>
+                            </div>
+                        </div>
+
+                        <!-- Agente 4: Datos & IoT -->
+                        <div class="agent-card" id="card-agent-data" data-agent="data">
+                            <div class="agent-card-header">
+                                <span class="agent-avatar">📊</span>
+                                <div class="agent-info">
+                                    <div class="agent-name">Agente Datos & IoT</div>
+                                    <div class="agent-role">Telemetría, Sensores y Métricas</div>
+                                </div>
+                                <span class="agent-status-badge status-idle">Idle</span>
+                            </div>
+                            <div class="agent-card-body">
+                                <div class="agent-detail"><strong>Modelo:</strong> Local Analytics Model [DEMO]</div>
+                                <div class="agent-detail"><strong>Permisos:</strong> OP_ARDUINO_READ, Telemetry Log</div>
+                                <div class="agent-current-task">Esperando asignación...</div>
+                            </div>
+                        </div>
+
+                        <!-- Agente 5: Creativo / UI -->
+                        <div class="agent-card" id="card-agent-ui" data-agent="ui">
+                            <div class="agent-card-header">
+                                <span class="agent-avatar">🎨</span>
+                                <div class="agent-info">
+                                    <div class="agent-name">Agente Creativo / UI</div>
+                                    <div class="agent-role">Glassmorphism, Tokens y Widgets</div>
+                                </div>
+                                <span class="agent-status-badge status-idle">Idle</span>
+                            </div>
+                            <div class="agent-card-body">
+                                <div class="agent-detail"><strong>Modelo:</strong> Vision & Layout Agent [DEMO]</div>
+                                <div class="agent-detail"><strong>Permisos:</strong> UI Shell, CSS Tokens</div>
+                                <div class="agent-current-task">Esperando asignación...</div>
+                            </div>
+                        </div>
+
+                        <!-- Agente 6: Automatización -->
+                        <div class="agent-card" id="card-agent-automation" data-agent="automation">
+                            <div class="agent-card-header">
+                                <span class="agent-avatar">⚡</span>
+                                <div class="agent-info">
+                                    <div class="agent-name">Agente Automatización</div>
+                                    <div class="agent-role">Pipelines, Tareas Programadas y Cron</div>
+                                </div>
+                                <span class="agent-status-badge status-idle">Idle</span>
+                            </div>
+                            <div class="agent-card-body">
+                                <div class="agent-detail"><strong>Modelo:</strong> Fast Tool Agent [DEMO]</div>
+                                <div class="agent-detail"><strong>Permisos:</strong> OP_FS_READ, OP_FS_WRITE, Scheduler</div>
+                                <div class="agent-current-task">Esperando asignación...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Ventana 3: Monitor de Sistema & Telemetría [DEMO] -->
+            <div class="window glass-window" id="win-monitor" data-win-id="monitor" style="top: 240px; left: 160px; width: 560px; height: 380px; display: none;">
+                <div class="window-titlebar">
+                    <div class="window-traffic-lights">
+                        <button class="win-btn close" data-action="close" title="Cerrar"></button>
+                        <button class="win-btn minimize" data-action="minimize" title="Minimizar"></button>
+                        <button class="win-btn maximize" data-action="maximize" title="Maximizar"></button>
+                    </div>
+                    <div class="window-title">
+                        <span class="win-icon">📈</span>
+                        <span>Monitor de Sistema & IoT [DEMO]</span>
+                    </div>
+                    <div class="window-status-pill">Telemetría Simulada</div>
+                </div>
+                <div class="window-content monitor-layout">
+                    <div class="metric-cards-row">
+                        <div class="metric-card">
+                            <div class="metric-label">Uso de CPU [DEMO]</div>
+                            <div class="metric-val" id="metric-cpu">8.4%</div>
+                            <div class="metric-sub">Quantum PIT: 5 ticks</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">RAM Ocupada [DEMO]</div>
+                            <div class="metric-val" id="metric-ram">18.2 MiB</div>
+                            <div class="metric-sub">de 64 MiB Identity Map</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">Temperatura IoT [DEMO]</div>
+                            <div class="metric-val" id="metric-temp">24.5 °C</div>
+                            <div class="metric-sub">Arduino Link: Conectado</div>
+                        </div>
+                    </div>
+                    <div class="telemetry-chart-box">
+                        <div class="chart-header">
+                            <span>Actividad del Scheduler en Tiempo Real [DEMO]</span>
+                            <span class="badge-tag">UP Mode (Uniprocessor)</span>
+                        </div>
+                        <div class="mini-chart" id="mini-chart">
+                            <!-- Barras generadas por JS -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Ventana 4: Terminal Zenthra -->
+            <div class="window glass-window" id="win-terminal" data-win-id="terminal" style="top: 180px; left: 240px; width: 580px; height: 360px; display: none;">
+                <div class="window-titlebar">
+                    <div class="window-traffic-lights">
+                        <button class="win-btn close" data-action="close" title="Cerrar"></button>
+                        <button class="win-btn minimize" data-action="minimize" title="Minimizar"></button>
+                        <button class="win-btn maximize" data-action="maximize" title="Maximizar"></button>
+                    </div>
+                    <div class="window-title">
+                        <span class="win-icon">💻</span>
+                        <span>Terminal Zenthra OS — Ring 3 Shell [DEMO]</span>
+                    </div>
+                    <div class="window-status-pill">TTY /dev/pts0</div>
+                </div>
+                <div class="window-content terminal-layout">
+                    <div class="terminal-body" id="term-output">
+                        <div>Zenthra OS v16.0 (i686-pc-zenthra)</div>
+                        <div>Escriba 'help', 'tasks', 'sysinfo', 'agents' o 'clear'.</div>
+                    </div>
+                    <div class="terminal-prompt-line">
+                        <span class="prompt-symbol">zenthra@core:~$</span>
+                        <input type="text" id="term-input" class="term-input" autocomplete="off">
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Modal de Aprobación Crítica para Operaciones de Agentes -->
+        <div class="modal-overlay" id="approval-modal" style="display: none;">
+            <div class="modal-box glass-window">
+                <div class="modal-header">
+                    <span class="modal-icon">⚠️</span>
+                    <span class="modal-title">Confirmación de Acción Crítica Requerida</span>
+                </div>
+                <div class="modal-body">
+                    <p id="modal-desc">El <strong>Agente de Ciberseguridad</strong> solicita modificar las reglas de control de acceso ACL para el perfil activo.</p>
+                    <div class="modal-scope-box">
+                        <div><strong>Operación:</strong> <span id="modal-operation">OP_SYSTEM_ADMIN</span></div>
+                        <div><strong>Destino:</strong> <span id="modal-target">/etc/security/acl.conf</span></div>
+                        <div><strong>Nivel de Riesgo:</strong> <span class="badge-risk">ELEVADO</span></div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" id="btn-modal-reject">Denegar Acción</button>
+                    <button class="btn btn-warning" id="btn-modal-approve">Aprobar y Continuar</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dock Flotante Inferior con Glassmorphism -->
+        <nav id="dock" class="glass-dock">
+            <button class="dock-item active" data-app="jarvis" title="Jarvis AI Assistant">
+                <span class="dock-icon">🤖</span>
+                <span class="dock-label">Jarvis</span>
+                <span class="dock-dot"></span>
+            </button>
+            <button class="dock-item active" data-app="agents" title="Centro de Agentes">
+                <span class="dock-icon">👥</span>
+                <span class="dock-label">Agentes</span>
+                <span class="dock-dot"></span>
+            </button>
+            <button class="dock-item" data-app="terminal" title="Terminal Zenthra">
+                <span class="dock-icon">💻</span>
+                <span class="dock-label">Terminal</span>
+                <span class="dock-dot"></span>
+            </button>
+            <button class="dock-item" data-app="monitor" title="Monitor & IoT">
+                <span class="dock-icon">📈</span>
+                <span class="dock-label">Monitor</span>
+                <span class="dock-dot"></span>
+            </button>
+            <div class="dock-separator"></div>
+            <button class="dock-item" data-app="settings" title="Configuración del Sistema">
+                <span class="dock-icon">⚙️</span>
+                <span class="dock-label">Ajustes</span>
+                <span class="dock-dot"></span>
+            </button>
+        </nav>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

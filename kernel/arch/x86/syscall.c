@@ -27,12 +27,12 @@ bool is_user_pointer(const void* ptr, size_t size) {
 }
 
 /*
- * Validación estricta de páginas mapeadas para punteros de usuario (Auditoría v15):
+ * Validación estricta de páginas mapeadas para punteros de usuario (Auditoría v15/v16):
  * Comprueba que todas las páginas del rango [ptr, ptr + size) estén presentes en el
  * directorio de páginas activo con permisos de usuario (PTE_USER) y, si corresponde,
  * de escritura (PTE_WRITABLE).
  *
- * POLÍTICA FAIL-CLOSED (Auditoría v15):
+ * POLÍTICA FAIL-CLOSED:
  * Si la paginación está activa y no existe un directorio de páginas de proceso válido
  * o es inaccesible, se RECHAZA de inmediato retornando false en lugar de validar contra
  * el espacio del kernel por defecto.
@@ -66,11 +66,6 @@ bool is_user_pages_accessible_failclosed(const void* ptr, size_t size, bool writ
     return true;
 }
 
-/* Helper interno compatible */
-static inline bool is_user_pages_accessible(const void* ptr, size_t size, bool write_intent) {
-    return is_user_pages_accessible_failclosed(ptr, size, write_intent);
-}
-
 /*
  * Copia segura desde userland hacia buffer acotado en kernel:
  * Retorna 0 si fue exitosa, o -1 si el puntero, rango o páginas son inválidos.
@@ -98,7 +93,7 @@ int copy_to_user(void* user_dest, const void* kernel_src, size_t size) {
 /*
  * Calcula la longitud de una cadena de usuario de forma segura hasta max_len.
  *
- * Contrato de seguridad y prevención de fallos (#PF en Ring 0) - Auditoría v14/v15:
+ * Contrato de seguridad y prevención de fallos (#PF en Ring 0):
  * Valida bloque por bloque de página en el directorio de páginas activo que cada dirección
  * pertenezca a userland (USER_MEMORY_LIMIT), esté presente (PTE_PRESENT) y cuente con
  * permisos de usuario (PTE_USER). Si la cadena se extiende hacia una página no mapeada
@@ -141,9 +136,8 @@ ssize_t strnlen_user(const char* user_str, size_t max_len) {
     return -1; // Terminador NUL no encontrado dentro de max_len
 }
 
-/* Buffer acotado seguro en el kernel para transferencias de syscalls */
+/* Tamaño de chunk para transferencias acotadas en la pila de kernel */
 #define KERNEL_SYSCALL_BUF_SIZE 256
-static char kernel_safe_buf[KERNEL_SYSCALL_BUF_SIZE];
 
 /* Handler de Syscalls invocado por la interrupción 0x80 (Ring 3 -> Ring 0) */
 void syscall_dispatcher(struct registers* regs) {
@@ -151,13 +145,17 @@ void syscall_dispatcher(struct registers* regs) {
 
     switch (syscall_num) {
         case SYS_WRITE: {
-            // ABI de Syscall Zenthra OS (Auditoría v14/v15):
+            // ABI de Syscall Zenthra OS (Auditoría v14/v15/v16):
             //   EBX: const void* user_buf (puntero a búfer de usuario)
             //   ECX: size_t count (número exacto de bytes a transferir)
             // Retorno en EAX:
             //   count == 0  -> 0 (éxito nulo estándar POSIX)
             //   éxito       -> número de bytes transferidos/escritos (> 0)
             //   error       -> -EFAULT (-14 ante puntero nulo, páginas no mapeadas, sin PTE_USER o fuera de rango)
+            //
+            // Reentrancia y Concurrencia (Auditoría v16):
+            // Se utiliza un búfer local en la pila de kernel privada de la tarea actual ('kbuf_write'),
+            // eliminando colisiones y corrupción ante preempción o conmutación de contexto.
             const char* user_buf = (const char*)(uintptr_t)regs->ebx;
             size_t count = (size_t)regs->ecx;
 
@@ -178,20 +176,21 @@ void syscall_dispatcher(struct registers* regs) {
                 break;
             }
 
+            char kbuf_write[KERNEL_SYSCALL_BUF_SIZE];
             size_t total_written = 0;
             while (total_written < count) {
                 size_t chunk = count - total_written;
-                if (chunk > KERNEL_SYSCALL_BUF_SIZE) {
-                    chunk = KERNEL_SYSCALL_BUF_SIZE;
+                if (chunk > sizeof(kbuf_write)) {
+                    chunk = sizeof(kbuf_write);
                 }
 
-                if (copy_from_user(kernel_safe_buf, user_buf + total_written, chunk) != 0) {
+                if (copy_from_user(kbuf_write, user_buf + total_written, chunk) != 0) {
                     regs->eax = (total_written > 0) ? (uint32_t)total_written : (uint32_t)-EFAULT;
                     break;
                 }
 
                 for (size_t i = 0; i < chunk; i++) {
-                    vga_putc(kernel_safe_buf[i]);
+                    vga_putc(kbuf_write[i]);
                 }
                 total_written += chunk;
             }
@@ -201,33 +200,39 @@ void syscall_dispatcher(struct registers* regs) {
         }
 
         case SYS_READ: {
-            // ABI de Syscall Zenthra OS (Auditoría v15):
+            // ABI de Syscall Zenthra OS (Auditoría v15/v16):
             //   EBX: void* user_buf (puntero a búfer de destino en usuario)
-            //   ECX: size_t count (número de bytes a leer)
+            //   ECX: size_t count (número máximo de bytes solicitados)
             //   EDX: uint32_t flags (SYS_READ_NONBLOCK o SYS_READ_BLOCKING)
             // Retorno en EAX:
             //   count == 0  -> 0 (éxito nulo estándar POSIX)
-            //   error       -> -EFAULT (-14) ante puntero nulo, fuera de rango o sin PTE_WRITABLE
+            //   error       -> -EINVAL (-22) ante flags no reconocidos
+            //               -> -ENOSYS (-38) si se solicita SYS_READ_BLOCKING (bloqueo cooperativo/evento planificado para Fase 4)
+            //               -> -EFAULT (-14) ante puntero nulo, fuera de rango o sin PTE_WRITABLE en el rango transferido
             //               -> -EAGAIN (-11) si no hay datos en la cola de entrada (lectura interactiva no bloqueante)
-            //   éxito       -> número de bytes leídos (> 0)
+            //   éxito       -> número de bytes efectivamente leídos (> 0)
             void* user_buf = (void*)(uintptr_t)regs->ebx;
             size_t count = (size_t)regs->ecx;
+            uint32_t flags = (uint32_t)regs->edx;
+
+            if (flags & ~(SYS_READ_NONBLOCK | SYS_READ_BLOCKING)) {
+                regs->eax = (uint32_t)-EINVAL;
+                break;
+            }
+
+            if (flags & SYS_READ_BLOCKING) {
+                // Modo bloqueante planificado formalmente para la Fase 4 con IPC/despertar por eventos de terminal.
+                // Documentado con retorno explícito -ENOSYS.
+                regs->eax = (uint32_t)-ENOSYS;
+                break;
+            }
 
             if (count == 0) {
                 regs->eax = 0;
                 break;
             }
 
-            if (!user_buf || !is_user_pointer(user_buf, count)) {
-                regs->eax = (uint32_t)-EFAULT;
-                break;
-            }
-
-            // Validación crítica previa:
-            // Exigir que todas las páginas de destino estén presentes, pertenezcan a usuario
-            // y tengan permiso de escritura (write_intent = true) ANTES de extraer cualquier byte
-            // de la cola de entrada, garantizando que no se pierdan pulsaciones de teclas si el búfer es inválido.
-            if (!is_user_pages_accessible_failclosed(user_buf, count, true)) {
+            if (!user_buf || !is_user_pointer(user_buf, 1) || !is_user_pages_accessible_failclosed(user_buf, 1, true)) {
                 regs->eax = (uint32_t)-EFAULT;
                 break;
             }
@@ -237,27 +242,34 @@ void syscall_dispatcher(struct registers* regs) {
 
             // Comprobar si hay datos disponibles en la cola de teclado/terminal
             if (keyboard_queue_is_empty()) {
-                // En semántica interactiva no bloqueante, retornar -EAGAIN (-11), no 0 (0 es EOF en POSIX)
                 regs->eax = (uint32_t)-EAGAIN;
                 break;
             }
 
-            size_t to_read = count;
-            if (to_read > KERNEL_SYSCALL_BUF_SIZE) {
-                to_read = KERNEL_SYSCALL_BUF_SIZE;
-            }
+            // Alinear el rango a validar con los bytes que efectivamente se transferirán
             size_t q_len = keyboard_queue_length();
+            size_t to_read = count;
             if (to_read > q_len) {
                 to_read = q_len;
             }
+            if (to_read > KERNEL_SYSCALL_BUF_SIZE) {
+                to_read = KERNEL_SYSCALL_BUF_SIZE;
+            }
 
-            // Extraer de la cola al buffer intermedio seguro del kernel
+            // Validar espacio de usuario estrictamente para los 'to_read' bytes a escribir si to_read > 1
+            if (to_read > 1 && (!is_user_pointer(user_buf, to_read) || !is_user_pages_accessible_failclosed(user_buf, to_read, true))) {
+                regs->eax = (uint32_t)-EFAULT;
+                break;
+            }
+
+            // Búfer local en la pila de kernel privada de la tarea (reentrante y seguro frente a preempción)
+            char kbuf_read[KERNEL_SYSCALL_BUF_SIZE];
             for (size_t i = 0; i < to_read; i++) {
-                kernel_safe_buf[i] = keyboard_dequeue_char();
+                kbuf_read[i] = keyboard_dequeue_char();
             }
 
             // Copiar los datos leídos hacia el espacio de usuario
-            if (copy_to_user(user_buf, kernel_safe_buf, to_read) != 0) {
+            if (copy_to_user(user_buf, kbuf_read, to_read) != 0) {
                 regs->eax = (uint32_t)-EFAULT;
                 break;
             }
@@ -304,7 +316,6 @@ void syscall_dispatcher(struct registers* regs) {
                 uint16_t kernel_temp = 0;
                 bool ok = nova_iot_get_temp(&kernel_temp);
                 if (ok) {
-                    // Escribir el resultado a userland mediante copia validada
                     if (copy_to_user(user_out_ptr, &kernel_temp, sizeof(uint16_t)) == 0) {
                         regs->eax = 0;
                     } else {
@@ -326,6 +337,10 @@ void syscall_dispatcher(struct registers* regs) {
         }
 
         case SYS_SET_PROFILE: {
+            // Auditoría v16: Aislamiento estricto de perfiles.
+            // SYS_SET_PROFILE modifica EXCLUSIVAMENTE el perfil de la tarea llamadora ('cur->profile').
+            // NO modifica el perfil global de ACL ('acl_set_active_profile'), eliminando efectos
+            // colaterales entre tareas concurrentes y garantizando credenciales por proceso.
             uint32_t new_prof = regs->ebx;
             struct task* cur = task_get_current();
             enum nova_profile curr_prof = cur ? cur->profile : acl_get_active_profile();
@@ -338,7 +353,6 @@ void syscall_dispatcher(struct registers* regs) {
                 if (cur) {
                     cur->profile = (enum nova_profile)new_prof;
                 }
-                acl_set_active_profile((enum nova_profile)new_prof);
                 regs->eax = 0;
             } else {
                 regs->eax = (uint32_t)-EINVAL; // -22
@@ -359,7 +373,6 @@ extern void isr128(void);
 
 void syscall_init(void) {
     // Interrupción de software 0x80 (128 decimal) accesible desde Ring 3 (DPL=3 / 0xEE)
-    // Se utiliza el stub isr128 que construye el marco completo struct registers y retorna con IRET
 #if defined(__KERNEL__)
     idt_set_gate(0x80, (uint32_t)(uintptr_t)isr128, 0x08, 0xEE);
 #else

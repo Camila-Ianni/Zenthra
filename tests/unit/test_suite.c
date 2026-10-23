@@ -97,7 +97,7 @@ void test_klib_strings(void) {
 /* Test 2: Gestor de memoria dinámica kheap */
 void test_kheap_allocator(void) {
     printf("[*] Ejecutando: test_kheap_allocator...\n");
-    static uint8_t memory_pool[16384] __attribute__((aligned(16)));
+    static uint8_t memory_pool[65536] __attribute__((aligned(16)));
     kheap_init(memory_pool, sizeof(memory_pool));
 
     size_t initial_free = kheap_get_free();
@@ -518,6 +518,21 @@ void test_syscall_boundary_and_abi(void) {
     TEST_ASSERT(regs_acl.eax == 0, "SYS_SET_PROFILE cambia el perfil activo con permisos de administracion");
     TEST_ASSERT(task_get_current()->profile == PROFILE_STUDENT, "Perfil de proceso verificado tras SYS_SET_PROFILE");
 
+    // Auditoría v16: Aislamiento estricto de perfiles.
+    // Comprobar que SYS_SET_PROFILE de una tarea NO altera el perfil global de ACL
+    TEST_ASSERT(acl_get_active_profile() == PROFILE_IOT_HARDWARE,
+                "Aislamiento de perfiles: SYS_SET_PROFILE de una tarea no altera el perfil global del sistema");
+
+    // Probar aislamiento de credenciales creando una tarea concurrente con perfil Backend
+    int pid_iso = task_create_with_profile("task_iso_b", exiting_worker, PROFILE_BACKEND);
+    TEST_ASSERT(pid_iso > 0, "Creacion de tarea concurrente para prueba de aislamiento de perfil");
+    task_yield();
+    struct task* task_iso = task_get_current();
+    TEST_ASSERT(task_iso->profile == PROFILE_BACKEND, "Tarea concurrente conserva su perfil propio (Backend)");
+    TEST_ASSERT(acl_check_permission(task_iso->profile, OP_ARDUINO_WRITE) == false,
+                "Permisos de tarea concurrente estan estrictamente aislados de la tarea A");
+    task_exit(); // Limpieza: finaliza task_iso_b y conmuta de regreso a la tarea principal
+
     // Auditoría v14/v15: Semántica ABI de SYS_WRITE (buffer binario, count=0 POSIX y códigos errno estandarizados)
     char sample_user_buf[32] = "Userland Output Test";
     struct registers regs_w;
@@ -573,6 +588,22 @@ void test_syscall_boundary_and_abi(void) {
     syscall_dispatcher(&regs_r);
     TEST_ASSERT(regs_r.eax == (uint32_t)-EFAULT, "SYS_READ rechaza puntero NULL retornando -EFAULT (-14)");
 
+    // Auditoría v16: Validación de flags en SYS_READ
+    regs_r.eax = SYS_READ;
+    regs_r.ebx = (uintptr_t)bin_data;
+    regs_r.ecx = 1;
+    regs_r.edx = 0xAA550000; // Flags inválidos desconocidos
+    syscall_dispatcher(&regs_r);
+    TEST_ASSERT(regs_r.eax == (uint32_t)-EINVAL, "SYS_READ rechaza flags no reconocidos con -EINVAL (-22)");
+
+    regs_r.eax = SYS_READ;
+    regs_r.ebx = (uintptr_t)bin_data;
+    regs_r.ecx = 1;
+    regs_r.edx = SYS_READ_BLOCKING;
+    syscall_dispatcher(&regs_r);
+    TEST_ASSERT(regs_r.eax == (uint32_t)-ENOSYS, "SYS_READ_BLOCKING retorna -ENOSYS (-38) al no estar soportado aun");
+    regs_r.edx = SYS_READ_NONBLOCK;
+
     // Auditoría v15: SYS_READ con cola de teclado vacía en modo interactivo retorna -EAGAIN (-11)
     keyboard_queue_clear();
     char read_target[32];
@@ -582,6 +613,18 @@ void test_syscall_boundary_and_abi(void) {
     regs_r.ecx = 10;
     syscall_dispatcher(&regs_r);
     TEST_ASSERT(regs_r.eax == (uint32_t)-EAGAIN, "SYS_READ con cola vacia retorna -EAGAIN (-11) en lugar de 0 EOF");
+
+    // Auditoría v16: SYS_READ con count grande (> 256) lee exactamente los caracteres disponibles
+    keyboard_enqueue_char('O');
+    keyboard_enqueue_char('K');
+    char small_valid_target[16];
+    regs_r.eax = SYS_READ;
+    regs_r.ebx = (uintptr_t)small_valid_target;
+    regs_r.ecx = 1000; // count mayor a 256
+    regs_r.edx = SYS_READ_NONBLOCK;
+    syscall_dispatcher(&regs_r);
+    TEST_ASSERT(regs_r.eax == 2, "SYS_READ con count grande lee exactamente los 2 caracteres disponibles");
+    TEST_ASSERT(k_strncmp(small_valid_target, "OK", 2) == 0, "Contenido leido con count grande coincide exactamente");
 
     // Auditoría v15: Inyección en cola de teclado y lectura real vía SYS_READ
     keyboard_enqueue_char('Z');
@@ -1160,6 +1203,103 @@ void test_window_manager_and_desktop(void) {
     free(fb_mock);
 }
 
+/* Test 22: Driver de Teclado PS/2, Modificadores Shift/Caps Lock, Layouts y Telemetría (Auditoría v16) */
+void test_ps2_keyboard_driver(void) {
+    printf("[*] Ejecutando: test_ps2_keyboard_driver...\n");
+
+    keyboard_init();
+    TEST_ASSERT(keyboard_queue_is_empty() == true, "keyboard_init inicializa cola vacia");
+    TEST_ASSERT(keyboard_is_shift_active() == false, "Shift inactivo por defecto");
+    TEST_ASSERT(keyboard_is_caps_active() == false, "Caps Lock inactivo por defecto");
+    TEST_ASSERT(keyboard_get_layout() == KEYBOARD_LAYOUT_US, "Layout inicial es US");
+    TEST_ASSERT(keyboard_get_overflow_count() == 0, "Contador de overflow inicializado en 0");
+
+    // 1. Teclas normales sin Shift ni Caps (Scancode 0x10 = 'q', 0x1E = 'a')
+    keyboard_process_scancode(0x10);
+    TEST_ASSERT(keyboard_queue_length() == 1, "Procesamiento de scancode encola 1 caracter");
+    char c = keyboard_dequeue_char();
+    TEST_ASSERT(c == 'q', "Scancode 0x10 produce 'q' minuscula");
+
+    // 2. Tecla con Shift (Make 0x2A -> 'a' -> Break 0xAA)
+    keyboard_process_scancode(0x2A); // Left Shift Make
+    TEST_ASSERT(keyboard_is_shift_active() == true, "Left Shift make activa estado shift");
+    keyboard_process_scancode(0x1E); // 'a'
+    c = keyboard_dequeue_char();
+    TEST_ASSERT(c == 'A', "Con Shift activo, scancode 'a' produce 'A' mayuscula");
+
+    // Símbolo numérico con Shift en layout US (0x02 = '1' -> '!')
+    keyboard_process_scancode(0x02);
+    c = keyboard_dequeue_char();
+    TEST_ASSERT(c == '!', "Con Shift activo en US, '1' produce '!'");
+
+    keyboard_process_scancode(0xAA); // Left Shift Break
+    TEST_ASSERT(keyboard_is_shift_active() == false, "Left Shift break desactiva estado shift");
+
+    // 3. Caps Lock (Make 0x3A)
+    keyboard_process_scancode(0x3A);
+    TEST_ASSERT(keyboard_is_caps_active() == true, "Caps Lock make conmuta a activo");
+    keyboard_process_scancode(0x1E); // 'a' -> 'A'
+    c = keyboard_dequeue_char();
+    TEST_ASSERT(c == 'A', "Con Caps Lock activo, 'a' produce 'A'");
+
+    // Caps Lock NO debe alterar números o símbolos
+    keyboard_process_scancode(0x02); // '1'
+    c = keyboard_dequeue_char();
+    TEST_ASSERT(c == '1', "Caps Lock no afecta numeros (scancode '1' permanece '1')");
+
+    // XOR: Caps Lock activo + Shift presionado -> Letra minúscula
+    keyboard_process_scancode(0x36); // Right Shift Make
+    TEST_ASSERT(keyboard_is_shift_active() == true, "Right Shift make activa shift");
+    keyboard_process_scancode(0x1E); // 'a'
+    c = keyboard_dequeue_char();
+    TEST_ASSERT(c == 'a', "XOR: Caps Lock + Shift produce letra minuscula ('a')");
+    keyboard_process_scancode(0xB6); // Right Shift Break
+
+    // Desactivar Caps Lock
+    keyboard_process_scancode(0x3A);
+    TEST_ASSERT(keyboard_is_caps_active() == false, "Segundo Caps Lock conmuta a inactivo");
+
+    // 4. Conmutación a Layout Español (KEYBOARD_LAYOUT_ES)
+    keyboard_set_layout(KEYBOARD_LAYOUT_ES);
+    TEST_ASSERT(keyboard_get_layout() == KEYBOARD_LAYOUT_ES, "Conmutacion de layout a Espanol/LatAm exitosa");
+
+    keyboard_process_scancode(0x33); // En ES normal: ','
+    c = keyboard_dequeue_char();
+    TEST_ASSERT(c == ',', "Layout ES normal scancode 0x33 produce ','");
+
+    keyboard_process_scancode(0x2A); // Shift
+    keyboard_process_scancode(0x33); // En ES shift: ';'
+    c = keyboard_dequeue_char();
+    TEST_ASSERT(c == ';', "Layout ES con Shift scancode 0x33 produce ';'");
+    keyboard_process_scancode(0xAA); // Shift break
+
+    // Restaurar layout US
+    keyboard_set_layout(KEYBOARD_LAYOUT_US);
+
+    // 5. Telemetría y saturación de cola (overflow counter)
+    keyboard_queue_clear();
+    keyboard_reset_overflow_count();
+    TEST_ASSERT(keyboard_get_overflow_count() == 0, "keyboard_reset_overflow_count restablece contador a 0");
+
+    // Llenar exactamente la cola hasta KEYBOARD_QUEUE_CAPACITY (256)
+    for (size_t i = 0; i < KEYBOARD_QUEUE_CAPACITY; i++) {
+        bool enq = keyboard_enqueue_char('X');
+        TEST_ASSERT(enq == true, "Encolado exitoso dentro de capacidad");
+    }
+    TEST_ASSERT(keyboard_queue_length() == KEYBOARD_QUEUE_CAPACITY, "Cola al maximo de capacidad");
+    TEST_ASSERT(keyboard_get_overflow_count() == 0, "Sin overflow mientras no se exceda la capacidad");
+
+    // Intentar 5 inserciones adicionales que desborden la cola
+    for (int i = 0; i < 5; i++) {
+        bool enq = keyboard_enqueue_char('Z');
+        TEST_ASSERT(enq == false, "Encolado rechazado cuando la cola esta saturada");
+    }
+    TEST_ASSERT(keyboard_get_overflow_count() == 5, "keyboard_get_overflow_count registra exactamente los 5 desbordes");
+
+    keyboard_queue_clear();
+    keyboard_reset_overflow_count();
+}
+
 int main(void) {
     printf("====================================================\n");
     printf("    ZENTHRA OS — SUITE DE PRUEBAS AUTOMATIZADAS     \n");
@@ -1186,6 +1326,7 @@ int main(void) {
     test_gfx_2d_primitives_and_double_buffer();
     test_ps2_mouse_driver();
     test_window_manager_and_desktop();
+    test_ps2_keyboard_driver();
 
     printf("\n----------------------------------------------------\n");
     printf("Resultados: %d Aprobados | %d Fallidos\n", tests_passed, tests_failed);
@@ -1198,3 +1339,4 @@ int main(void) {
     printf("[+] Todas las pruebas pasaron satisfactoriamente.\n");
     return 0;
 }
+

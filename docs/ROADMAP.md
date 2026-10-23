@@ -1,7 +1,7 @@
-# Zenthra OS — Hoja de Ruta de Desarrollo (Roadmap v15)
+# Zenthra OS — Hoja de Ruta de Desarrollo (Roadmap v16)
 
 > **Plan Maestro de Evolución hacia un Sistema Operativo de PC**  
-> Formulado para el proyecto académico de grado de Camila Ianni (2026), estructurado con base en la **Auditoría Técnica v15**.
+> Formulado para el proyecto académico de grado de Camila Ianni (2026), estructurado con base en la **Auditoría Técnica v16**.
 
 ---
 
@@ -11,7 +11,8 @@
 flowchart TD
     F0["Fase 0: Congelar Base y Hashes Criptográficos"] --> F1["Fase 1: Arranque Confiable CI test-complete y boot-smoke"]
     F1 --> F2["Fase 2: SYS_READ Funcional, Fail-Closed, errno.h y VMM 64 MiB"]
-    F2 --> F3["Fase 3: Proceso Ring 3 Aislado y Cargador ELF"]
+    F2 --> F2B["Fase 2.5 (v16): Reentrancia, Aislamiento Perfiles, Teclado ES y Prototipo Jarvis"]
+    F2B --> F3["Fase 3: Proceso Ring 3 Aislado y Cargador ELF"]
     F3 --> F4["Fase 4: Userland Nativo (Terminal, Monitor, Editor)"]
     F4 --> F5["Fase 5: Persistencia en Disco Virtual (ATA/IDE y FS)"]
     F5 --> F6["Fase 6: GUI Usable y Validación Visual en Emulador"]
@@ -31,7 +32,7 @@ flowchart TD
 - [x] Criterio de salida: Manifiesto reproducible con SHA-256 de binarios ELF e ISO.
 
 ### Fase 1 — Arranque Confiable e Integración Continua (COMPLETADA EN CI)
-- [x] Flujo de compilación determinista y reproducible con `make clean`, `make check-env` y `make test` (251 tests).
+- [x] Flujo de compilación determinista y reproducible con `make clean`, `make check-env` y `make test` (416 tests).
 - [x] Validación estricta de cabecera con `grub-file --is-x86-multiboot` en CI (Ubuntu runner).
 - [x] Generación de ISO con `grub-mkrescue` y hash SHA-256 verificado en CI.
 - [x] Separación estricta de pruebas en QEMU:
@@ -41,17 +42,21 @@ flowchart TD
 - [ ] Reproducción local en hosts macOS/Windows (reportado de forma limpia como `[BLOCKED]` por herramientas de virtualización de host).
 
 ### Fase 2 — Entrada Real, Syscalls Seguras, Memoria Fail-Closed y errno.h (COMPLETADA)
-- [x] Implementación funcional de `SYS_READ` conectada a cola circular de teclado y terminal:
-  - Retorna bytes leídos si hay caracteres disponibles en la cola.
-  - En lectura interactiva no bloqueante sin datos listos, retorna `-EAGAIN` (-11) en lugar de `0` (el cual representa EOF en POSIX).
-  - Validación previa del búfer de usuario antes de extraer caracteres de la cola, garantizando que no se pierdan pulsaciones de teclas ante punteros inválidos.
-  - Salvaguarda contra saturación y desbordamiento de la cola de teclado (capacidad fija de 128 caracteres).
-- [x] Validación de memoria Fail-Closed en `is_user_pages_accessible_failclosed()`: si el directorio de páginas activo es nulo o inaccesible, se rechaza la llamada de usuario con `-EFAULT` sin recurrir al espacio del kernel por defecto.
-- [x] Centralización de códigos de error y ABI de syscalls en `kernel/include/errno.h` (`EPERM`, `EBADF`, `EAGAIN`, `ENOMEM`, `EACCES`, `EFAULT`, `EINVAL`, `ENOSYS`, `EOVERFLOW`).
-- [x] Aritmética de 64 bits en PMM a prueba de desbordamiento en redondeos superiores (`UINT64_MAX`) y reserva de regiones críticas.
-- [x] Unificación del Identity Mapping del kernel supervisor a 64 MiB (`KERNEL_IDENTITY_TABLES = 16`, `KERNEL_IDENTITY_MAP_SIZE = 64 MiB`).
+- [x] Implementación funcional de `SYS_READ` conectada a cola circular de teclado y terminal.
+- [x] Validación de memoria Fail-Closed en `is_user_pages_accessible_failclosed()`.
+- [x] Centralización de códigos de error y ABI de syscalls en `kernel/include/errno.h`.
+- [x] Aritmética de 64 bits en PMM a prueba de desbordamiento en redondeos superiores (`UINT64_MAX`).
+- [x] Unificación del Identity Mapping del kernel supervisor a 64 MiB.
 - [x] Inspección segura bloque por bloque en `strnlen_user()` exigiendo `PTE_PRESENT` y `PTE_USER`.
-- [x] Definición formal de la ABI de `SYS_WRITE` para buffers binarios (`count == 0` retorna 0 según POSIX, sin requerir terminador NUL).
+- [x] Definición formal de la ABI de `SYS_WRITE` para buffers binarios.
+
+### Fase 2.5 — Auditoría Técnica v16: Reentrancia, Aislamiento de Perfiles, Teclado ES y Prototipo Jarvis (COMPLETADA)
+- [x] **Aislamiento Estricto de Perfiles**: `SYS_SET_PROFILE` modifica exclusivamente `cur->profile` y no altera el perfil global de ACL (`acl_get_active_profile()`).
+- [x] **Reentrancia de Syscalls**: Eliminación del buffer estático global `kernel_safe_buf[256]`; asignación en la pila de kernel privada de cada tarea (`kbuf_write`, `kbuf_read`) para garantizar seguridad frente a preempción.
+- [x] **ABI de `SYS_READ` Completa**: Validación de flags en EDX (`SYS_READ_NONBLOCK`, `SYS_READ_BLOCKING` documentado con `-ENOSYS`, flags inválidos con `-EINVAL`), buffers acotados a `to_read` bytes con validación de punteros fail-closed.
+- [x] **Driver de Teclado PS/2 Ampliado**: Modificadores Shift make/break, Caps Lock con inversión XOR de glifos, tablas completas US y Español/LatAm (`KEYBOARD_LAYOUT_ES`), y telemetría de eventos de saturación (`keyboard_get_overflow_count`).
+- [x] **Prototipo Independiente de Escritorio & Jarvis Multi-Agente (`desktop_prototype/`)**: Glassmorphism auténtico, Dock flotante, Terminal gráfica, panel interactivo de Jarvis con planes por pasos, modal de confirmación crítica, centro de 6 agentes (Backend, Ciberseguridad, Kernel/OS, Datos, Creativo/UI, Automatización), arquitectura Gateway híbrida sin secretos hardcodeados y etiquetas `[DEMO]`.
+- [x] **Suite de Pruebas Unitarias**: Ampliada a **416 pruebas automatizadas aprobadas (0 fallos, 0 warnings)**.
 
 ### Fase 3 — Proceso Ring 3 y Cargador ELF i386 (PRÓXIMO OBJETIVO)
 - [ ] Definición formal de la ABI de llamadas al sistema (Syscalls) para Ring 3 (convenciones, estructuras y códigos de error).
