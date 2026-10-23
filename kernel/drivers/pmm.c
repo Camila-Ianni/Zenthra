@@ -175,12 +175,19 @@ void pmm_init(uint32_t magic, uintptr_t mbi_addr) {
             pmm_mark_region_used(mbi->mmap_addr, mbi->mmap_length);
         }
         if ((mbi->flags & (1 << 3)) && mbi->mods_count > 0 && mbi->mods_addr != 0) {
-            pmm_mark_region_used(mbi->mods_addr, mbi->mods_count * sizeof(struct multiboot_mod_list));
-            struct multiboot_mod_list* mods = (struct multiboot_mod_list*)mbi->mods_addr;
+            pmm_mark_region_used((uintptr_t)mbi->mods_addr, mbi->mods_count * sizeof(struct multiboot_mod_list));
+            struct multiboot_mod_list* mods = (struct multiboot_mod_list*)(uintptr_t)mbi->mods_addr;
             for (uint32_t m = 0; m < mbi->mods_count; m++) {
                 if (mods[m].mod_end > mods[m].mod_start) {
                     pmm_mark_region_used(mods[m].mod_start, mods[m].mod_end - mods[m].mod_start);
                 }
+            }
+        }
+        if ((mbi->flags & MULTIBOOT_INFO_FRAMEBUFFER_INFO) && mbi->framebuffer_addr != 0) {
+            uint64_t fb_addr = mbi->framebuffer_addr;
+            uint64_t fb_size = (uint64_t)mbi->framebuffer_pitch * (uint64_t)mbi->framebuffer_height;
+            if (fb_addr < (uint64_t)total_memory_bytes && fb_size > 0) {
+                pmm_mark_region_used((uintptr_t)fb_addr, (size_t)fb_size);
             }
         }
     }
@@ -218,6 +225,39 @@ uintptr_t pmm_alloc_frame(void) {
         }
     }
     return 0; // Sin memoria física disponible
+}
+
+uintptr_t pmm_alloc_frame_below(uintptr_t max_limit) {
+    size_t max_frames = max_limit / PAGE_SIZE;
+    if (max_frames > total_frames) max_frames = total_frames;
+
+    for (size_t i = 0; i < (max_frames + 31) / 32; i++) {
+        if (pmm_bitmap[i] != 0xFFFFFFFF) {
+            for (size_t b = 0; b < 32; b++) {
+                if (!(pmm_bitmap[i] & (1U << b))) {
+                    size_t frame = i * 32 + b;
+                    if (frame < max_frames) {
+                        set_bit(frame);
+                        return (uintptr_t)(frame * PAGE_SIZE);
+                    }
+                }
+            }
+        }
+    }
+    return 0; // Sin memoria física disponible bajo el límite
+}
+
+bool pmm_is_region_reserved(uintptr_t base, size_t length) {
+    if (length == 0) return true;
+    size_t start_frame = base / PAGE_SIZE;
+    size_t end_frame = (base + length + PAGE_SIZE - 1) / PAGE_SIZE;
+
+    for (size_t frame = start_frame; frame < end_frame && frame < total_frames; frame++) {
+        if (!test_bit(frame)) {
+            return false;
+        }
+    }
+    return true;
 }
 
 void pmm_free_frame(uintptr_t frame_addr) {

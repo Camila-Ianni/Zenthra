@@ -24,6 +24,12 @@ void pmm_mark_region_used(uintptr_t base, size_t length);
 /* Marcar un rango de direcciones físicas como disponible */
 void pmm_mark_region_free(uintptr_t base, size_t length);
 
+/* Asignar un marco físico libre por debajo de un límite dado (para tablas de páginas accesibles) */
+uintptr_t pmm_alloc_frame_below(uintptr_t max_limit);
+
+/* Comprobar si una región completa está marcada como reservada/ocupada */
+bool pmm_is_region_reserved(uintptr_t base, size_t length);
+
 /* Métricas del administrador de memoria física */
 size_t pmm_get_total_frames(void);
 size_t pmm_get_free_frames(void);

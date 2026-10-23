@@ -20,17 +20,15 @@ static void* host_user_tables[ENTRIES_PER_PAGE_DIR];
 
 static inline struct page_table* vmm_get_pt(struct page_directory* pd, size_t pde_idx) {
 #if defined(__KERNEL__)
-    (void)pd;
-    uintptr_t pt_phys = pd->entries[pde_idx] & PDE_FRAME_MASK;
-    // Si la tabla de páginas está dentro del Identity Mapping (primeros 64 MiB), su puntero físico es virtualmente válido
-    if (pt_phys < KERNEL_IDENTITY_LIMIT) {
-        return (struct page_table*)pt_phys;
-    }
-    // Fallback de seguridad para tablas del kernel
     if (pde_idx < KERNEL_IDENTITY_TABLES) {
         return &kernel_pts[pde_idx];
     }
-    return (struct page_table*)pt_phys;
+    uintptr_t pt_phys = pd->entries[pde_idx] & PDE_FRAME_MASK;
+    // Si la tabla de páginas está dentro del Identity Mapping (primeros 64 MiB), su puntero físico es directamente accesible
+    if (pt_phys != 0 && pt_phys < KERNEL_IDENTITY_LIMIT) {
+        return (struct page_table*)pt_phys;
+    }
+    return NULL; // Tabla fuera de la ventana directamente mapeada: acceso no seguro
 #else
     (void)pd;
     if (pde_idx < KERNEL_IDENTITY_TABLES) {
@@ -84,17 +82,17 @@ int vmm_map_page(struct page_directory* pd, uintptr_t virt_addr, uintptr_t phys_
     size_t pde_idx = (virt_addr >> 22) & 0x3FF;
     size_t pte_idx = (virt_addr >> 12) & 0x3FF;
 
-    // Proteger estrictamente los primeros 16 MiB: denegar mapeos de usuario (PTE_USER) en el espacio del kernel
+    // Proteger estrictamente los primeros 64 MiB: denegar mapeos de usuario (PTE_USER) en el espacio del kernel
     if ((flags & PTE_USER) && pde_idx < KERNEL_IDENTITY_TABLES) {
         return -1; // Acceso denegado: el espacio del kernel no admite páginas de usuario
     }
 
-    // Si la tabla de páginas no existe en el directorio, asignar un nuevo marco físico
+    // Si la tabla de páginas no existe en el directorio, asignar un nuevo marco físico garantizado en memoria accesible (< KERNEL_IDENTITY_LIMIT)
     if (!(pd->entries[pde_idx] & PDE_PRESENT)) {
 #if defined(__KERNEL__)
-        uintptr_t pt_frame = pmm_alloc_frame();
+        uintptr_t pt_frame = pmm_alloc_frame_below(KERNEL_IDENTITY_LIMIT);
         if (pt_frame == 0) {
-            return -1; // Fallo de memoria física (OOM)
+            return -1; // Fallo de memoria física (OOM en memoria baja)
         }
         struct page_table* new_pt = (struct page_table*)pt_frame;
 #else
@@ -123,6 +121,16 @@ int vmm_map_page(struct page_directory* pd, uintptr_t virt_addr, uintptr_t phys_
 
     struct page_table* pt = vmm_get_pt(pd, pde_idx);
     if (!pt) return -1;
+
+    // Política explícita de ownership y reemplazo de PTE (Auditoría v10):
+    // Si la página ya está presente con un marco físico DIFERENTE, rechazar el reemplazo para evitar desalineación/fugas
+    if (pt->entries[pte_idx] & PTE_PRESENT) {
+        uintptr_t existing_frame = pt->entries[pte_idx] & PTE_FRAME_MASK;
+        if (existing_frame != (phys_addr & PTE_FRAME_MASK)) {
+            return -1; // Conflicto de mapeo: la dirección virtual ya está asociada a otro marco físico
+        }
+    }
+
     pt->entries[pte_idx] = (phys_addr & PTE_FRAME_MASK) | (flags & 0xFFF) | PTE_PRESENT;
 
     if (paging_enabled && pd == current_pdir) {
@@ -135,9 +143,20 @@ int vmm_map_page(struct page_directory* pd, uintptr_t virt_addr, uintptr_t phys_
 int vmm_map_range(struct page_directory* pd, uintptr_t virt_start, uintptr_t phys_start, size_t size, uint32_t flags) {
     if (!pd || size == 0) return -1;
 
-    uintptr_t v = virt_start & PTE_FRAME_MASK;
-    uintptr_t p = phys_start & PTE_FRAME_MASK;
-    size_t aligned_size = (size + PAGE_SIZE - 1) & PTE_FRAME_MASK;
+    uint64_t v_end = (uint64_t)virt_start + (uint64_t)size;
+    uint64_t p_end = (uint64_t)phys_start + (uint64_t)size;
+    if (v_end < (uint64_t)virt_start || v_end > 0x100000000ULL) return -1;
+    if (p_end < (uint64_t)phys_start || p_end > 0x100000000ULL) return -1;
+
+    uint64_t v_page_start = (uint64_t)(virt_start & PTE_FRAME_MASK);
+    uint64_t p_page_start = (uint64_t)(phys_start & PTE_FRAME_MASK);
+    uint64_t v_page_end = (v_end + PAGE_SIZE - 1) & ~(uint64_t)(PAGE_SIZE - 1);
+    uint64_t p_page_end = (p_end + PAGE_SIZE - 1) & ~(uint64_t)(PAGE_SIZE - 1);
+    if (v_page_end > 0x100000000ULL || p_page_end > 0x100000000ULL) return -1;
+
+    size_t aligned_size = (size_t)(v_page_end - v_page_start);
+    uintptr_t v = (uintptr_t)v_page_start;
+    uintptr_t p = (uintptr_t)p_page_start;
 
     for (size_t offset = 0; offset < aligned_size; offset += PAGE_SIZE) {
         int res = vmm_map_page(pd, v + offset, p + offset, flags);
@@ -149,21 +168,32 @@ int vmm_map_range(struct page_directory* pd, uintptr_t virt_start, uintptr_t phy
 int vmm_map_physical_range(struct page_directory* pd, uint64_t phys_addr, size_t size, uint32_t flags, uintptr_t* out_virt_addr) {
     if (!pd || size == 0 || !out_virt_addr) return -1;
 
-    // Validación estricta contra overflow y límites de arquitectura de 32 bits (i686)
-    if (phys_addr + (uint64_t)size < phys_addr || phys_addr + (uint64_t)size > 0x100000000ULL) {
+    // Validación estricta en aritmética de 64 bits contra overflow y límites de arquitectura de 32 bits (i686)
+    uint64_t phys_end = phys_addr + (uint64_t)size;
+    if (phys_end < phys_addr || phys_end > 0x100000000ULL) {
         return -1; // Dirección física fuera del espacio direccionable de 32 bits
     }
 
-    uintptr_t p_addr = (uintptr_t)phys_addr;
-    uintptr_t page_offset = p_addr & (PAGE_SIZE - 1);
-    uintptr_t phys_page_start = p_addr & PTE_FRAME_MASK;
-    size_t total_span = (size_t)((p_addr + size + PAGE_SIZE - 1) - phys_page_start);
+    uint64_t phys_page_start = phys_addr & ~(uint64_t)(PAGE_SIZE - 1);
+    uint64_t phys_page_end = (phys_end + PAGE_SIZE - 1) & ~(uint64_t)(PAGE_SIZE - 1);
+    if (phys_page_end < phys_end || phys_page_end > 0x100000000ULL) {
+        return -1;
+    }
+
+    uint64_t total_span_64 = phys_page_end - phys_page_start;
+    if (total_span_64 > 0xFFFFFFFFULL || total_span_64 == 0) {
+        return -1;
+    }
+
+    uintptr_t p_page_start = (uintptr_t)phys_page_start;
+    uintptr_t page_offset = (uintptr_t)(phys_addr & (PAGE_SIZE - 1));
+    size_t total_span = (size_t)total_span_64;
 
     // Mapear identity la región física en el espacio virtual del kernel
-    int res = vmm_map_range(pd, phys_page_start, phys_page_start, total_span, flags);
+    int res = vmm_map_range(pd, p_page_start, p_page_start, total_span, flags);
     if (res != 0) return res;
 
-    *out_virt_addr = phys_page_start + page_offset;
+    *out_virt_addr = p_page_start + page_offset;
     return 0;
 }
 
@@ -209,7 +239,7 @@ bool vmm_is_mapped(struct page_directory* pd, uintptr_t virt_addr) {
 
 struct page_directory* vmm_create_process_directory(void) {
 #if defined(__KERNEL__)
-    uintptr_t pd_frame = pmm_alloc_frame();
+    uintptr_t pd_frame = pmm_alloc_frame_below(KERNEL_IDENTITY_LIMIT);
     if (pd_frame == 0) return NULL;
     struct page_directory* new_pd = (struct page_directory*)pd_frame;
 #else
@@ -219,7 +249,7 @@ struct page_directory* vmm_create_process_directory(void) {
 #endif
     k_memset(new_pd, 0, sizeof(struct page_directory));
 
-    // Clonar las entradas maestras del kernel (primeros 16 MiB) para preservar handlers, IDT y kernel
+    // Clonar las entradas maestras del kernel (primeros 64 MiB) para preservar handlers, IDT y kernel
     for (size_t i = 0; i < KERNEL_IDENTITY_TABLES; i++) {
         new_pd->entries[i] = kernel_pdir.entries[i];
     }
@@ -230,7 +260,11 @@ struct page_directory* vmm_create_process_directory(void) {
 void vmm_destroy_process_directory(struct page_directory* pd) {
     if (!pd || pd == &kernel_pdir) return;
 
-    // Liberar marcos de usuario y tablas de páginas asignadas en el espacio privado (índices 4 a 1023)
+#if defined(__KERNEL__)
+    size_t ram_bytes = pmm_get_total_memory_kib() * 1024;
+#endif
+
+    // Liberar marcos de usuario y tablas de páginas asignadas en el espacio privado (índices 16 a 1023)
     for (size_t i = KERNEL_IDENTITY_TABLES; i < ENTRIES_PER_PAGE_DIR; i++) {
         if (pd->entries[i] & PDE_PRESENT) {
             struct page_table* pt = vmm_get_pt(pd, i);
@@ -239,7 +273,10 @@ void vmm_destroy_process_directory(struct page_directory* pd) {
                     if ((pt->entries[pte_idx] & PTE_PRESENT) && (pt->entries[pte_idx] & PTE_USER)) {
 #if defined(__KERNEL__)
                         uintptr_t page_frame = pt->entries[pte_idx] & PTE_FRAME_MASK;
-                        pmm_free_frame(page_frame);
+                        // Solo liberar si pertenece a la RAM administrada por PMM y no es MMIO externo
+                        if (page_frame < ram_bytes && pmm_is_frame_allocated(page_frame)) {
+                            pmm_free_frame(page_frame);
+                        }
 #endif
                         pt->entries[pte_idx] = 0;
                     }
@@ -248,7 +285,9 @@ void vmm_destroy_process_directory(struct page_directory* pd) {
 
 #if defined(__KERNEL__)
             uintptr_t pt_frame = pd->entries[i] & PDE_FRAME_MASK;
-            pmm_free_frame(pt_frame);
+            if (pt_frame < ram_bytes && pmm_is_frame_allocated(pt_frame)) {
+                pmm_free_frame(pt_frame);
+            }
 #else
             if (host_user_tables[i]) {
                 free(host_user_tables[i]);
@@ -259,7 +298,10 @@ void vmm_destroy_process_directory(struct page_directory* pd) {
     }
 
 #if defined(__KERNEL__)
-    pmm_free_frame((uintptr_t)pd);
+    uintptr_t pd_frame = (uintptr_t)pd;
+    if (pd_frame < ram_bytes && pmm_is_frame_allocated(pd_frame)) {
+        pmm_free_frame(pd_frame);
+    }
 #else
     free(pd);
 #endif

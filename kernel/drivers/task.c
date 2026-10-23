@@ -4,6 +4,7 @@
 #include "vga.h"
 #include "gdt.h"
 #include "acl_security.h"
+#include "serial.h"
 
 #if defined(__KERNEL__)
 extern void switch_context(uint32_t* old_esp_ptr, uint32_t new_esp);
@@ -21,15 +22,38 @@ static int current_task_idx = 0;
 static uint32_t next_task_id = 1;
 static uint8_t main_task_stack[TASK_STACK_SIZE];
 static bool preemption_enabled = true;
-static int scheduler_lock_count = 0;
+#if defined(__KERNEL__) && (defined(__i386__) || defined(__x86_64__))
+static inline uint32_t irq_save(void) {
+    uint32_t eflags;
+    __asm__ volatile ("pushfl; popl %0; cli" : "=r"(eflags) : : "memory");
+    return eflags;
+}
+
+static inline void irq_restore(uint32_t eflags) {
+    __asm__ volatile ("pushl %0; popfl" : : "r"(eflags) : "memory");
+}
+#else
+static inline uint32_t irq_save(void) { return 0; }
+static inline void irq_restore(uint32_t eflags) { (void)eflags; }
+#endif
+
+static volatile int scheduler_lock_count = 0;
+static volatile uint32_t saved_eflags = 0;
 
 void scheduler_lock(void) {
+    uint32_t flags = irq_save();
+    if (scheduler_lock_count == 0) {
+        saved_eflags = flags;
+    }
     scheduler_lock_count++;
 }
 
 void scheduler_unlock(void) {
     if (scheduler_lock_count > 0) {
         scheduler_lock_count--;
+        if (scheduler_lock_count == 0) {
+            irq_restore(saved_eflags);
+        }
     }
 }
 
@@ -119,14 +143,18 @@ static size_t zombie_stack_count = 0;
 
 static void enqueue_zombie_stack(uint8_t* stack) {
     if (!stack) return;
+
+    // Evitar duplicados en la cola
+    for (size_t i = 0; i < zombie_stack_count; i++) {
+        if (zombie_stacks[i] == stack) return;
+    }
+
     if (zombie_stack_count < MAX_ZOMBIE_STACKS) {
         zombie_stacks[zombie_stack_count++] = stack;
     } else {
-        kfree(zombie_stacks[0]);
-        for (size_t i = 1; i < MAX_ZOMBIE_STACKS; i++) {
-            zombie_stacks[i - 1] = zombie_stacks[i];
-        }
-        zombie_stacks[MAX_ZOMBIE_STACKS - 1] = stack;
+        // En lugar de liberar ciegamente el elemento 0 (que podria estar en uso por la CPU),
+        // se rechaza la insercion para preservar la integridad de la memoria
+        serial_write_string("[SCHEDULER] Advertencia: Cola zombie llena. Evitando descarte inseguro.\r\n");
     }
 }
 

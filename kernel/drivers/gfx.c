@@ -27,9 +27,9 @@ bool gfx_init(uint32_t magic, uintptr_t mbi_addr) {
         return false;
     }
 
-    // Comprobar que la dirección física del Framebuffer sea direccionable en arquitectura de 32 bits (i686)
-    if (mbi->framebuffer_addr > 0xFFFFFFFFULL) {
-        serial_write_string("[GFX] Framebuffer fisico por encima de 4 GiB no soportado en i686. Modo VGA activo.\r\n");
+    // Comprobar que la dirección física del Framebuffer sea válida y direccionable en 32 bits (i686)
+    if (mbi->framebuffer_addr == 0 || mbi->framebuffer_addr > 0xFFFFFFFFULL) {
+        serial_write_string("[GFX] Direccion de Framebuffer invalida o > 4 GiB no soportada en i686. Modo VGA activo.\r\n");
         return false;
     }
 
@@ -59,6 +59,13 @@ bool gfx_init(uint32_t magic, uintptr_t mbi_addr) {
     uint64_t total_size = (uint64_t)current_fb.height * (uint64_t)current_fb.pitch;
     if (total_size == 0 || total_size > 32 * 1024 * 1024) { // Límite de seguridad: 32 MiB
         serial_write_string("[GFX] Tamano de buffer excede limites seguros de memoria.\r\n");
+        return false;
+    }
+
+    // Validar que el rango completo físico no desborde el límite de 4 GiB
+    if (mbi->framebuffer_addr + total_size < mbi->framebuffer_addr || 
+        mbi->framebuffer_addr + total_size > 0x100000000ULL) {
+        serial_write_string("[GFX] Rango fisico de Framebuffer desborda espacio de 32 bits.\r\n");
         return false;
     }
     size_t buffer_size = (size_t)total_size;

@@ -559,7 +559,34 @@ void test_physical_memory_manager(void) {
     uintptr_t f3 = pmm_alloc_frame();
     TEST_ASSERT(f3 == f1, "PMM recicla el marco recientemente liberado en el bitmap");
 
+    // Verificación estricta de Regiones Reservadas (Auditoría v10):
+    // El primer megabyte (0x00000000 - 0x00100000: IVT, BDA, VGA, BIOS) debe estar 100% reservado
+    TEST_ASSERT(pmm_is_region_reserved(0x00000000, 0x00100000) == true, "Primer megabyte (0x00000000 - 0x00100000) esta completamente reservado");
+    // El heap del kernel (0x00400000 - 0x00600000: 2 MiB) debe estar 100% reservado
+    TEST_ASSERT(pmm_is_region_reserved(0x00400000, 2 * 1024 * 1024) == true, "Heap del kernel (0x00400000 - 0x00600000: 2 MiB) esta completamente reservado");
+
+    // Asignación con límite superior (pmm_alloc_frame_below, requerido para tablas de páginas en identity map)
+    uintptr_t low_frame = pmm_alloc_frame_below(0x04000000); // < 64 MiB
+    TEST_ASSERT(low_frame != 0, "pmm_alloc_frame_below asigna un marco fisico");
+    TEST_ASSERT(low_frame < 0x04000000, "El marco asignado se encuentra estrictamente dentro del limite de 64 MiB");
+
+    // Verificación de no-invasión: asignar múltiples marcos y verificar que ninguno invada el 1 MiB inferior ni el Heap
+    bool no_invaded = true;
+    uintptr_t sample_frames[16];
+    for (int s = 0; s < 16; s++) {
+        sample_frames[s] = pmm_alloc_frame();
+        if (sample_frames[s] < 0x00100000 || 
+            (sample_frames[s] >= 0x00400000 && sample_frames[s] < 0x00600000)) {
+            no_invaded = false;
+        }
+    }
+    TEST_ASSERT(no_invaded == true, "Ningun marco asignado por PMM invade el megabyte inferior ni el Heap reservado");
+
     // Limpieza
+    for (int s = 0; s < 16; s++) {
+        pmm_free_frame(sample_frames[s]);
+    }
+    pmm_free_frame(low_frame);
     pmm_free_frame(f2);
     pmm_free_frame(f3);
 }
@@ -604,9 +631,19 @@ void test_virtual_memory_paging(void) {
     TEST_ASSERT(vmm_is_mapped(pdir, proc_virt) == true, "Pagina privada mapeada en directorio de proceso");
     TEST_ASSERT(vmm_is_mapped(kdir, proc_virt) == false, "Aislamiento estricto: la pagina privada NO existe en el kernel");
 
-    // Seguridad: rechazar páginas de usuario (PTE_USER) en el espacio reservado del kernel (< 16 MiB)
+    // Política de ownership y reemplazo de PTE (Auditoría v10):
+    // Mapear la misma página con flags actualizados debe tener éxito
+    int same_map = vmm_map_page(pdir, proc_virt, phys_target, PTE_PRESENT | PTE_USER);
+    TEST_ASSERT(same_map == 0, "vmm_map_page permite actualizar flags en pagina ya asociada al mismo marco fisico");
+
+    // Intentar asociar la misma direccion virtual a un marco fisico DIFERENTE sin desmapear debe ser rechazado
+    uintptr_t other_frame = 0x70000000;
+    int conflict_map = vmm_map_page(pdir, proc_virt, other_frame, PTE_PRESENT | PTE_USER);
+    TEST_ASSERT(conflict_map == -1, "vmm_map_page rechaza reemplazo conflictivo de marco fisico sin desmapeo previo");
+
+    // Seguridad: rechazar páginas de usuario (PTE_USER) en el espacio reservado del kernel (< 64 MiB)
     int intrusion_res = vmm_map_page(pdir, 0x000B8000, phys_target, PTE_PRESENT | PTE_USER);
-    TEST_ASSERT(intrusion_res == -1, "VMM rechaza mapeo de usuario (PTE_USER) en el espacio del kernel (< 16 MiB)");
+    TEST_ASSERT(intrusion_res == -1, "VMM rechaza mapeo de usuario (PTE_USER) en el espacio del kernel (< 64 MiB)");
 
     // Mapeo contiguo de rangos (vmm_map_range, requerido para Framebuffer / MMIO)
     uintptr_t range_virt = 0x50000000;
@@ -615,20 +652,29 @@ void test_virtual_memory_paging(void) {
     TEST_ASSERT(range_res == 0, "vmm_map_range mapea rango contiguo de 16 KiB (4 paginas) exitosamente");
     TEST_ASSERT(vmm_virt_to_phys(pdir, range_virt + 8192) == range_phys + 8192, "Traduccion virtual a fisica en medio del rango mapeado");
 
-    // Prueba de vmm_map_physical_range con offset intra-pagina y validaciones 64-bit (Auditoria v9)
-    void* virt_mapped = NULL;
+    // Prueba de vmm_map_physical_range con offset intra-pagina y validaciones 64-bit (Auditoria v9/v10)
+    uintptr_t virt_mapped = 0;
     int map_res = vmm_map_physical_range(pdir, 0xE0000120ULL, 8000, PTE_PRESENT | PTE_WRITABLE, &virt_mapped);
     TEST_ASSERT(map_res == 0, "vmm_map_physical_range mapea exitosamente rango fisico con offset intra-pagina");
-    TEST_ASSERT(((uintptr_t)virt_mapped & 0xFFF) == 0x120, "Puntero virtual retornado preserva el desplazamiento intra-pagina (0x120)");
-    TEST_ASSERT(vmm_virt_to_phys(pdir, (uintptr_t)virt_mapped) == 0xE0000120, "Traduccion virtual a fisica del puntero mapeado coincide exactamente");
+    TEST_ASSERT((virt_mapped & 0xFFF) == 0x120, "Puntero virtual retornado preserva el desplazamiento intra-pagina (0x120)");
+    TEST_ASSERT(vmm_virt_to_phys(pdir, virt_mapped) == 0xE0000120, "Traduccion virtual a fisica del puntero mapeado coincide exactamente");
 
     // Rechazo de direcciones por encima del espacio de 32 bits (4 GiB)
-    void* invalid_ptr = NULL;
+    uintptr_t invalid_ptr = 0;
     int ovf_res = vmm_map_physical_range(pdir, 0x100000000ULL, 4096, PTE_PRESENT | PTE_WRITABLE, &invalid_ptr);
     TEST_ASSERT(ovf_res == -1, "vmm_map_physical_range rechaza direcciones fisicas >= 4 GiB en arquitectura de 32 bits");
 
     int ovf_len = vmm_map_physical_range(pdir, 0xFFFFF000ULL, 8192, PTE_PRESENT | PTE_WRITABLE, &invalid_ptr);
     TEST_ASSERT(ovf_len == -1, "vmm_map_physical_range rechaza rangos que desbordan el limite de 32 bits");
+
+    // Probar rango que termina exactamente en 4 GiB (0xFFFFF000 + 4096 = 0x100000000)
+    uintptr_t edge_ptr = 0;
+    int edge_4gb = vmm_map_physical_range(pdir, 0xFFFFF000ULL, 4096, PTE_PRESENT | PTE_WRITABLE, &edge_ptr);
+    TEST_ASSERT(edge_4gb == 0, "vmm_map_physical_range maneja con precision el rango que finaliza exactamente en el limite de 4 GiB");
+
+    // Probar rango que cruza o excede 4 GiB tras alineacion de pagina (0xFFFFF800 + 4096 = 0x100000800 > 4 GiB)
+    int cross_4gb = vmm_map_physical_range(pdir, 0xFFFFF800ULL, 4096, PTE_PRESENT | PTE_WRITABLE, &invalid_ptr);
+    TEST_ASSERT(cross_4gb == -1, "vmm_map_physical_range rechaza rango no alineado cuyo final sobrepasa 4 GiB");
 
     // Destrucción de directorio de proceso
     vmm_destroy_process_directory(pdir);
