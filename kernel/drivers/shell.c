@@ -59,12 +59,12 @@ void shell_init(void) {
     line_len = 0;
     line_buf[0] = '\0';
     vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK));
-    kprintf("nova [%s]# ", profile_names[current_profile]);
+    kprintf("zenthra [%s]# ", profile_names[current_profile]);
 }
 
 static void show_profiles_list(void) {
     vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
-    kprintf("Perfiles de Usuario configurados en NOVA OS (0 a 10):\n");
+    kprintf("Perfiles de Usuario configurados en Zenthra OS (0 a 10):\n");
     for (int i = 0; i < PROFILE_COUNT; i++) {
         const char* mark = (i == (int)current_profile) ? "[ACTIVO]" : "        ";
         kprintf("  %s %2d. %-15s - %s\n", mark, i, profile_names[i], profile_descriptions[i]);
@@ -75,7 +75,7 @@ static void show_profiles_list(void) {
 void shell_execute(const char* cmd) {
     if (k_strcmp(cmd, "help") == 0) {
         vga_set_color(vga_entry_color(VGA_COLOR_YELLOW, VGA_COLOR_BLACK));
-        kprintf("Comandos disponibles en NOVA OS:\n");
+        kprintf("Comandos disponibles en Zenthra OS:\n");
         kprintf("  help                 - Muestra este menu de ayuda\n");
         kprintf("  clear                - Limpia la pantalla de la consola\n");
         kprintf("  info                 - Informacion y version del sistema operativo\n");
@@ -86,7 +86,7 @@ void shell_execute(const char* cmd) {
         kprintf("  cat <archivo>        - Muestra el contenido de un archivo de texto\n");
         kprintf("  profiles             - Lista los 11 perfiles de usuario disponibles\n");
         kprintf("  profile <0-10>       - Activa un perfil y auto-descarga sus herramientas\n");
-        kprintf("  store search         - Muestra el catalogo completo de NOVA Store\n");
+        kprintf("  store search         - Muestra el catalogo completo de Zenthra Store\n");
         kprintf("  store list           - Muestra las aplicaciones instaladas\n");
         kprintf("  store rec            - Recomienda aplicaciones segun tu perfil activo\n");
         kprintf("  store install <id>   - Instala una aplicacion del catalogo\n");
@@ -105,7 +105,7 @@ void shell_execute(const char* cmd) {
         vga_clear();
     } else if (k_strcmp(cmd, "info") == 0) {
         vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
-        kprintf("NOVA OS v0.1 (Experimental Academic Edition - Octubre 2026)\n");
+        kprintf("Zenthra OS v0.1 (Experimental Academic Edition - Octubre 2026)\n");
         kprintf("Arquitectura: x86_32 Modo Protegido (Ring 0 / Ring 3)\n");
         kprintf("Seguridad: Principio de Minimo Privilegio (ACL por perfil)\n");
         kprintf("Multitarea: Planificador Round-Robin / Tareas Cooperativas\n");
@@ -367,7 +367,7 @@ void shell_step(void) {
         shell_execute(line_buf);
         line_len = 0;
         vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK));
-        kprintf("nova [%s]# ", profile_names[current_profile]);
+        kprintf("zenthra [%s]# ", profile_names[current_profile]);
     } else if (c == '\b') {
         if (line_len > 0) {
             line_len--;

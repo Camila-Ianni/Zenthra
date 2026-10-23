@@ -403,7 +403,7 @@ void test_multiboot_and_power(void) {
 
 int main(void) {
     printf("====================================================\n");
-    printf("      NOVA OS — SUITE DE PRUEBAS AUTOMATIZADAS      \n");
+    printf("    ZENTHRA OS — SUITE DE PRUEBAS AUTOMATIZADAS     \n");
     printf("====================================================\n\n");
 
     test_klib_strings();

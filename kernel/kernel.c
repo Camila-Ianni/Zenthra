@@ -36,10 +36,10 @@ void kernel_main(uint32_t magic, uintptr_t mbi_addr) {
     // 1. Inicializar pantalla VGA en modo texto
     vga_init();
     
-    // 2. Banner de inicio de NOVA OS
+    // 2. Banner de inicio de Zenthra OS
     vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK));
     kprintf("================================================================================\n");
-    kprintf("                           NOVA OPERATING SYSTEM                                \n");
+    kprintf("                         ZENTHRA OPERATING SYSTEM                               \n");
     kprintf("                 Propuesta Experimental de Grado - 2026                         \n");
     kprintf("================================================================================\n\n");
 
@@ -100,9 +100,9 @@ void kernel_main(uint32_t magic, uintptr_t mbi_addr) {
     vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
     kprintf("[OK]\n");
 
-    // 11. Inicializar catálogo y tienda de aplicaciones (NOVA Store)
+    // 11. Inicializar catálogo y tienda de aplicaciones (Zenthra Store)
     vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
-    kprintf("[*] Inicializando catalogo NOVA Store (11 Perfiles)... ");
+    kprintf("[*] Inicializando catalogo Zenthra Store (11 Perfiles)... ");
     pkg_init();
     vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
     kprintf("[OK]\n");
@@ -120,7 +120,7 @@ void kernel_main(uint32_t magic, uintptr_t mbi_addr) {
     if (serial_init() == 0) {
         vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
         kprintf("[OK]\n");
-        serial_write_string("\r\n[NOVA OS SERIAL LOG] Kernel iniciado con Seguridad ACL, Multitarea, Heap, Syscalls, Store y 11 Perfiles.\r\n");
+        serial_write_string("\r\n[ZENTHRA OS SERIAL LOG] Kernel iniciado con Seguridad ACL, Multitarea, Heap, Syscalls, Store y 11 Perfiles.\r\n");
     } else {
         vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK));
         kprintf("[FALLO O SIN HARDWARE]\n");
@@ -156,7 +156,7 @@ void kernel_main(uint32_t magic, uintptr_t mbi_addr) {
     __asm__ volatile ("sti");
 
     vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
-    kprintf("\n[>] Sistema operativo preparado. Iniciando NOVA Shell.\n\n");
+    kprintf("\n[>] Sistema operativo preparado. Iniciando Zenthra Shell.\n\n");
 
     // 17. Iniciar shell interactivo
     shell_init();
