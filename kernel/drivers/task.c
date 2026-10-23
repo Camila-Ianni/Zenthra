@@ -3,6 +3,7 @@
 #include "klib.h"
 #include "vga.h"
 #include "gdt.h"
+#include "acl_security.h"
 
 #if defined(__KERNEL__)
 extern void switch_context(uint32_t* old_esp_ptr, uint32_t new_esp);
@@ -18,6 +19,7 @@ static inline void switch_context(uint32_t* old_esp_ptr, uint32_t new_esp) {
 static struct task task_table[MAX_TASKS];
 static int current_task_idx = 0;
 static uint32_t next_task_id = 1;
+static uint8_t main_task_stack[TASK_STACK_SIZE];
 
 void scheduler_init(void) {
     k_memset(task_table, 0, sizeof(task_table));
@@ -29,15 +31,18 @@ void scheduler_init(void) {
     size_t len = k_strlen(k_name);
     k_memcpy(task_table[0].name, k_name, len + 1);
     task_table[0].state = TASK_RUNNING;
-    task_table[0].stack = NULL; // Utiliza el stack configurado en boot.s
-    task_table[0].stack_size = 16384;
+    task_table[0].stack = main_task_stack;
+    task_table[0].stack_size = TASK_STACK_SIZE;
+    task_table[0].kernel_stack_top = (uint32_t)(uintptr_t)(main_task_stack + TASK_STACK_SIZE);
     task_table[0].esp = 0;
+    task_table[0].profile = PROFILE_GENERAL;
     task_table[0].runtime_ticks = 0;
 
     current_task_idx = 0;
+    tss_set_kernel_stack(task_table[0].kernel_stack_top);
 }
 
-int task_create(const char* name, void (*entry_point)(void)) {
+int task_create_with_profile(const char* name, void (*entry_point)(void), enum nova_profile profile) {
     if (!name || !entry_point) return -1;
 
     for (int i = 1; i < MAX_TASKS; i++) {
@@ -53,6 +58,8 @@ int task_create(const char* name, void (*entry_point)(void)) {
 
             task_table[i].stack = stack;
             task_table[i].stack_size = TASK_STACK_SIZE;
+            task_table[i].kernel_stack_top = (uint32_t)(uintptr_t)(stack + TASK_STACK_SIZE);
+            task_table[i].profile = profile;
             task_table[i].state = TASK_READY;
             task_table[i].runtime_ticks = 0;
 
@@ -75,10 +82,22 @@ int task_create(const char* name, void (*entry_point)(void)) {
     return -3; // Tabla de tareas llena
 }
 
+int task_create(const char* name, void (*entry_point)(void)) {
+    enum nova_profile inherited = task_table[current_task_idx].profile;
+    return task_create_with_profile(name, entry_point, inherited);
+}
+
 static uint8_t* zombie_stack_to_free = NULL;
 
 struct task* task_get_current(void) {
     return &task_table[current_task_idx];
+}
+
+void task_set_current_profile(enum nova_profile profile) {
+    if (current_task_idx >= 0 && current_task_idx < MAX_TASKS) {
+        task_table[current_task_idx].profile = profile;
+    }
+    acl_set_active_profile(profile);
 }
 
 void task_exit(void) {
@@ -123,7 +142,7 @@ void task_yield(void) {
     current_task_idx = next_idx;
     task_table[current_task_idx].state = TASK_RUNNING;
     task_table[current_task_idx].runtime_ticks++;
-    tss_set_kernel_stack(task_table[current_task_idx].esp);
+    tss_set_kernel_stack(task_table[current_task_idx].kernel_stack_top);
 
     switch_context(&task_table[prev_idx].esp, task_table[current_task_idx].esp);
 

@@ -2,6 +2,7 @@
 #define TASK_H
 
 #include "ktypes.h"
+#include "shell.h"
 
 #define MAX_TASKS 8
 
@@ -31,13 +32,17 @@ struct task {
     enum task_state state;
     uint8_t* stack;
     size_t stack_size;
-    uint32_t esp;
+    uint32_t esp;               // ESP guardado de contexto (switch_context)
+    uint32_t kernel_stack_top;  // Tope real superior de la pila de kernel (TSS.ESP0)
+    enum nova_profile profile;  // Credencial / perfil de seguridad propio de este proceso
     uint32_t sleep_ticks;
     uint32_t runtime_ticks;
 };
 
 void scheduler_init(void);
 int task_create(const char* name, void (*entry_point)(void));
+int task_create_with_profile(const char* name, void (*entry_point)(void), enum nova_profile profile);
+void task_set_current_profile(enum nova_profile profile);
 void task_yield(void);
 void task_exit(void);
 void task_list(void);

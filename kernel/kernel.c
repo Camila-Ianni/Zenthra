@@ -122,7 +122,7 @@ void kernel_main(uint32_t magic, uintptr_t mbi_addr) {
     scheduler_init();
     task_create("worker_a", worker_task_a);
     task_create("worker_b", worker_task_b);
-    task_create("iot_daemon", background_sensor_daemon);
+    task_create_with_profile("iot_daemon", background_sensor_daemon, PROFILE_IOT_HARDWARE);
     vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
     kprintf("[OK]\n");
 

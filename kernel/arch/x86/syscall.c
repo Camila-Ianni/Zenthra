@@ -3,6 +3,7 @@
 #include "klib.h"
 #include "nova_iot.h"
 #include "acl_security.h"
+#include "task.h"
 
 /*
  * Validación de punteros de usuario:
@@ -113,7 +114,8 @@ void syscall_dispatcher(struct registers* regs) {
             // ebx: comando (1: ping, 2: led on, 3: led off, 4: get temp)
             // ecx: puntero en userland para almacenar el resultado
             uint32_t cmd = regs->ebx;
-            enum nova_profile prof = acl_get_active_profile();
+            struct task* cur_task = task_get_current();
+            enum nova_profile prof = cur_task ? cur_task->profile : acl_get_active_profile();
 
             if (cmd == 1) { // PING
                 if (!acl_check_permission(prof, OP_ARDUINO_READ)) {
@@ -162,19 +164,24 @@ void syscall_dispatcher(struct registers* regs) {
         }
 
         case SYS_GET_PROFILE: {
-            regs->eax = (uint32_t)acl_get_active_profile();
+            struct task* cur = task_get_current();
+            regs->eax = (uint32_t)(cur ? cur->profile : acl_get_active_profile());
             break;
         }
 
         case SYS_SET_PROFILE: {
             uint32_t new_prof = regs->ebx;
-            enum nova_profile curr_prof = acl_get_active_profile();
+            struct task* cur = task_get_current();
+            enum nova_profile curr_prof = cur ? cur->profile : acl_get_active_profile();
             if (!acl_check_permission(curr_prof, OP_SYSTEM_ADMIN)) {
                 acl_log_violation(curr_prof, OP_SYSTEM_ADMIN, "SYS_SET_PROFILE");
                 regs->eax = (uint32_t)-13; // -EACCES
                 break;
             }
             if (new_prof < PROFILE_COUNT) {
+                if (cur) {
+                    cur->profile = (enum nova_profile)new_prof;
+                }
                 acl_set_active_profile((enum nova_profile)new_prof);
                 regs->eax = 0;
             } else {

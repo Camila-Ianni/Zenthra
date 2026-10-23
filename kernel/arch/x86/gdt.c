@@ -29,11 +29,11 @@ static void gdt_flush(uint32_t gdt_ptr_addr) {
 #endif
 }
 
-/* Cargar el Task Register (TR) con el selector del TSS (GDT Entry 5: 0x28) */
+/* Cargar el Task Register (TR) con el selector del TSS (GDT Entry 5: 0x28, RPL 0) */
 static void tss_flush(void) {
 #if defined(__KERNEL__)
-    // 0x28 | 3 = 0x2B (RPL 3 para permitir acceso a TSS)
-    __asm__ volatile ("ltr %%ax" : : "a"(0x2B));
+    // Selector 0x28 (GDT Entry 5: 5 * 8 = 40 = 0x28, TI=0, RPL=0)
+    __asm__ volatile ("ltr %%ax" : : "a"(0x28));
 #endif
 }
 
@@ -78,10 +78,14 @@ void gdt_init(void) {
 
     uint32_t tss_base = (uint32_t)&tss;
     uint32_t tss_limit = sizeof(struct tss_entry) - 1;
-    // 0xE9: Presente=1, DPL=3, Type=9 (32-bit Available TSS), Granularidad=0 (bytes)
-    gdt_set_gate(5, tss_base, tss_limit, 0xE9, 0x00);
+    // 0x89: Presente=1, DPL=0 (Kernel), Type=9 (32-bit Available TSS), Granularidad=0 (bytes)
+    gdt_set_gate(5, tss_base, tss_limit, 0x89, 0x00);
 
-    // Cargar la nueva GDT en la CPU y recargar el Task Register
+    // Cargar la nueva GDT en la CPU y recargar el Task Register (TR)
     gdt_flush((uint32_t)&gp);
     tss_flush();
 }
+
+// Verificación estática de tamaño del Task State Segment x86 de 32 bits (104 bytes exactos)
+typedef char check_tss_size[(sizeof(struct tss_entry) == 104) ? 1 : -1];
+
