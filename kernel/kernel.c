@@ -270,9 +270,6 @@ void kernel_main(uint32_t magic, uintptr_t mbi_addr) {
         kprintf("[FALLO O SIN HARDWARE]\n");
     }
 
-    // 13b. Ejecutar prueba bare-metal de recuperación real de #PF (redirección EIP fixup) en QEMU (Auditoría v19)
-    verify_real_hardware_pf_fixup_in_qemu();
-
     // 14. Verificar y parsear protocolo Multiboot (Soporte seguro Multiboot 1 y 2)
     vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
     kprintf("[*] Verificando protocolo Multiboot... ");
@@ -298,6 +295,9 @@ void kernel_main(uint32_t magic, uintptr_t mbi_addr) {
         vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK));
         kprintf("[ADVERTENCIA] Firma no reconocida (Magic: 0x%x)\n", magic);
     }
+
+    // 14b. Ejecutar prueba bare-metal de recuperación real de #PF (redirección EIP fixup) en QEMU (Auditoría v19)
+    verify_real_hardware_pf_fixup_in_qemu();
 
     // 15. Inicializar subsistema gráfico (Linear Framebuffer VESA o Fallback VGA)
     vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));

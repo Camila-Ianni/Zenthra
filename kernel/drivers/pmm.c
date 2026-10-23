@@ -194,10 +194,13 @@ void pmm_init(uint32_t magic, uintptr_t mbi_addr) {
     // 3. Reservar la región asignada para el Kernel Heap (0x00400000 - 0x00600000: 2 MiB)
     pmm_mark_region_used(0x00400000, 2 * 1024 * 1024);
 
-    // 4. Reservar las estructuras de Multiboot y módulos
+    // 4. Reservar las estructuras de Multiboot, cmdline y módulos
     if (mbi_addr != 0) {
         pmm_mark_region_used(mbi_addr, sizeof(struct multiboot1_info));
         struct multiboot1_info* mbi = (struct multiboot1_info*)mbi_addr;
+        if ((mbi->flags & MULTIBOOT_INFO_CMDLINE) && mbi->cmdline != 0) {
+            pmm_mark_region_used((uintptr_t)mbi->cmdline, PAGE_SIZE);
+        }
         if ((mbi->flags & (1 << 6)) && mbi->mmap_addr != 0 && mbi->mmap_length > 0) {
             pmm_mark_region_used(mbi->mmap_addr, mbi->mmap_length);
         }
