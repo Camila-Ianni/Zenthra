@@ -73,7 +73,7 @@ ssize_t strnlen_user(const char* user_str, size_t max_len) {
 static char kernel_safe_buf[KERNEL_SYSCALL_BUF_SIZE];
 
 /* Handler de Syscalls invocado por la interrupción 0x80 (Ring 3 -> Ring 0) */
-static void syscall_dispatcher(struct registers* regs) {
+void syscall_dispatcher(struct registers* regs) {
     uint32_t syscall_num = regs->eax;
 
     switch (syscall_num) {

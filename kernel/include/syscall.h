@@ -26,5 +26,6 @@ int copy_to_user(void* user_dest, const void* kernel_src, size_t size);
 ssize_t strnlen_user(const char* user_str, size_t max_len);
 
 void syscall_init(void);
+void syscall_dispatcher(struct registers* regs);
 
 #endif

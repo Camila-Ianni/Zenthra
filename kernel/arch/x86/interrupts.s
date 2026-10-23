@@ -200,3 +200,6 @@ switch_context:
     popl %ebp
     ret                 /* Salta a la dirección de retorno de la nueva tarea */
 .size switch_context, . - switch_context
+
+/* Marca de pila no ejecutable para compatibilidad con linkers modernos */
+.section .note.GNU-stack,"",@progbits
