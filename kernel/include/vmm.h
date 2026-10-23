@@ -59,6 +59,9 @@ int vmm_set_page_flags(struct page_directory* pd, uintptr_t virt_addr, uint32_t 
 /* Obtener los flags de una página virtual mapeada (o 0 si no presente) */
 uint32_t vmm_get_page_flags(struct page_directory* pd, uintptr_t virt_addr);
 
+/* Comprobar si un directorio de páginas es accesible directamente en memoria baja (< 64 MiB) */
+bool vmm_is_directory_accessible(struct page_directory* pd);
+
 /* Obtener el directorio de páginas maestro del kernel */
 struct page_directory* vmm_get_kernel_directory(void);
 

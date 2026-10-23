@@ -37,6 +37,26 @@ static inline uint32_t irq_save(void) { return 0; }
 static inline void irq_restore(uint32_t eflags) { (void)eflags; }
 #endif
 
+/*
+ * CONTRATO DE CONCURRENCIA UNIPROCESADOR (UP) — Auditoría Técnica v12:
+ *
+ * 1. Modelo de Ejecución:
+ *    El kernel de Zenthra opera actualmente en modo Uniprocesador (UP, un solo núcleo x86).
+ *    La exclusión mutua de secciones críticas del scheduler se garantiza deshabilitando
+ *    interrupciones a nivel de CPU mediante 'cli' e 'irq_save()' (pushfl), previniendo que
+ *    una interrupción de temporizador PIT (IRQ0) o periférico conmute el contexto en medio
+ *    de una mutación de la tabla de tareas o colas de pilas.
+ *
+ * 2. Anidamiento Estricto:
+ *    El contador reentrante 'scheduler_lock_count' permite que funciones internas del scheduler
+ *    se invoquen entre sí sin perder el estado original de IF (Interrupt Flag). 'saved_eflags'
+ *    se captura en el primer nivel (count == 0) y solo se restaura con 'popfl' al desbloquear el nivel 0.
+ *
+ * 3. Límite Arquitectural SMP:
+ *    Este mecanismo NO es un spinlock multiprocesador SMP; en un entorno SMP de múltiples núcleos,
+ *    'cli' solo afecta a la CPU local. La transición a SMP requerirá spinlocks atómicos basados en
+ *    'lock cmpxchg' / 'pause' y colas por CPU (planificado para fases posteriores a la estabilización i686/BIOS).
+ */
 static volatile int scheduler_lock_count = 0;
 static volatile uint32_t saved_eflags = 0;
 

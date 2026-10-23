@@ -224,6 +224,10 @@ void test_ramfs(void) {
     TEST_ASSERT(del == 0, "Borrado de archivo exitoso");
     bytes = ramfs_read("sensor_test.dat", read_buf, sizeof(read_buf) - 1);
     TEST_ASSERT(bytes < 0, "Archivo borrado ya no puede ser leido");
+
+    // Auditoría v12: ramfs_write rechaza datos mayores a RAMFS_MAX_SIZE con error explícito (-1)
+    int oversized_write = ramfs_write("bienvenida.txt", (const uint8_t*)data_to_write, RAMFS_MAX_SIZE + 16);
+    TEST_ASSERT(oversized_write == -1, "ramfs_write rechaza datos mayores a RAMFS_MAX_SIZE con error explícito sin truncado silencioso");
 }
 
 /* Test 7: Validación de los 11 Perfiles y Auto-Aprovisionamiento */
@@ -287,6 +291,22 @@ void test_package_manager(void) {
 
     int dup = pkg_install("arduino-ide");
     TEST_ASSERT(dup == 1, "Deteccion de aplicacion ya instalada");
+
+    // Auditoría v12: Si RAMFS está lleno, pkg_install debe fallar y NO marcar el paquete como instalado
+    ramfs_delete("app_dev-browser");
+    for (int f = 0; f < RAMFS_MAX_FILES; f++) {
+        char dummy[16];
+        snprintf(dummy, sizeof(dummy), "fill_%d.txt", f);
+        ramfs_create(dummy);
+    }
+    int fill_res = pkg_install("dev-browser");
+    TEST_ASSERT(fill_res == -3, "pkg_install rechaza instalacion si RAMFS esta saturado");
+    // Limpiar archivos dummy para restaurar estado
+    for (int f = 0; f < RAMFS_MAX_FILES; f++) {
+        char dummy[16];
+        snprintf(dummy, sizeof(dummy), "fill_%d.txt", f);
+        ramfs_delete(dummy);
+    }
 
     int uninst = pkg_uninstall("arduino-ide");
     TEST_ASSERT(uninst == 0, "Desinstalacion exitosa de paquete");
@@ -440,16 +460,16 @@ void test_task_lifecycle_and_cleanup(void) {
     task_yield(); // Drena cola zombie_stacks
     TEST_ASSERT(task_get_current()->state == TASK_RUNNING, "Cola zombie_stacks drena multiples tareas terminadas en cascada sin corrupcion");
 
-    // Prueba de estrés: creación y terminación de más de 16 tareas consecutivas (Auditoría v11)
+    // Prueba de estrés: creación y terminación de más de 32 tareas consecutivas (Auditoría v12)
     bool stress_ok = true;
-    for (int t = 0; t < 20; t++) {
+    for (int t = 0; t < 40; t++) {
         int spid = task_create("stress_worker", exiting_worker);
         if (spid <= 0) { stress_ok = false; break; }
         task_yield();
         task_exit();
         task_yield();
     }
-    TEST_ASSERT(stress_ok == true, "Scheduler soporta mas de 16 terminaciones consecutivas con purga automatica y sin fugas");
+    TEST_ASSERT(stress_ok == true, "Scheduler soporta mas de 32 terminaciones consecutivas con purga automatica y sin fugas");
 }
 
 void test_syscall_boundary_and_abi(void) {
@@ -593,7 +613,7 @@ void test_physical_memory_manager(void) {
     }
     TEST_ASSERT(no_invaded == true, "Ningun marco asignado por PMM invade el megabyte inferior ni el Heap reservado");
 
-    // Pruebas de desbordamiento en pmm_mark_region_used y free (Auditoría v11)
+    // Pruebas de desbordamiento en pmm_mark_region_used y free (Auditoría v11/v12)
     size_t free_before_ovf = pmm_get_free_frames();
     pmm_mark_region_used(0xFFFFF000, 0x2000); // 0xFFFFF000 + 0x2000 desborda 32 bits
     TEST_ASSERT(pmm_get_free_frames() == free_before_ovf, "pmm_mark_region_used rechaza desbordamiento sin corromper bitmap");
@@ -604,6 +624,20 @@ void test_physical_memory_manager(void) {
     // Prueba de rango parcial / no alineado menor a 1 página completa (no debe liberar ninguna página)
     pmm_mark_region_free(0x02000010, 100);
     TEST_ASSERT(pmm_get_free_frames() == free_before_ovf, "pmm_mark_region_free no libera paginas ante rangos incompletos menores a 4 KiB");
+
+    // Auditoría v12: desbordamiento en redondeo superior y en suma con límites de 64 bits (UINT64_MAX)
+    pmm_mark_region_used((uintptr_t)0xFFFFFFFFFFFFF000ULL, 0x2000);
+    TEST_ASSERT(pmm_get_free_frames() == free_before_ovf, "pmm_mark_region_used rechaza direccion cercana a UINT64_MAX");
+
+    pmm_mark_region_free((uintptr_t)0xFFFFFFFFFFFFF000ULL, 0x2000);
+    TEST_ASSERT(pmm_get_free_frames() == free_before_ovf, "pmm_mark_region_free rechaza direccion cercana a UINT64_MAX");
+
+    // Rango vacío (length = 0) es ignorado con seguridad
+    pmm_mark_region_used(0x20000000, 0);
+    pmm_mark_region_free(0x20000000, 0);
+    TEST_ASSERT(pmm_get_free_frames() == free_before_ovf, "pmm_mark_region_used/free con longitud 0 no altera el estado de la memoria");
+
+    TEST_ASSERT(pmm_is_region_reserved((uintptr_t)0xFFFFFFFFFFFFF000ULL, 0x2000) == false, "pmm_is_region_reserved maneja desbordamiento de 64 bits retornando false de forma segura");
 
     // Limpieza
     for (int s = 0; s < 16; s++) {
@@ -675,9 +709,24 @@ void test_virtual_memory_paging(void) {
     int copy_unmapped = copy_from_user(k_buf, (const void*)0x40002000, 10);
     TEST_ASSERT(copy_unmapped == -1, "copy_from_user rechaza lectura de pagina no mapeada en el directorio activo");
 
+    // Auditoría v12: Rango que cruza el límite de una página mapeada hacia una no mapeada
+    // proc_virt está mapeado en [0x40000000 .. 0x40000FFF]. 0x40001000 NO está mapeado.
+    // Un buffer en 0x40000000 + 4000 de tamaño 200 cruza hacia la página no mapeada.
+    int cross_unmapped = copy_from_user(k_buf, (const void*)(proc_virt + 4000), 200);
+    TEST_ASSERT(cross_unmapped == -1, "copy_from_user rechaza rango que cruza frontera hacia una pagina no mapeada");
+
+    int cross_write = copy_to_user((void*)(proc_virt + 4000), k_buf, 200);
+    TEST_ASSERT(cross_write == -1, "copy_to_user rechaza rango que cruza frontera hacia una pagina no mapeada");
+
     // Restaurar permiso de escritura con vmm_set_page_flags
     vmm_set_page_flags(pdir, proc_virt, PTE_PRESENT | PTE_USER | PTE_WRITABLE);
     vmm_switch_page_directory(kdir);
+
+    // Auditoría v12: Validación de accesibilidad de directorio (vmm_is_directory_accessible)
+    TEST_ASSERT(vmm_is_directory_accessible(NULL) == false, "vmm_is_directory_accessible rechaza puntero NULL");
+    TEST_ASSERT(vmm_is_directory_accessible((struct page_directory*)0x200) == false, "vmm_is_directory_accessible rechaza puntero de directorio corrupto/invalido");
+    TEST_ASSERT(vmm_map_page(NULL, 0x50000000, 0x1000000, PTE_PRESENT) == -1, "vmm_map_page rechaza de forma segura directorio NULL");
+    TEST_ASSERT(vmm_get_page_flags(NULL, 0x50000000) == 0, "vmm_get_page_flags retorna 0 ante directorio NULL");
 
     // Seguridad: rechazar páginas de usuario (PTE_USER) en el espacio reservado del kernel (< 64 MiB)
     int intrusion_res = vmm_map_page(pdir, 0x000B8000, phys_target, PTE_PRESENT | PTE_USER);

@@ -25,9 +25,15 @@ int pkg_install(const char* pkg_id);
 int pkg_uninstall(const char* pkg_id);
 
 /* 
- * Verificación de integridad estándar mediante CRC32 (IEEE 802.3).
- * NOTA: Valida contra corrupción accidental en memoria/transferencia.
- * Para autenticidad criptográfica de autor, la Fase 6 implementará firmas digitales SHA256/Ed25519.
+ * NOTA DE ARQUITECTURA (Auditoría v12):
+ * El catálogo actual modela la estructura de aprovisionamiento de perfiles de usuario
+ * mediante METADATOS DE DEMOSTRACIÓN (simulada en RAM). No representa ejecutables comerciales
+ * reales (VS Code, Docker, Office, etc.). La instalación de binarios ejecutables reales
+ * requerirá el formato formal de paquetes .zpkg, firmas criptográficas (SHA256/Ed25519)
+ * y almacenamiento persistente en disco (Fase 6 y 7).
+ *
+ * Verificación de integridad estándar mediante CRC32 (IEEE 802.3):
+ * Valida contra corrupción accidental en memoria/transferencia. No sustituye una firma criptográfica.
  */
 uint32_t pkg_compute_crc32(const uint8_t* data, size_t length);
 bool pkg_verify_integrity(const char* pkg_id, const uint8_t* data, size_t length);

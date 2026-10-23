@@ -177,8 +177,6 @@ int pkg_install(const char* pkg_id) {
                 return -2; // Fallo de verificación de integridad
             }
 
-            catalog[i].installed = true;
-
             // Registrar binario/metadata en el sistema de archivos RAMFS
             char filename[32];
             k_memset(filename, 0, sizeof(filename));
@@ -188,9 +186,29 @@ int pkg_install(const char* pkg_id) {
             for (size_t j = 0; catalog[i].id[j] && idx < 28; j++) filename[idx++] = catalog[i].id[j];
             filename[idx] = '\0';
 
-            ramfs_create(filename);
-            ramfs_write(filename, (const uint8_t*)app_meta, k_strlen(app_meta));
+            // Comprobar retorno de creación en RAMFS
+            int c_res = ramfs_create(filename);
+            if (c_res != 0 && c_res != -2) {
+                // Error al crear archivo (e.g. filesystem lleno)
+                vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK));
+                kprintf("\n[ERROR RAMFS] No se pudo crear archivo para paquete '%s' (FS lleno o error %d).\n", pkg_id, c_res);
+                return -3;
+            }
 
+            size_t meta_len = k_strlen(app_meta);
+            int written = ramfs_write(filename, (const uint8_t*)app_meta, meta_len);
+            if (written < 0 || (size_t)written != meta_len) {
+                // Escritura incompleta o fallida: limpiar y no marcar como instalado
+                if (c_res == 0) {
+                    ramfs_delete(filename);
+                }
+                vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK));
+                kprintf("\n[ERROR RAMFS] Fallo al escribir metadata de paquete '%s'.\n", pkg_id);
+                return -4;
+            }
+
+            // Marcar como instalado únicamente tras éxito completo en RAMFS
+            catalog[i].installed = true;
             return 0; // Exito
         }
     }

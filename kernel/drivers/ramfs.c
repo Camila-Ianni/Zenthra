@@ -38,7 +38,7 @@ int ramfs_create(const char* name) {
 
 int ramfs_write(const char* name, const uint8_t* buffer, size_t size) {
     if (!name || !buffer) return -1;
-    if (size > RAMFS_MAX_SIZE) size = RAMFS_MAX_SIZE;
+    if (size > RAMFS_MAX_SIZE) return -1; // Rechazo explícito: excede la capacidad máxima de RAMFS (sin truncamiento silencioso)
 
     for (size_t i = 0; i < RAMFS_MAX_FILES; i++) {
         if (files[i].used && k_strcmp(files[i].name, name) == 0) {

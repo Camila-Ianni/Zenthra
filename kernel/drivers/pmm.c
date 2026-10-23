@@ -50,13 +50,18 @@ void pmm_mark_region_used(uintptr_t base, size_t length) {
     if (length == 0) return;
     uint64_t base64 = (uint64_t)base;
     uint64_t len64 = (uint64_t)length;
+    if (base64 > UINT64_MAX - len64) return; // Rechazo estricto de desbordamiento en suma
     uint64_t end64 = base64 + len64;
-    if (end64 < base64) return; // Rechazo estricto de desbordamiento
 
     size_t start_frame = (size_t)(base64 / PAGE_SIZE);
-    size_t end_frame = (size_t)((end64 + PAGE_SIZE - 1) / PAGE_SIZE);
-
     if (start_frame >= total_frames) return;
+
+    size_t end_frame;
+    if (end64 > UINT64_MAX - (PAGE_SIZE - 1)) {
+        end_frame = total_frames;
+    } else {
+        end_frame = (size_t)((end64 + PAGE_SIZE - 1) / PAGE_SIZE);
+    }
     if (end_frame > total_frames) end_frame = total_frames;
 
     for (size_t frame = start_frame; frame < end_frame; frame++) {
@@ -68,10 +73,11 @@ void pmm_mark_region_free(uintptr_t base, size_t length) {
     if (length == 0) return;
     uint64_t base64 = (uint64_t)base;
     uint64_t len64 = (uint64_t)length;
+    if (base64 > UINT64_MAX - len64) return; // Rechazo estricto de desbordamiento en suma
     uint64_t end64 = base64 + len64;
-    if (end64 < base64) return; // Rechazo estricto de desbordamiento
 
-    // Alinear inicio hacia arriba si no es múltiplo de página: solo se liberan páginas completamente contenidas
+    // Proteger contra desbordamiento en redondeo superior de base64
+    if (base64 > UINT64_MAX - (PAGE_SIZE - 1)) return;
     uint64_t aligned_start = (base64 + PAGE_SIZE - 1) & ~(uint64_t)(PAGE_SIZE - 1);
     uint64_t aligned_end = end64 & ~(uint64_t)(PAGE_SIZE - 1);
     if (aligned_start >= aligned_end) return; // Menos de una página completa dentro del rango
@@ -272,13 +278,18 @@ bool pmm_is_region_reserved(uintptr_t base, size_t length) {
     if (length == 0) return true;
     uint64_t base64 = (uint64_t)base;
     uint64_t len64 = (uint64_t)length;
+    if (base64 > UINT64_MAX - len64) return false; // Desbordamiento no representable
     uint64_t end64 = base64 + len64;
-    if (end64 < base64) return false; // Desbordamiento no representable
 
     size_t start_frame = (size_t)(base64 / PAGE_SIZE);
-    size_t end_frame = (size_t)((end64 + PAGE_SIZE - 1) / PAGE_SIZE);
-
     if (start_frame >= total_frames) return true;
+
+    size_t end_frame;
+    if (end64 > UINT64_MAX - (PAGE_SIZE - 1)) {
+        end_frame = total_frames;
+    } else {
+        end_frame = (size_t)((end64 + PAGE_SIZE - 1) / PAGE_SIZE);
+    }
     if (end_frame > total_frames) end_frame = total_frames;
 
     for (size_t frame = start_frame; frame < end_frame; frame++) {

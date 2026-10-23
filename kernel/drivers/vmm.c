@@ -18,11 +18,26 @@ extern uint32_t mock_cr2_addr;
 static void* host_user_tables[ENTRIES_PER_PAGE_DIR];
 #endif
 
+bool vmm_is_directory_accessible(struct page_directory* pd) {
+    if (!pd) return false;
+#if defined(__KERNEL__)
+    // Durante paginación activa en Ring 0, solo las direcciones en el Identity Map (0 .. 64 MiB) son directamente desreferenciables
+    uintptr_t addr = (uintptr_t)pd;
+    if (addr >= KERNEL_IDENTITY_LIMIT) return false;
+#else
+    // En host tests, rechazar punteros nulos o claramente inválidos (< 4 KiB)
+    if ((uintptr_t)pd < 0x1000) return false;
+#endif
+    return true;
+}
+
 static inline struct page_table* vmm_get_pt(struct page_directory* pd, size_t pde_idx) {
+    if (!pd || !vmm_is_directory_accessible(pd) || pde_idx >= ENTRIES_PER_PAGE_DIR) return NULL;
 #if defined(__KERNEL__)
     if (pde_idx < KERNEL_IDENTITY_TABLES) {
         return &kernel_pts[pde_idx];
     }
+    if (!(pd->entries[pde_idx] & PDE_PRESENT)) return NULL;
     uintptr_t pt_phys = pd->entries[pde_idx] & PDE_FRAME_MASK;
     // Si la tabla de páginas está dentro del Identity Mapping (primeros 64 MiB), su puntero físico es directamente accesible
     if (pt_phys != 0 && pt_phys < KERNEL_IDENTITY_LIMIT) {
@@ -30,10 +45,10 @@ static inline struct page_table* vmm_get_pt(struct page_directory* pd, size_t pd
     }
     return NULL; // Tabla fuera de la ventana directamente mapeada: acceso no seguro
 #else
-    (void)pd;
     if (pde_idx < KERNEL_IDENTITY_TABLES) {
         return &kernel_pts[pde_idx];
     }
+    if (!(pd->entries[pde_idx] & PDE_PRESENT)) return NULL;
     return (struct page_table*)host_user_tables[pde_idx];
 #endif
 }
@@ -77,7 +92,7 @@ void vmm_switch_page_directory(struct page_directory* pd) {
 }
 
 int vmm_map_page(struct page_directory* pd, uintptr_t virt_addr, uintptr_t phys_addr, uint32_t flags) {
-    if (!pd) return -1;
+    if (!pd || !vmm_is_directory_accessible(pd)) return -1;
 
     size_t pde_idx = (virt_addr >> 22) & 0x3FF;
     size_t pte_idx = (virt_addr >> 12) & 0x3FF;
@@ -138,7 +153,7 @@ int vmm_map_page(struct page_directory* pd, uintptr_t virt_addr, uintptr_t phys_
 }
 
 int vmm_set_page_flags(struct page_directory* pd, uintptr_t virt_addr, uint32_t flags) {
-    if (!pd) return -1;
+    if (!pd || !vmm_is_directory_accessible(pd)) return -1;
 
     size_t pde_idx = (virt_addr >> 22) & 0x3FF;
     size_t pte_idx = (virt_addr >> 12) & 0x3FF;
@@ -167,7 +182,7 @@ int vmm_set_page_flags(struct page_directory* pd, uintptr_t virt_addr, uint32_t 
 }
 
 uint32_t vmm_get_page_flags(struct page_directory* pd, uintptr_t virt_addr) {
-    if (!pd) return 0;
+    if (!pd || !vmm_is_directory_accessible(pd)) return 0;
 
     size_t pde_idx = (virt_addr >> 22) & 0x3FF;
     size_t pte_idx = (virt_addr >> 12) & 0x3FF;
@@ -185,7 +200,7 @@ struct page_directory* vmm_get_current_directory(void) {
 }
 
 int vmm_map_range(struct page_directory* pd, uintptr_t virt_start, uintptr_t phys_start, size_t size, uint32_t flags) {
-    if (!pd || size == 0) return -1;
+    if (!pd || !vmm_is_directory_accessible(pd) || size == 0) return -1;
 
     uint64_t v_end = (uint64_t)virt_start + (uint64_t)size;
     uint64_t p_end = (uint64_t)phys_start + (uint64_t)size;
@@ -210,7 +225,7 @@ int vmm_map_range(struct page_directory* pd, uintptr_t virt_start, uintptr_t phy
 }
 
 int vmm_map_physical_range(struct page_directory* pd, uint64_t phys_addr, size_t size, uint32_t flags, uintptr_t* out_virt_addr) {
-    if (!pd || size == 0 || !out_virt_addr) return -1;
+    if (!pd || !vmm_is_directory_accessible(pd) || size == 0 || !out_virt_addr) return -1;
 
     // Validación estricta en aritmética de 64 bits contra overflow y límites de arquitectura de 32 bits (i686)
     uint64_t phys_end = phys_addr + (uint64_t)size;
@@ -242,7 +257,7 @@ int vmm_map_physical_range(struct page_directory* pd, uint64_t phys_addr, size_t
 }
 
 void vmm_unmap_page(struct page_directory* pd, uintptr_t virt_addr) {
-    if (!pd) return;
+    if (!pd || !vmm_is_directory_accessible(pd)) return;
 
     size_t pde_idx = (virt_addr >> 22) & 0x3FF;
     size_t pte_idx = (virt_addr >> 12) & 0x3FF;
@@ -260,7 +275,7 @@ void vmm_unmap_page(struct page_directory* pd, uintptr_t virt_addr) {
 }
 
 uintptr_t vmm_virt_to_phys(struct page_directory* pd, uintptr_t virt_addr) {
-    if (!pd) return 0;
+    if (!pd || !vmm_is_directory_accessible(pd)) return 0;
 
     size_t pde_idx = (virt_addr >> 22) & 0x3FF;
     size_t pte_idx = (virt_addr >> 12) & 0x3FF;
@@ -302,7 +317,7 @@ struct page_directory* vmm_create_process_directory(void) {
 }
 
 void vmm_destroy_process_directory(struct page_directory* pd) {
-    if (!pd || pd == &kernel_pdir) return;
+    if (!pd || !vmm_is_directory_accessible(pd) || pd == &kernel_pdir) return;
 
 #if defined(__KERNEL__)
     size_t ram_bytes = pmm_get_total_memory_kib() * 1024;
