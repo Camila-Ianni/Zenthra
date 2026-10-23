@@ -16,8 +16,9 @@ jobs:
 
       - name: Instalar Dependencias (GCC Multilib, Clang, GRUB, xorriso, QEMU, mtools, dosfstools)
         run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-multilib build-essential grub-pc-bin grub-common xorriso qemu-system-x86 clang mtools dosfstools
+          export DEBIAN_FRONTEND=noninteractive
+          sudo -E apt-get update
+          sudo -E apt-get install -y --no-install-recommends gcc-multilib build-essential grub-pc-bin grub-common xorriso qemu-system-x86 clang mtools dosfstools
 
       - name: Ejecutar Test Suite Unitario y de Protocolo
         run: |
