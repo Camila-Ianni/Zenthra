@@ -108,6 +108,57 @@ static void background_sensor_daemon(void) {
 }
 
 
+/*
+ * Prueba de integración bare-metal en QEMU para verificar la recuperación real de #PF (Auditoría v19):
+ * Provoca dos excepciones #PF reales de la CPU x86 dentro de arch_user_copy_bytes (instrucción rep movsb):
+ *   1. Copia de lectura que cruza desde una página mapeada hacia una página NO mapeada a mitad de transferencia.
+ *   2. Copia de escritura hacia una página de usuario marcada como SOLO LECTURA (sin PTE_WRITABLE, con CR0.WP=1).
+ * Verifica que page_fault_handler valide el rango de EIP y CR2, redirija regs->eip a __user_copy_fault_fixup,
+ * retorne -1 (-EFAULT) de inmediato sin bucle infinito ni Kernel Panic, y que el contador de fixups se incremente.
+ */
+static void verify_real_hardware_pf_fixup_in_qemu(void) {
+    serial_write_string("[VMM_TEST] Iniciando prueba de #PF real de hardware con redireccion de EIP (fixup)...\r\n");
+
+    struct page_directory* kdir = vmm_get_kernel_directory();
+    uintptr_t frame_phys = pmm_alloc_frame();
+    uintptr_t test_virt_page1 = 0x40000000UL; // Página 1 (mapeada)
+    uintptr_t test_virt_page2 = 0x40001000UL; // Página 2 (NO mapeada)
+
+    // Mapear únicamente test_virt_page1 como escribible y de usuario; garantizar que test_virt_page2 no esté mapeada
+    vmm_map_page(kdir, test_virt_page1, frame_phys, PTE_PRESENT | PTE_WRITABLE | PTE_USER);
+    vmm_unmap_page(kdir, test_virt_page2);
+
+    uint8_t* page1_ptr = (uint8_t*)test_virt_page1;
+    for (size_t i = 0; i < PAGE_SIZE; i++) {
+        page1_ptr[i] = 'Z';
+    }
+
+    uint8_t kbuf[64];
+    size_t fixups_before = page_fault_get_fixup_count();
+
+    // Caso 1: Leer 32 bytes comenzando 16 bytes antes del final de test_virt_page1.
+    // Los primeros 16 bytes se copian con éxito y el byte 17 cruza a test_virt_page2 (0x40001000),
+    // disparando un #PF real de hardware en rep movsb. El handler debe redirigir EIP a __user_copy_fault_fixup.
+    int rc_unmapped = copy_from_user_fixup_hw_test(kbuf, (const void*)(test_virt_page1 + PAGE_SIZE - 16), 32);
+
+    // Caso 2: Cambiar test_virt_page1 a SOLO LECTURA (sin PTE_WRITABLE) e intentar escribir en ella
+    // con copy_to_user_fixup_hw_test. Con CR0.WP=1, la CPU dispara un #PF real por violación de escritura.
+    vmm_set_page_flags(kdir, test_virt_page1, PTE_PRESENT | PTE_USER);
+    int rc_readonly = copy_to_user_fixup_hw_test((void*)test_virt_page1, kbuf, 16);
+
+    size_t fixups_after = page_fault_get_fixup_count();
+
+    // Limpiar mapeo temporal y liberar marco
+    vmm_unmap_page(kdir, test_virt_page1);
+    pmm_free_frame(frame_phys);
+
+    if (rc_unmapped == -1 && rc_readonly == -1 && (fixups_after == fixups_before + 2)) {
+        serial_write_string("[VMM_FIXUP_QEMU_PASS] #PF reales de hardware (no mapeada y solo lectura) recuperados con redireccion EIP -> -EFAULT.\r\n");
+    } else {
+        serial_write_string("[VMM_FIXUP_QEMU_FAIL] Fallo en la prueba de recuperacion de #PF real en QEMU.\r\n");
+    }
+}
+
 void kernel_main(uint32_t magic, uintptr_t mbi_addr) {
     // 1. Inicializar pantalla VGA en modo texto
     vga_init();
@@ -218,6 +269,9 @@ void kernel_main(uint32_t magic, uintptr_t mbi_addr) {
         vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK));
         kprintf("[FALLO O SIN HARDWARE]\n");
     }
+
+    // 13b. Ejecutar prueba bare-metal de recuperación real de #PF (redirección EIP fixup) en QEMU (Auditoría v19)
+    verify_real_hardware_pf_fixup_in_qemu();
 
     // 14. Verificar y parsear protocolo Multiboot (Soporte seguro Multiboot 1 y 2)
     vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));

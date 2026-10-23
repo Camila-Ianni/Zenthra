@@ -44,6 +44,8 @@ void syscall_set_require_paging(bool require_paging);
 bool syscall_is_paging_required(void);
 int copy_from_user(void* kernel_dest, const void* user_src, size_t size);
 int copy_to_user(void* user_dest, const void* kernel_src, size_t size);
+int copy_from_user_fixup_hw_test(void* kernel_dest, const void* user_src, size_t size);
+int copy_to_user_fixup_hw_test(void* user_dest, const void* kernel_src, size_t size);
 ssize_t strnlen_user(const char* user_str, size_t max_len);
 
 void syscall_init(void);

@@ -226,13 +226,14 @@ verify-qemu-complete: $(BIN_NAME)
 	@grep -q "ZENTHRA OS SERIAL LOG" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se encontro el banner serial del kernel" && exit 1)
 	@grep -q "PMM" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se encontro inicializacion de PMM en serial.log" && exit 1)
 	@grep -q "VMM" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se encontro activacion de Paginacion x86 en serial.log" && exit 1)
+	@grep -q "VMM_FIXUP_QEMU_PASS" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se supero la prueba de #PF real con redireccion de EIP (fixup) en QEMU" && exit 1)
 	@grep -q "Worker A" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se registro la ejecucion del Worker A" && exit 1)
 	@grep -q "Worker B" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se registro la ejecucion del Worker B" && exit 1)
 	@grep -q "Worker C (CPU-bound)" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se registro la ejecucion de Worker C CPU-bound" && exit 1)
 	@grep -q "Interrupcion IRQ0" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se registraron ticks de interrupcion de PIT IRQ0" && exit 1)
 	@grep -q "ZENTHRA_QEMU_TEST_COMPLETE" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se encontro el marcador final ZENTHRA_QEMU_TEST_COMPLETE" && exit 1)
 	@grep -q "Apagado limpio ACPI" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se registro el apagado ACPI limpio en serial.log" && exit 1)
-	@echo "[+] [PASS] Prueba test-complete superada: Kernel completado y apagado limpiamente con exit code 0 (sin timeouts)."
+	@echo "[+] [PASS] Prueba test-complete superada: Kernel completado, #PF fixup real verificado y apagado limpiamente con exit code 0 (sin timeouts)."
 
 # Verificación 2: Prueba de humo de arranque ISO y GUI viva (boot-smoke)
 # Comprueba que la imagen ISO arranque con GRUB, cargue el framebuffer VESA, mouse,

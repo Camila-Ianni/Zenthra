@@ -1007,12 +1007,18 @@ void test_virtual_memory_paging(void) {
 
     // Auditoría v18: Escritura parcial exacta en SYS_WRITE cuando el primer chunk (256 bytes) es válido
     // y el segundo chunk cruza hacia una página no mapeada.
-    // Usar un buffer válido en memoria de host mapeado en pdir exactamente en su primera página alineada.
-    static uint8_t aligned_partial_buf[8192] __attribute__((aligned(4096)));
-    k_memset(aligned_partial_buf, 'P', sizeof(aligned_partial_buf));
-    uintptr_t partial_page_virt = (uintptr_t)aligned_partial_buf;
+    // Usar un buffer válido en memoria de host mapeado en pdir exactamente en su primera página alineada,
+    // asegurando que sus bits [31:22] caigan fuera de KERNEL_IDENTITY_TABLES (< 16) sin importar ASLR en 64-bit.
+    uint8_t* raw_partial_alloc = (uint8_t*)malloc(0x04000000UL + 16384UL);
+    TEST_ASSERT(raw_partial_alloc != NULL, "Reserva temporal de host para prueba de escritura parcial en SYS_WRITE");
+    uintptr_t partial_page_virt = ((uintptr_t)raw_partial_alloc + PAGE_SIZE - 1) & ~(uintptr_t)(PAGE_SIZE - 1);
+    if (((partial_page_virt >> 22) & 0x3FF) < 16) {
+        partial_page_virt += 0x04000000UL;
+    }
+    k_memset((void*)partial_page_virt, 'P', 8192);
     // Mapear únicamente la primera página [partial_page_virt .. partial_page_virt + 4095], dejando la segunda sin mapear
-    vmm_map_page(pdir, partial_page_virt, phys_target, PTE_PRESENT | PTE_USER);
+    int partial_map_rc = vmm_map_page(pdir, partial_page_virt, phys_target, PTE_PRESENT | PTE_USER);
+    TEST_ASSERT(partial_map_rc == 0, "Primera pagina de prueba parcial mapeada en directorio de proceso");
     vmm_unmap_page(pdir, partial_page_virt + PAGE_SIZE);
     regs_sw.eax = SYS_WRITE;
     regs_sw.ebx = partial_page_virt + PAGE_SIZE - 256; // Primeros 256 bytes dentro de la página mapeada; siguientes 256 en página no mapeada
@@ -1021,6 +1027,7 @@ void test_virtual_memory_paging(void) {
     TEST_ASSERT(regs_sw.eax == 256,
                 "SYS_WRITE retorna escritura parcial exacta (256 bytes) cuando el segundo chunk cruza a pagina no mapeada");
     vmm_unmap_page(pdir, partial_page_virt);
+    free(raw_partial_alloc);
 
     regs_sw.eax = SYS_READ;
     regs_sw.ebx = (uintptr_t)proc_virt; // proc_virt actualmente de solo lectura
@@ -1105,19 +1112,74 @@ void test_page_fault_handling(void) {
     TEST_ASSERT(page_fault_get_last_address() == 0xDEADB000, "Registro CR2 capturado como direccion causante");
     TEST_ASSERT(page_fault_get_last_error_code() == (PF_ERR_WRITE | PF_ERR_USER), "Codigo de error (#PF) decodificado con precision");
 
-    // Auditoría v18: Verificación del mecanismo de recuperación (fixup) ante un Page Fault durante copia de usuario
-    page_fault_begin_user_copy();
-    TEST_ASSERT(page_fault_is_user_copy_active() == true, "page_fault_begin_user_copy activa ventana de fixup");
-    TEST_ASSERT(page_fault_did_user_copy_fault() == false, "Sin fallo registrado al iniciar ventana de copia");
+    // Auditoría v19: Verificación de redirección real de EIP (fixup), vinculación a rango de EIP/CR2 y pila reentrante
+    uintptr_t copy_eip_start = page_fault_get_copy_eip_start();
+    uintptr_t copy_eip_end   = page_fault_get_copy_eip_end();
+    uintptr_t copy_fixup_eip = page_fault_get_copy_fixup_eip();
 
-    // Simular #PF en Ring 0 mientras user_copy_active == true (no debe entrar en pánico sino marcar user_copy_faulted)
-    mock_cr2_addr = 0x40009000;
-    regs.err_code = 0; // Ring 0 read fault durante copy_from_user
+    bool pushed = page_fault_push_user_copy_ctx(0x40000000UL, 0x2000UL, copy_eip_start, copy_eip_end, copy_fixup_eip);
+    TEST_ASSERT(pushed == true && page_fault_get_user_copy_depth() == 1,
+                "page_fault_push_user_copy_ctx apila contexto de copia (depth = 1)");
+    TEST_ASSERT(page_fault_is_user_copy_active() == true, "Ventana de copia activa tras push");
+
+    // 1. Si un #PF ocurre en Ring 0 pero con un EIP FUERA del rango de la instrucción de copia registrada,
+    // page_fault_handler NO debe tratarlo como fixup ni redirigir EIP (evita ocultar bugs de kernel).
+    mock_cr2_addr = 0x40000100; // Dentro del rango de dirección de usuario
+    regs.eip = 0x00100500;      // EIP fuera de [copy_eip_start, copy_eip_end)
+    regs.err_code = 0;
+    size_t fixups_before = page_fault_get_fixup_count();
+    page_fault_handler(&regs);
+    TEST_ASSERT(page_fault_did_user_copy_fault() == false && page_fault_get_fixup_count() == fixups_before,
+                "page_fault_handler NO oculta #PF cuando el EIP no pertenece a la instruccion de copia registrada");
+    TEST_ASSERT(regs.eip == 0x00100500, "EIP permanece sin alterar si el fallo no proviene de la instruccion de copia");
+
+    // 2. Si un #PF tiene el EIP dentro de la instrucción de copia pero la dirección en CR2 está FUERA del rango de usuario
+    // registrado (ej. desreferencia accidental en espacio de kernel), TAMPOCO debe ocultarse como fixup.
+    mock_cr2_addr = 0x00200000; // Fuera de [0x40000000, 0x40002000)
+    regs.eip = copy_eip_start;
+    page_fault_handler(&regs);
+    TEST_ASSERT(page_fault_did_user_copy_fault() == false && page_fault_get_fixup_count() == fixups_before,
+                "page_fault_handler NO oculta #PF cuando CR2 esta fuera del rango de usuario registrado");
+    TEST_ASSERT((uintptr_t)regs.eip == copy_eip_start, "EIP no se redirige si CR2 esta fuera del rango de usuario");
+
+    // 3. Caso legítimo de fixup: EIP dentro de [copy_eip_start, copy_eip_end) Y CR2 dentro de [0x40000000, 0x40002000).
+    // page_fault_handler DEBE redirigir regs->eip = copy_fixup_eip para que IRET no reintente la instrucción fallida.
+    mock_cr2_addr = 0x40001000;
+    regs.eip = copy_eip_start;
     page_fault_handler(&regs);
     TEST_ASSERT(page_fault_did_user_copy_fault() == true,
-                "page_fault_handler intercepta #PF dentro de ventana user_copy y activa bandera de fixup (-EFAULT)");
-    page_fault_end_user_copy();
-    TEST_ASSERT(page_fault_is_user_copy_active() == false, "page_fault_end_user_copy cierra ventana de fixup");
+                "page_fault_handler detecta #PF legitimo dentro del rango de EIP y CR2 registrados");
+    TEST_ASSERT((uintptr_t)regs.eip == copy_fixup_eip,
+                "page_fault_handler redirige regs->eip exactamente a fixup_eip para salir de la instruccion fallida");
+    TEST_ASSERT(page_fault_get_fixup_count() == fixups_before + 1,
+                "Contador de fixups de #PF se incrementa tras redireccion de EIP");
+
+    // 4. Reentrancia y anidamiento de contextos de copia (pila de profundidad USER_COPY_CTX_MAX_DEPTH = 4)
+    // Con el contexto exterior marcado con faulted == true, apilar un contexto interior limpio (depth = 2)
+    bool pushed_inner = page_fault_push_user_copy_ctx(0x50000000UL, 0x1000UL, copy_eip_start, copy_eip_end, copy_fixup_eip);
+    TEST_ASSERT(pushed_inner == true && page_fault_get_user_copy_depth() == 2,
+                "Pila reentrante permite contexto anidado (depth = 2) sin sobrescribir el contexto exterior");
+    TEST_ASSERT(page_fault_did_user_copy_fault() == false,
+                "Contexto interior inicia con estado faulted = false independiente del exterior");
+
+    // Llenar hasta USER_COPY_CTX_MAX_DEPTH (4) y verificar rechazo explícito si se intenta superar la profundidad máxima
+    TEST_ASSERT(page_fault_push_user_copy_ctx(0x60000000UL, 0x1000UL, copy_eip_start, copy_eip_end, copy_fixup_eip) == true,
+                "Apilado nivel 3 exitoso");
+    TEST_ASSERT(page_fault_push_user_copy_ctx(0x70000000UL, 0x1000UL, copy_eip_start, copy_eip_end, copy_fixup_eip) == true,
+                "Apilado nivel 4 (USER_COPY_CTX_MAX_DEPTH) exitoso");
+    TEST_ASSERT(page_fault_push_user_copy_ctx(0x80000000UL, 0x1000UL, copy_eip_start, copy_eip_end, copy_fixup_eip) == false,
+                "Pila de contextos rechaza desbordamiento cuando se supera USER_COPY_CTX_MAX_DEPTH");
+
+    // Desapilar niveles 4, 3 y 2 (sin fallo) y comprobar que el nivel 1 conserva su estado faulted == true intacto
+    TEST_ASSERT(page_fault_pop_user_copy_ctx() == false, "Pop nivel 4 retorna false (sin fallo)");
+    TEST_ASSERT(page_fault_pop_user_copy_ctx() == false, "Pop nivel 3 retorna false (sin fallo)");
+    TEST_ASSERT(page_fault_pop_user_copy_ctx() == false, "Pop nivel 2 retorna false (sin fallo)");
+    TEST_ASSERT(page_fault_get_user_copy_depth() == 1 && page_fault_did_user_copy_fault() == true,
+                "Al desapilar contextos interiores, el contexto exterior preserva su estado faulted == true");
+    TEST_ASSERT(page_fault_pop_user_copy_ctx() == true,
+                "Pop del contexto exterior (nivel 1) retorna true confirmando el fallo registrado");
+    TEST_ASSERT(page_fault_is_user_copy_active() == false && page_fault_get_user_copy_depth() == 0,
+                "Pila de contextos queda completamente cerrada (depth = 0)");
 }
 
 /* Test 19: Primitivas GFX 2D, Clipping y Doble Búfer */

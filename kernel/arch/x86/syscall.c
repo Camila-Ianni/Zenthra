@@ -95,13 +95,18 @@ bool is_user_pages_accessible_failclosed(const void* ptr, size_t size, bool writ
 }
 
 /*
- * Copia segura con ventana de recuperación (fault-fixup) desde userland hacia kernel (Auditoría v18):
- * - Bloquea el planificador (scheduler_lock) para estabilizar el espacio de direcciones durante la validación y copia.
- * - Registra una ventana activa de copia (page_fault_begin_user_copy) para interceptar cualquier #PF inesperado
- *   sin causar pánico del kernel y retornar -1 (-EFAULT).
+ * Copia segura con tabla de excepción real (Exception Table / Fixup) desde userland hacia kernel (Auditoría v19):
+ * 1. Bloquea el planificador (scheduler_lock) para estabilizar el espacio de direcciones durante la validación y copia.
+ * 2. Valida todas las páginas del rango en el directorio activo (is_user_pages_accessible_failclosed).
+ * 3. Apila un contexto reentrante (page_fault_push_user_copy_ctx) que vincula estrictamente el rango de direcciones
+ *    de usuario [user_src, user_src + size) y el rango de instrucciones [__user_copy_fault_start, __user_copy_fault_end).
+ * 4. Ejecuta la copia mediante arch_user_copy_bytes: si ocurre un #PF de hardware dentro de la instrucción,
+ *    page_fault_handler redirige regs->eip = __user_copy_fault_fixup y arch_user_copy_bytes retorna -1 (-EFAULT)
+ *    de forma inmediata sin bucle de excepciones ni pánico.
  */
 int copy_from_user(void* kernel_dest, const void* user_src, size_t size) {
     if (!kernel_dest || !user_src) return -1;
+    if (size == 0) return 0;
 
     scheduler_lock();
     if (!is_user_pages_accessible_failclosed(user_src, size, false)) {
@@ -109,30 +114,28 @@ int copy_from_user(void* kernel_dest, const void* user_src, size_t size) {
         return -1;
     }
 
-    page_fault_begin_user_copy();
-    const uint8_t* src_bytes = (const uint8_t*)user_src;
-    uint8_t* dst_bytes = (uint8_t*)kernel_dest;
-    for (size_t i = 0; i < size; i++) {
-        if (page_fault_did_user_copy_fault()) {
-            page_fault_end_user_copy();
-            scheduler_unlock();
-            return -1;
-        }
-        dst_bytes[i] = src_bytes[i];
+    if (!page_fault_push_user_copy_ctx((uintptr_t)user_src, size,
+                                       page_fault_get_copy_eip_start(),
+                                       page_fault_get_copy_eip_end(),
+                                       page_fault_get_copy_fixup_eip())) {
+        scheduler_unlock();
+        return -1;
     }
-    bool faulted = page_fault_did_user_copy_fault();
-    page_fault_end_user_copy();
+
+    int rc = arch_user_copy_bytes(kernel_dest, user_src, size);
+    bool faulted = page_fault_pop_user_copy_ctx();
     scheduler_unlock();
 
-    return faulted ? -1 : 0;
+    return (rc != 0 || faulted) ? -1 : 0;
 }
 
 /*
- * Copia segura con ventana de recuperación (fault-fixup) desde kernel hacia userland (Auditoría v18):
- * Retorna 0 si fue exitosa, o -1 si el destino de usuario o páginas son inválidos/de solo lectura o hubo #PF.
+ * Copia segura con tabla de excepción real (Exception Table / Fixup) desde kernel hacia userland (Auditoría v19):
+ * Retorna 0 si fue exitosa, o -1 si el destino de usuario o páginas son inválidos/de solo lectura o hubo #PF con fixup.
  */
 int copy_to_user(void* user_dest, const void* kernel_src, size_t size) {
     if (!user_dest || !kernel_src) return -1;
+    if (size == 0) return 0;
 
     scheduler_lock();
     if (!is_user_pages_accessible_failclosed(user_dest, size, true)) {
@@ -140,51 +143,90 @@ int copy_to_user(void* user_dest, const void* kernel_src, size_t size) {
         return -1;
     }
 
-    page_fault_begin_user_copy();
-    uint8_t* dst_bytes = (uint8_t*)user_dest;
-    const uint8_t* src_bytes = (const uint8_t*)kernel_src;
-    for (size_t i = 0; i < size; i++) {
-        if (page_fault_did_user_copy_fault()) {
-            page_fault_end_user_copy();
-            scheduler_unlock();
-            return -1;
-        }
-        dst_bytes[i] = src_bytes[i];
+    if (!page_fault_push_user_copy_ctx((uintptr_t)user_dest, size,
+                                       page_fault_get_copy_eip_start(),
+                                       page_fault_get_copy_eip_end(),
+                                       page_fault_get_copy_fixup_eip())) {
+        scheduler_unlock();
+        return -1;
     }
-    bool faulted = page_fault_did_user_copy_fault();
-    page_fault_end_user_copy();
+
+    int rc = arch_user_copy_bytes(user_dest, kernel_src, size);
+    bool faulted = page_fault_pop_user_copy_ctx();
     scheduler_unlock();
 
-    return faulted ? -1 : 0;
+    return (rc != 0 || faulted) ? -1 : 0;
 }
 
 /*
- * Calcula la longitud de una cadena de usuario de forma segura hasta max_len (Auditoría v14..v18).
+ * Primitiva de verificación de hardware (Auditoría v19):
+ * Ejecuta arch_user_copy_bytes directamente sobre un rango de usuario registrado en la
+ * tabla de excepción SIN el filtro previo de páginas por software, permitiendo provocar un
+ * Page Fault (#PF Vector 14) real en la CPU en QEMU (página no mapeada o página de solo lectura
+ * con CR0.WP=1) y demostrar que page_fault_handler redirige regs->eip a __user_copy_fault_fixup
+ * retornando -1 (-EFAULT) sin bucle infinito ni Kernel Panic.
+ */
+int copy_from_user_fixup_hw_test(void* kernel_dest, const void* user_src, size_t size) {
+    if (!kernel_dest || !user_src || size == 0) return -1;
+    if (!is_user_pointer(user_src, size)) return -1;
+
+    scheduler_lock();
+    if (!page_fault_push_user_copy_ctx((uintptr_t)user_src, size,
+                                       page_fault_get_copy_eip_start(),
+                                       page_fault_get_copy_eip_end(),
+                                       page_fault_get_copy_fixup_eip())) {
+        scheduler_unlock();
+        return -1;
+    }
+
+    int rc = arch_user_copy_bytes(kernel_dest, user_src, size);
+    bool faulted = page_fault_pop_user_copy_ctx();
+    scheduler_unlock();
+
+    return (rc != 0 || faulted) ? -1 : 0;
+}
+
+int copy_to_user_fixup_hw_test(void* user_dest, const void* kernel_src, size_t size) {
+    if (!user_dest || !kernel_src || size == 0) return -1;
+    if (!is_user_pointer(user_dest, size)) return -1;
+
+    scheduler_lock();
+    if (!page_fault_push_user_copy_ctx((uintptr_t)user_dest, size,
+                                       page_fault_get_copy_eip_start(),
+                                       page_fault_get_copy_eip_end(),
+                                       page_fault_get_copy_fixup_eip())) {
+        scheduler_unlock();
+        return -1;
+    }
+
+    int rc = arch_user_copy_bytes(user_dest, kernel_src, size);
+    bool faulted = page_fault_pop_user_copy_ctx();
+    scheduler_unlock();
+
+    return (rc != 0 || faulted) ? -1 : 0;
+}
+
+/*
+ * Calcula la longitud de una cadena de usuario de forma segura hasta max_len (Auditoría v14..v19).
  *
  * Contrato de seguridad y prevención de fallos (#PF en Ring 0):
  * Mantiene estable el espacio de direcciones con scheduler_lock(), valida bloque por bloque de página
- * en el directorio activo y protege la lectura bajo page_fault_begin_user_copy().
+ * en el directorio activo y copia cada bloque validado mediante arch_user_copy_bytes protegido por
+ * page_fault_push_user_copy_ctx() con redirección real de EIP ante cualquier #PF inesperado.
  */
 ssize_t strnlen_user(const char* user_str, size_t max_len) {
     if (!user_str || max_len == 0) return -1;
     if (!is_user_pointer(user_str, 1)) return -1;
 
     scheduler_lock();
-    page_fault_begin_user_copy();
     size_t inspected = 0;
+    char kpage_chunk[64];
+
     while (inspected < max_len) {
         const char* cur = user_str + inspected;
         if (!is_user_pointer(cur, 1)) {
-            page_fault_end_user_copy();
             scheduler_unlock();
             return -1;
-        }
-
-        // Validar que la página que contiene 'cur' sea accesible con permisos de usuario
-        if (!is_user_pages_accessible_failclosed(cur, 1, false)) {
-            page_fault_end_user_copy();
-            scheduler_unlock();
-            return -1; // Página inaccesible: abortar de forma segura sin desreferenciar
         }
 
         // Determinar cuántos bytes restan en la página actual antes del siguiente límite de 4 KiB
@@ -194,16 +236,34 @@ ssize_t strnlen_user(const char* user_str, size_t max_len) {
         if (chunk_len > bytes_left_in_page) {
             chunk_len = bytes_left_in_page;
         }
+        if (chunk_len > sizeof(kpage_chunk)) {
+            chunk_len = sizeof(kpage_chunk);
+        }
 
-        // Inspeccionar bytes dentro del rango validado de la página
+        // Validar que el bloque dentro de la página sea accesible con permisos de usuario
+        if (!is_user_pages_accessible_failclosed(cur, chunk_len, false)) {
+            scheduler_unlock();
+            return -1; // Página inaccesible: abortar de forma segura sin desreferenciar
+        }
+
+        if (!page_fault_push_user_copy_ctx((uintptr_t)cur, chunk_len,
+                                           page_fault_get_copy_eip_start(),
+                                           page_fault_get_copy_eip_end(),
+                                           page_fault_get_copy_fixup_eip())) {
+            scheduler_unlock();
+            return -1;
+        }
+
+        int rc = arch_user_copy_bytes(kpage_chunk, cur, chunk_len);
+        bool faulted = page_fault_pop_user_copy_ctx();
+        if (rc != 0 || faulted) {
+            scheduler_unlock();
+            return -1;
+        }
+
+        // Inspeccionar bytes en el buffer local del kernel
         for (size_t j = 0; j < chunk_len; j++) {
-            if (page_fault_did_user_copy_fault()) {
-                page_fault_end_user_copy();
-                scheduler_unlock();
-                return -1;
-            }
-            if (cur[j] == '\0') {
-                page_fault_end_user_copy();
+            if (kpage_chunk[j] == '\0') {
                 scheduler_unlock();
                 return (ssize_t)(inspected + j);
             }
@@ -212,7 +272,6 @@ ssize_t strnlen_user(const char* user_str, size_t max_len) {
         inspected += chunk_len;
     }
 
-    page_fault_end_user_copy();
     scheduler_unlock();
     return -1; // Terminador NUL no encontrado dentro de max_len
 }
@@ -227,10 +286,10 @@ void syscall_dispatcher(struct registers* regs) {
 
     switch (syscall_num) {
         case SYS_WRITE: {
-            // ABI de Syscall Zenthra OS (Auditoría v14..v18):
+            // ABI de Syscall Zenthra OS (Auditoría v14..v19):
             //   EBX: const void* user_buf (puntero a búfer de usuario)
             //   ECX: size_t count (número de bytes solicitados a escribir)
-            // Contrato de transferencia y escritura parcial (Auditoría v18):
+            // Contrato de transferencia y escritura parcial (Auditoría v18/v19):
             //   - count == 0 retorna 0 (éxito nulo estándar POSIX).
             //   - Cada llamada acota count a un máximo de MAX_SYSCALL_TRANSFER_SIZE (65536 bytes).
             //   - No se realiza doble validación global previa: cada bloque de 256 bytes ('chunk')
@@ -282,16 +341,17 @@ void syscall_dispatcher(struct registers* regs) {
         }
 
         case SYS_READ: {
-            // ABI de Syscall Zenthra OS (Auditoría v15..v18):
+            // ABI de Syscall Zenthra OS (Auditoría v15..v19):
             //   EBX: void* user_buf (puntero a búfer de destino en usuario)
             //   ECX: size_t count (número máximo de bytes solicitados)
             //   EDX: uint32_t flags (SYS_READ_NONBLOCK o SYS_READ_BLOCKING)
             //
-            // Lectura Transaccional y Atomicidad (Auditoría v17/v18):
-            // La secuencia keyboard_peek_queue -> copy_to_user -> keyboard_discard_chars se ejecuta
-            // dentro de una sección crítica protegida con scheduler_lock() bajo el modelo UP (Uniprocesador)
-            // con gate de interrupción INT 0x80 (IF=0), impidiendo que otra tarea o consumidor concurrente
-            // intercalado altere la cola entre el peek y el discard.
+            // Lectura Transaccional y Validación Exacta (Auditoría v17..v19):
+            // 1. Se comprueba que user_buf no sea NULL y que su primer byte sea escribible antes de
+            //    devolver -EAGAIN cuando la cola está vacía (preservando la prioridad POSIX -EFAULT sobre -EAGAIN).
+            // 2. Cuando existen 'peeked' bytes disponibles en la cola, copy_to_user(user_buf, kbuf_read, peeked)
+            //    es la validación autoritativa que verifica el rango exacto [user_buf, user_buf + peeked)
+            //    y realiza la copia bajo protección de fixup antes de invocar keyboard_discard_chars(peeked).
             void* user_buf = (void*)(uintptr_t)regs->ebx;
             size_t count = (size_t)regs->ecx;
             uint32_t flags = (uint32_t)regs->edx;
@@ -311,7 +371,7 @@ void syscall_dispatcher(struct registers* regs) {
                 break;
             }
 
-            if (!user_buf || !is_user_pages_accessible_failclosed(user_buf, 1, true)) {
+            if (!user_buf) {
                 regs->eax = (uint32_t)-EFAULT;
                 break;
             }
@@ -320,8 +380,10 @@ void syscall_dispatcher(struct registers* regs) {
             keyboard_poll_hardware();
 
             if (keyboard_queue_is_empty()) {
+                // Si la cola está vacía, verificar accesibilidad de la base de user_buf para retornar -EFAULT si el puntero es inválido
+                bool base_ok = is_user_pages_accessible_failclosed(user_buf, 1, true);
                 scheduler_unlock();
-                regs->eax = (uint32_t)-EAGAIN;
+                regs->eax = base_ok ? (uint32_t)-EAGAIN : (uint32_t)-EFAULT;
                 break;
             }
 
@@ -342,7 +404,7 @@ void syscall_dispatcher(struct registers* regs) {
                 break;
             }
 
-            // copy_to_user valida las páginas de los 'peeked' bytes y copia bajo protección fault-safe
+            // copy_to_user es la validación autoritativa para los 'peeked' bytes exactos y ejecuta bajo fixup
             if (copy_to_user(user_buf, kbuf_read, peeked) != 0) {
                 // Si la copia falla, la cola permanece 100% intacta
                 scheduler_unlock();

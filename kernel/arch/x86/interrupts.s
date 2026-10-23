@@ -201,5 +201,50 @@ switch_context:
     ret                 /* Salta a la dirección de retorno de la nueva tarea */
 .size switch_context, . - switch_context
 
+/*
+ * arch_user_copy_bytes:
+ *   Primitiva de copia de memoria en assembly x86 con dirección de recuperación (fixup) real
+ *   frente a excepciones #PF de la CPU (Auditoría v19).
+ *
+ *   Prototipo C: int arch_user_copy_bytes(void* dst, const void* src, size_t size);
+ *   Convención cdecl (i386):
+ *     [esp +  8] tras push %esi, %edi = dst
+ *     [esp + 12] tras push %esi, %edi = src
+ *     [esp + 16] tras push %esi, %edi = size
+ *
+ *   Mecanismo de fixup real:
+ *   Si una instrucción entre __user_copy_fault_start y __user_copy_fault_end provoca un #PF
+ *   (por página no mapeada o sin permisos de escritura) y la dirección en CR2 pertenece al
+ *   rango de usuario registrado en la ventana activa de copia, page_fault_handler redirige
+ *   regs->eip = (uint32_t)__user_copy_fault_fixup. Al ejecutar IRET, la CPU continúa en
+ *   __user_copy_fault_fixup (en lugar de reintentar la instrucción fallida en bucle),
+ *   restaura %edi/%esi y retorna -1 (-EFAULT).
+ */
+.global arch_user_copy_bytes
+.global __user_copy_fault_start
+.global __user_copy_fault_end
+.global __user_copy_fault_fixup
+.type arch_user_copy_bytes, @function
+arch_user_copy_bytes:
+    pushl %esi
+    pushl %edi
+    movl 12(%esp), %edi     /* dst */
+    movl 16(%esp), %esi     /* src */
+    movl 20(%esp), %ecx     /* size */
+    cld
+__user_copy_fault_start:
+    rep movsb
+__user_copy_fault_end:
+    xorl %eax, %eax         /* Éxito: retorna 0 */
+    popl %edi
+    popl %esi
+    ret
+__user_copy_fault_fixup:
+    movl $-1, %eax          /* Recuperación de #PF: retorna -1 (-EFAULT) */
+    popl %edi
+    popl %esi
+    ret
+.size arch_user_copy_bytes, . - arch_user_copy_bytes
+
 /* Marca de pila no ejecutable para compatibilidad con linkers modernos */
 .section .note.GNU-stack,"",@progbits

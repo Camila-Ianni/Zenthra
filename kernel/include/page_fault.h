@@ -20,16 +20,50 @@ void page_fault_handler(struct registers* regs);
 size_t page_fault_get_count(void);
 uint32_t page_fault_get_last_address(void);
 uint32_t page_fault_get_last_error_code(void);
+size_t page_fault_get_fixup_count(void);
 
 /*
- * Mecanismo de protección y recuperación (fixup) durante copias entre userland y kernel (Auditoría v18):
- * Permite registrar una ventana activa de copia (copy_from_user / copy_to_user / strnlen_user)
- * y detectar si se produjo un Page Fault inesperado durante la transferencia para abortar con -EFAULT.
+ * Mecanismo de recuperación real de excepciones #PF (Exception Table / Fixup) durante copias
+ * entre userland y kernel (Auditoría v19):
+ *
+ * 1. Pila reentrante de contextos de copia (profundidad USER_COPY_CTX_MAX_DEPTH) para soportar
+ *    o rechazar explícitamente el anidamiento sin sobrescribir ni perder el contexto exterior.
+ * 2. Vinculación estricta del fallo a:
+ *      (a) Rango de EIP registrado de la instrucción de copia ([eip_start, eip_end)), y
+ *      (b) Rango de direcciones virtuales de usuario esperado ([user_start, user_end)).
+ * 3. Redirección real del contexto de CPU guardado: si el #PF cumple ambas condiciones,
+ *    page_fault_handler reescribe regs->eip = fixup_eip para que IRET salte a la etiqueta de
+ *    salida (__user_copy_fault_fixup) y retorne -1 (-EFAULT) sin reintentar la instrucción fallida.
+ * 4. Si el #PF ocurre en otra instrucción de Ring 0 o sobre una dirección de kernel fuera de la
+ *    ventana de usuario registrada, NO se oculta: sigue el camino normal de diagnóstico y Kernel Panic.
  */
+#define USER_COPY_CTX_MAX_DEPTH 4
+
+struct user_copy_fixup_ctx {
+    uintptr_t user_start;
+    uintptr_t user_end;
+    uintptr_t eip_start;
+    uintptr_t eip_end;
+    uintptr_t fixup_eip;
+    bool      faulted;
+};
+
+bool page_fault_push_user_copy_ctx(uintptr_t user_start, size_t size,
+                                   uintptr_t eip_start, uintptr_t eip_end, uintptr_t fixup_eip);
+bool page_fault_pop_user_copy_ctx(void);
+size_t page_fault_get_user_copy_depth(void);
+
+/* Wrappers de compatibilidad con rango de usuario y EIP de la primitiva arch_user_copy_bytes */
+void page_fault_begin_user_copy_range(uintptr_t user_addr, size_t size);
 void page_fault_begin_user_copy(void);
 void page_fault_end_user_copy(void);
 bool page_fault_is_user_copy_active(void);
 bool page_fault_did_user_copy_fault(void);
-void page_fault_simulate_user_copy_fault(uint32_t fault_addr);
+
+/* Primitiva en assembly x86 (interrupts.s) con etiquetas de excepción exportadas */
+int arch_user_copy_bytes(void* dst, const void* src, size_t size);
+uintptr_t page_fault_get_copy_eip_start(void);
+uintptr_t page_fault_get_copy_eip_end(void);
+uintptr_t page_fault_get_copy_fixup_eip(void);
 
 #endif

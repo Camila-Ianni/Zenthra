@@ -85,9 +85,9 @@ Zenthra OS implementa **11 perfiles de usuario** especializados. Cada perfil cue
 
 ---
 
-### 3. Pruebas Automatizadas y Validación (Auditoría v18)
+### 3. Pruebas Automatizadas y Validación (Auditoría v19)
 
-Se ejecutó la suite de pruebas mediante `make test` (**460 pruebas automatizadas, 0 fallos, 0 warnings**):
+Se ejecutó la suite de pruebas mediante `make test` (**478 pruebas automatizadas, 0 fallos, 0 warnings**):
 
 ```
 ====================================================
@@ -107,8 +107,8 @@ Se ejecutó la suite de pruebas mediante `make test` (**460 pruebas automatizada
 [*] Ejecutando: test_x86_structures... (3 pruebas: GDT, IDT, TSS 104 bytes)
 [*] Ejecutando: test_multiboot_and_power... (11 pruebas: firmas, tags, salvaguardas ACPI)
 [*] Ejecutando: test_pmm_physical_allocator... (23 pruebas: 64-bit, alineación, límites, salvaguarda de desbordamiento)
-[*] Ejecutando: test_vmm_hardware_paging... (40 pruebas: Identity Mapping exacto a 64 MiB, CR0, CR3, accesibilidad, direct map, aislamiento de proceso, validación fail-closed de memoria de usuario, escritura parcial exacta en frontera de página y TLB invalidation)
-[*] Ejecutando: test_page_fault_handler... (12 pruebas: decodificación #PF CR2 y ventana de recuperación fixup durante copia de usuario)
+[*] Ejecutando: test_vmm_hardware_paging... (41 pruebas: Identity Mapping exacto a 64 MiB, CR0, CR3, accesibilidad, direct map, aislamiento de proceso, validación fail-closed de memoria de usuario, escritura parcial exacta en frontera de página y TLB invalidation)
+[*] Ejecutando: test_page_fault_handler... (29 pruebas: decodificación #PF CR2, redirección real de regs->eip a fixup_eip, no-ocultamiento de #PF de Ring 0 fuera de la instrucción de copia o fuera del rango de usuario CR2, y pila reentrante copy_ctx_stack de profundidad 4 con rechazo de desbordamiento)
 [*] Ejecutando: test_pit_and_irq_masks... (10 pruebas: 100 Hz, máscaras PIC)
 [*] Ejecutando: test_gfx_and_lfb... (25 pruebas: 1024x768x32bpp, doble buffer, clipping)
 [*] Ejecutando: test_mouse_ps2... (17 pruebas: paquetes, botones, límites de pantalla)
@@ -116,7 +116,7 @@ Se ejecutó la suite de pruebas mediante `make test` (**460 pruebas automatizada
 [*] Ejecutando: test_ps2_keyboard_driver... (171 pruebas: Left/Right Shift independientes, protección anti-autorepetición de Caps Lock Make/Break, Layout Español Básico ASCII, telemetría y saturación de cola)
 
 ----------------------------------------------------
-Resultados: 460 Aprobados | 0 Fallidos
+Resultados: 478 Aprobados | 0 Fallidos
 ----------------------------------------------------
 [+] Todas las pruebas pasaron satisfactoriamente.
 ```
@@ -127,12 +127,12 @@ Resultados: 460 Aprobados | 0 Fallidos
 
 - **Flujo GitHub Actions (`.github/workflows/ci.yml`)**:
   - `make check-env`: Diagnóstico y reporte de herramientas del entorno.
-  - `make test`: Ejecución de las 460 pruebas unitarias sin dependencias externas (0 fallos, 0 warnings).
+  - `make test`: Ejecución de las 478 pruebas unitarias sin dependencias externas (0 fallos, 0 warnings).
   - `make kernel`: Compilación y enlace del ELF x86 de 32 bits (`i686`).
   - `grub-file`: Verificación estricta del encabezado Multiboot 1.
   - `make iso`: Creación de la imagen arrancable `build/zenthra_os.iso` con GRUB y generación de `build/BUILD_INFO.txt` con SHA-256.
   - `make verify-qemu`: Ejecución de doble verificación automatizada:
-    1. `verify-qemu-complete`: Ejecución directa del kernel con bandera `test-mode`, exigiendo la emisión de `[TEST_COMPLETE] ZENTHRA_QEMU_TEST_COMPLETE`, apagado limpio ACPI y finalización con **exit code 0** (no acepta timeouts).
+    1. `verify-qemu-complete`: Ejecución directa del kernel con bandera `test-mode`, exigiendo la verificación de `#PF` real con redirección de `EIP` (`[VMM_FIXUP_QEMU_PASS]`), la emisión de `[TEST_COMPLETE] ZENTHRA_QEMU_TEST_COMPLETE`, apagado limpio ACPI y finalización con **exit code 0** (no acepta timeouts).
     2. `verify-qemu-smoke`: Arranque de la imagen ISO con GRUB, inicialización gráfica VESA LFB, ratón PS/2, gestor de ventanas y estabilidad del escritorio sin pánicos de CPU.
 - **Portabilidad Host macOS / Darwin**:
   - Detección explícita de SO en `Makefile`.
@@ -142,10 +142,10 @@ Resultados: 460 Aprobados | 0 Fallidos
 
 ## 5. Prototipo de Escritorio & Jarvis Multi-Agente (`desktop_prototype/`)
 
-Como parte de los compromisos de las **Auditorías Técnicas v16, v17 y v18**:
+Como parte de los compromisos de las **Auditorías Técnicas v16, v17, v18 y v19**:
 - **Aislamiento Arquitectónico**: El kernel bare-metal en `kernel/` permanece libre de código de IA, librerías de alto nivel o credenciales.
 - **Prototipo Independiente en Userland**: Se construyó en `desktop_prototype/` una interfaz gráfica con Glassmorphism auténtico (`backdrop-filter`), barra superior con selector de modo Eco (bajo consumo para hardware limitado) y temas claro/oscuro, dock flotante animado con sincronización completa de foco/minimizado, terminal interactiva con simulación de comandos del sistema, monitor de telemetría IoT y el **Centro de 6 Agentes Especializados** (Backend, Ciberseguridad, Kernel/OS, Datos, Creativo/UI, Automatización) coordinados por **Jarvis AI Assistant**.
-- **Seguridad y Transparencia Operativa (v17/v18)**:
+- **Seguridad y Transparencia Operativa (v17..v19)**:
   - **Prevención XSS (0 `innerHTML`)**: Construcción segura de elementos DOM mediante `document.createElement` y `textContent` tanto en la terminal como en el asistente Jarvis.
   - **Cancelación Modal Determinista**: El botón `⏹ Abortar Plan` cierra cualquier modal de aprobación abierto y resuelve de inmediato la promesa pendiente como cancelada, evitando bloqueos de estado.
   - **Etiquetado Honesto `[DEMO]` / `[SIMULADA]`**: Banner persistente de entorno demostrativo, métricas de hardware rotuladas como `[SIMULADA]`, estado `"Gateway Demo (No Conectado)"` y mensaje explícito de que no se ejecutan agentes reales ni se modifican archivos del sistema.
