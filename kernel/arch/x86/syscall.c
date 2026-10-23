@@ -6,17 +6,22 @@
 /*
  * Validación de punteros de usuario:
  * Comprueba que el rango [ptr, ptr + size) esté dentro del espacio de usuario válido,
- * no sea NULL y no desborde el límite de 32 bits ni invada el espacio reservado del kernel.
+ * no sea NULL y no desborde el límite de memoria del kernel.
+ * 
+ * NOTA ARQUITECTURAL: Esta verificación valida el rango lógico de direcciones
+ * (segmentación plana x86). El aislamiento total por proceso y protección ante
+ * páginas no mapeadas requiere activar Paging (CR0.PG) y tablas de páginas en Ring 3,
+ * programado en la Fase 3 del Roadmap.
  */
 bool is_user_pointer(const void* ptr, size_t size) {
     if (ptr == NULL) return false;
     uintptr_t addr = (uintptr_t)ptr;
 
-    // Comprobar desbordamiento aritmético
-    if (addr + size < addr) return false;
+    // Comprobar que la dirección base no exceda el límite de usuario
+    if (addr >= USER_MEMORY_LIMIT) return false;
 
-    // Comprobar que no acceda al espacio de memoria protegido del kernel
-    if (addr + size > USER_MEMORY_LIMIT) return false;
+    // Comprobar desbordamiento aritmético y límite superior sin wrap-around
+    if (size > (USER_MEMORY_LIMIT - addr)) return false;
 
     return true;
 }

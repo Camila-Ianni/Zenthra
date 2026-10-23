@@ -3,6 +3,15 @@
 #include "klib.h"
 #include "vga.h"
 
+#if defined(__KERNEL__)
+extern void switch_context(uint32_t* old_esp_ptr, uint32_t new_esp);
+#else
+static inline void switch_context(uint32_t* old_esp_ptr, uint32_t new_esp) {
+    if (old_esp_ptr) *old_esp_ptr = 0x1234;
+    (void)new_esp;
+}
+#endif
+
 #define TASK_STACK_SIZE 4096
 
 static struct task task_table[MAX_TASKS];
@@ -45,20 +54,16 @@ int task_create(const char* name, void (*entry_point)(void)) {
             task_table[i].state = TASK_READY;
             task_table[i].runtime_ticks = 0;
 
-            // Simular marco de pila para retorno con IRET o context switch
+            // Marco de pila exacto para switch_context (retorno vía 'ret' y popfl/pop registers)
             uint32_t* sp = (uint32_t*)(stack + TASK_STACK_SIZE);
 
-            *(--sp) = (uintptr_t)task_exit;   // Dirección de retorno si termina
-            *(--sp) = (uintptr_t)entry_point; // EIP inicial
-            *(--sp) = 0x202;                  // EFLAGS (IF=1)
-            *(--sp) = 0;                      // EAX
-            *(--sp) = 0;                      // ECX
-            *(--sp) = 0;                      // EDX
-            *(--sp) = 0;                      // EBX
-            *(--sp) = 0;                      // ESP ficticio
-            *(--sp) = 0;                      // EBP
-            *(--sp) = 0;                      // ESI
+            *(--sp) = (uintptr_t)task_exit;   // Dirección si entry_point() termina
+            *(--sp) = (uintptr_t)entry_point; // EIP inicial desapilado por 'ret' en switch_context
+            *(--sp) = 0x202;                  // EFLAGS (IF=1 para interrupciones activas)
             *(--sp) = 0;                      // EDI
+            *(--sp) = 0;                      // ESI
+            *(--sp) = 0;                      // EBX
+            *(--sp) = 0;                      // EBP
 
             task_table[i].esp = (uint32_t)(uintptr_t)sp;
             return (int)task_table[i].id;
@@ -104,6 +109,8 @@ void task_yield(void) {
     current_task_idx = next_idx;
     task_table[current_task_idx].state = TASK_RUNNING;
     task_table[current_task_idx].runtime_ticks++;
+
+    switch_context(&task_table[prev_idx].esp, task_table[current_task_idx].esp);
 }
 
 uint32_t scheduler_schedule(uint32_t current_esp) {

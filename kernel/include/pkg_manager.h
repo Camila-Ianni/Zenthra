@@ -24,7 +24,11 @@ void pkg_recommend(enum nova_profile profile);
 int pkg_install(const char* pkg_id);
 int pkg_uninstall(const char* pkg_id);
 
-/* Verificación de integridad estándar mediante CRC32 (IEEE 802.3) */
+/* 
+ * Verificación de integridad estándar mediante CRC32 (IEEE 802.3).
+ * NOTA: Valida contra corrupción accidental en memoria/transferencia.
+ * Para autenticidad criptográfica de autor, la Fase 6 implementará firmas digitales SHA256/Ed25519.
+ */
 uint32_t pkg_compute_crc32(const uint8_t* data, size_t length);
 bool pkg_verify_integrity(const char* pkg_id, const uint8_t* data, size_t length);
 

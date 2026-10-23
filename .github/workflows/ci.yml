@@ -1,4 +1,4 @@
-name: Zenthra OS CI - Build, Test & ISO Release
+name: Zenthra OS CI - Build, Test, QEMU & ISO Release
 
 on:
   push:
@@ -14,53 +14,29 @@ jobs:
       - name: Checkout del Repositorio
         uses: actions/checkout@v4
 
-      - name: Instalar Dependencias (GCC x86, Clang, GRUB, xorriso, QEMU)
+      - name: Instalar Dependencias (GCC Multilib, Clang, GRUB, xorriso, QEMU, mtools, dosfstools)
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc-multilib build-essential grub-pc-bin grub-common xorriso qemu-system-x86 clang mtools dosfstools
 
       - name: Ejecutar Test Suite Unitario y de Protocolo
         run: |
+          make clean
           make test
 
-      - name: Compilar Kernel ELF (Bare Metal x86_32)
+      - name: Compilar Kernel ELF y Generar Imagen ISO Arrancable
         run: |
-          mkdir -p build
-          gcc -m32 -c boot/boot.s -o build/boot_boot.o
-          gcc -std=gnu99 -m32 -ffreestanding -O2 -Wall -Wextra -fno-builtin -fno-stack-protector -nostdlib -D__KERNEL__ -Ikernel/include -c kernel/kernel.c -o build/kernel_kernel.o
-          gcc -std=gnu99 -m32 -ffreestanding -O2 -Wall -Wextra -fno-builtin -fno-stack-protector -nostdlib -D__KERNEL__ -Ikernel/include -c kernel/arch/x86/gdt.c -o build/kernel_gdt.o
-          gcc -std=gnu99 -m32 -ffreestanding -O2 -Wall -Wextra -fno-builtin -fno-stack-protector -nostdlib -D__KERNEL__ -Ikernel/include -c kernel/arch/x86/idt.c -o build/kernel_idt.o
-          gcc -std=gnu99 -m32 -ffreestanding -O2 -Wall -Wextra -fno-builtin -fno-stack-protector -nostdlib -D__KERNEL__ -Ikernel/include -c kernel/arch/x86/syscall.c -o build/kernel_syscall.o
-          gcc -std=gnu99 -m32 -ffreestanding -O2 -Wall -Wextra -fno-builtin -fno-stack-protector -nostdlib -D__KERNEL__ -Ikernel/include -c kernel/drivers/vga.c -o build/kernel_vga.o
-          gcc -std=gnu99 -m32 -ffreestanding -O2 -Wall -Wextra -fno-builtin -fno-stack-protector -nostdlib -D__KERNEL__ -Ikernel/include -c kernel/drivers/serial.c -o build/kernel_serial.o
-          gcc -std=gnu99 -m32 -ffreestanding -O2 -Wall -Wextra -fno-builtin -fno-stack-protector -nostdlib -D__KERNEL__ -Ikernel/include -c kernel/drivers/pit.c -o build/kernel_pit.o
-          gcc -std=gnu99 -m32 -ffreestanding -O2 -Wall -Wextra -fno-builtin -fno-stack-protector -nostdlib -D__KERNEL__ -Ikernel/include -c kernel/drivers/task.c -o build/kernel_task.o
-          gcc -std=gnu99 -m32 -ffreestanding -O2 -Wall -Wextra -fno-builtin -fno-stack-protector -nostdlib -D__KERNEL__ -Ikernel/include -c kernel/drivers/acl_security.c -o build/kernel_acl_security.o
-          gcc -std=gnu99 -m32 -ffreestanding -O2 -Wall -Wextra -fno-builtin -fno-stack-protector -nostdlib -D__KERNEL__ -Ikernel/include -c kernel/drivers/ramfs.c -o build/kernel_ramfs.o
-          gcc -std=gnu99 -m32 -ffreestanding -O2 -Wall -Wextra -fno-builtin -fno-stack-protector -nostdlib -D__KERNEL__ -Ikernel/include -c kernel/drivers/pkg_manager.c -o build/kernel_pkg_manager.o
-          gcc -std=gnu99 -m32 -ffreestanding -O2 -Wall -Wextra -fno-builtin -fno-stack-protector -nostdlib -D__KERNEL__ -Ikernel/include -c kernel/drivers/rules_engine.c -o build/kernel_rules_engine.o
-          gcc -std=gnu99 -m32 -ffreestanding -O2 -Wall -Wextra -fno-builtin -fno-stack-protector -nostdlib -D__KERNEL__ -Ikernel/include -c kernel/drivers/keyboard.c -o build/kernel_keyboard.o
-          gcc -std=gnu99 -m32 -ffreestanding -O2 -Wall -Wextra -fno-builtin -fno-stack-protector -nostdlib -D__KERNEL__ -Ikernel/include -c kernel/drivers/nova_iot.c -o build/kernel_nova_iot.o
-          gcc -std=gnu99 -m32 -ffreestanding -O2 -Wall -Wextra -fno-builtin -fno-stack-protector -nostdlib -D__KERNEL__ -Ikernel/include -c kernel/drivers/shell.c -o build/kernel_shell.o
-          gcc -std=gnu99 -m32 -ffreestanding -O2 -Wall -Wextra -fno-builtin -fno-stack-protector -nostdlib -D__KERNEL__ -Ikernel/include -c kernel/lib/klib.c -o build/kernel_klib.o
-          gcc -std=gnu99 -m32 -ffreestanding -O2 -Wall -Wextra -fno-builtin -fno-stack-protector -nostdlib -D__KERNEL__ -Ikernel/include -c kernel/lib/kheap.c -o build/kernel_kheap.o
-          ld -m elf_i386 -T boot/linker.ld -nostdlib -o build/nova_kernel.elf build/*.o
+          make iso
 
-      - name: Validar Cabecera Multiboot del Kernel ELF
+      - name: Validar Arranque Automatizado en QEMU y Alternancia de Tareas
         run: |
-          grub-file --is-x86-multiboot build/nova_kernel.elf
-          echo "[OK] El binario ELF cumple estrictamente la especificacion Multiboot"
+          make verify-qemu
 
-      - name: Generar Imagen ISO Arrancable (VirtualBox / GRUB)
-        run: |
-          mkdir -p build/isodir/boot/grub
-          cp build/nova_kernel.elf build/isodir/boot/nova_kernel.elf
-          cp boot/grub/grub.cfg build/isodir/boot/grub/grub.cfg
-          grub-mkrescue -o build/nova_os.iso build/isodir
-          sha256sum build/nova_os.iso
-
-      - name: Subir Imagen ISO como Artefacto de Build
+      - name: Subir Imagen ISO y Log Serial como Artefactos de Build
         uses: actions/upload-artifact@v4
         with:
-          name: zenthra-os-virtualbox-iso
-          path: build/nova_os.iso
+          name: zenthra-os-artifacts
+          path: |
+            build/zenthra_os.iso
+            build/zenthra_kernel.elf
+            build/serial.log

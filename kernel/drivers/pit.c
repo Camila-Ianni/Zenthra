@@ -1,6 +1,7 @@
 #include "pit.h"
 #include "io.h"
 #include "idt.h"
+#include "serial.h"
 
 static volatile uint32_t timer_ticks = 0;
 static uint32_t timer_frequency = 100; // 100 Hz por defecto (1 tick = 10ms)
@@ -9,6 +10,9 @@ static uint32_t timer_frequency = 100; // 100 Hz por defecto (1 tick = 10ms)
 static void timer_callback(struct registers* regs) {
     (void)regs;
     timer_ticks++;
+    if (timer_ticks == 10 || timer_ticks == 100 || timer_ticks % 500 == 0) {
+        serial_write_string("[PIT] Interrupcion IRQ0 recibida con exito.\r\n");
+    }
 }
 
 void pit_init(uint32_t frequency) {

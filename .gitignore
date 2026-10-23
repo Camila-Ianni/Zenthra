@@ -1,0 +1,12 @@
+# Archivos y directorios generados por compilación
+build/
+bin_test
+*.o
+*.elf
+*.iso
+*.bin
+*.log
+
+# Archivos del sistema operativo host
+.DS_Store
+Thumbs.db

@@ -21,6 +21,37 @@
 #define KHEAP_START 0x00400000
 #define KHEAP_SIZE  (2 * 1024 * 1024) // 2 MiB de Heap inicial
 
+static volatile uint32_t worker_a_counter = 0;
+static volatile uint32_t worker_b_counter = 0;
+
+static void worker_task_a(void) {
+    for (int i = 1; i <= 3; i++) {
+        worker_a_counter++;
+        serial_write_string("[SCHEDULER] Worker A ejecutando ciclo: ");
+        char buf[8];
+        uitoa(worker_a_counter, buf, 10);
+        serial_write_string(buf);
+        serial_write_string("\r\n");
+        task_yield();
+    }
+    serial_write_string("[SCHEDULER] Worker A completo con exito.\r\n");
+    task_exit();
+}
+
+static void worker_task_b(void) {
+    for (int i = 1; i <= 3; i++) {
+        worker_b_counter++;
+        serial_write_string("[SCHEDULER] Worker B ejecutando ciclo: ");
+        char buf[8];
+        uitoa(worker_b_counter, buf, 10);
+        serial_write_string(buf);
+        serial_write_string("\r\n");
+        task_yield();
+    }
+    serial_write_string("[SCHEDULER] Worker B completo con exito.\r\n");
+    task_exit();
+}
+
 /* Tarea de fondo de diagnóstico continuo de sensores IoT */
 static void background_sensor_daemon(void) {
     while (1) {
@@ -89,6 +120,8 @@ void kernel_main(uint32_t magic, uintptr_t mbi_addr) {
     vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
     kprintf("[*] Inicializando Planificador Multitarea (Scheduler)... ");
     scheduler_init();
+    task_create("worker_a", worker_task_a);
+    task_create("worker_b", worker_task_b);
     task_create("iot_daemon", background_sensor_daemon);
     vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
     kprintf("[OK]\n");
