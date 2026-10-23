@@ -32,3 +32,15 @@ bool nova_iot_get_temp(uint16_t* out_temp) {
     if (out_temp) *out_temp = 250;
     return true;
 }
+
+void tss_set_kernel_stack(uint32_t esp0) {
+    (void)esp0;
+}
+
+void pic_clear_mask(uint8_t irq) {
+    (void)irq;
+}
+
+void pic_set_mask(uint8_t irq) {
+    (void)irq;
+}

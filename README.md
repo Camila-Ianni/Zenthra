@@ -21,16 +21,16 @@ Para máxima transparencia técnica, el estado del código se clasifica rigurosa
 
 | Subsistema / Característica | Estado Actual | Descripción Técnica |
 | :--- | :---: | :--- |
-| **Arranque y Bootloader** | **REAL** | Soporte Multiboot 1 y 2 con detección de memoria física y validación estricta por `grub-file`. |
-| **Segmentación de Memoria (GDT)** | **REAL** | Descriptores de 32 bits de Código y Datos para Kernel (Ring 0) y Userland (Ring 3). |
-| **Interrupciones y Excepciones (IDT)** | **REAL** | IDT con 256 descriptores. Stubs en assembly para 32 excepciones de CPU y 16 IRQs PIC 8259 remapeadas (32..47). |
+| **Arranque y Bootloader** | **REAL** | Contrato Multiboot 1 oficial (`0x1BADB002`) con validación estricta por `grub-file --is-x86-multiboot`. |
+| **Segmentación de Memoria (GDT)** | **REAL** | 6 descriptores (Kernel Code/Data, User Code/Data, TSS de 32 bits en selector 0x28). Task Register cargado con `ltr 0x2B` y `esp0` dinámico en conmutación de tareas. |
+| **Interrupciones y PIC (IDT)** | **REAL** | 256 descriptores. Stubs assembly para 32 excepciones y 16 IRQs. Máscara PIC granular (todas enmascaradas por defecto salvo cascada IRQ2; IRQ0 desmascarada selectivamente en `pit_init`). |
 | **Temporizador del Sistema (PIT)** | **REAL** | Intel 8253/8254 programado a 100 Hz (IRQ 0 / Vector 32) con ticks periódicos y sleep por `hlt`. |
 | **Puerto Serie (COM1 UART 16550A)** | **REAL** | Inicialización con divisor de baudios (38400), FIFOs y salida serie para diagnóstico de depuración. |
-| **Planificador y Multitarea** | **REAL / PARCIAL** | Scheduler Round-Robin con cambio real de contexto en ensamblador (`switch_context`), pilas dedicadas por tarea y tareas alternantes. Paginación por proceso pendiente. |
+| **Planificador y Multitarea** | **REAL / PARCIAL** | Scheduler Round-Robin con cambio de contexto en ensamblador (`switch_context`), marco de pila corregido `[EFLAGS, EDI, ESI, EBX, EBP, entry_point, task_exit]`, actualización de TSS y liberación diferida sin use-after-free. |
 | **Gestión de Memoria Dinámica (Heap)** | **REAL** | Asignador `kmalloc`/`kfree` de bloques con cabeceras de tamaño, flag de ocupado y coalescencia de fragmentos contiguos (2 MiB iniciales en 0x00400000). |
 | **Sistema de Archivos (RAMFS)** | **REAL (Volátil)** | Sistema de archivos en RAM con inodos, operaciones de creación, lectura, escritura y borrado. Almacenamiento persistente en disco pendiente. |
-| **Llamadas al Sistema (Syscalls)** | **PROTOTIPO** | Despachador `int 0x80` mediante stub assembly `isr128` con marco `struct registers` e `iret`. Comprobaciones seguras de punteros (`is_user_pointer`, `copy_from_user`, `copy_to_user`). Requiere paging para aislamiento total. |
-| **Seguridad y Perfiles de Usuario** | **REAL** | Matriz de control de acceso (ACL) con 11 perfiles de usuario, operaciones diferenciadas y registro en `security.log`. |
+| **Llamadas al Sistema (Syscalls)** | **PROTOTIPO** | Despachador `int 0x80` mediante stub assembly `isr128` con marco `struct registers` e `iret`. Autorización ACL obligatoria en `SYS_ARDUINO_CMD` (-13 EACCES en accesos no autorizados) y gestión de perfiles (`SYS_GET_PROFILE`, `SYS_SET_PROFILE`). |
+| **Seguridad y Perfiles de Usuario** | **REAL** | Matriz centralizada de control de acceso (ACL) con 11 perfiles de usuario, operaciones diferenciadas y registro en `security.log`. |
 | **Gestor de Paquetes / Store** | **SIMULADA** | Catálogo demostrativo de aplicaciones con verificación de integridad por CRC32 (IEEE 802.3). Formato `.zpkg` firmado planificado para Fase 6. |
 | **Protocolo de Enlace Arduino (IoT)** | **REAL** | Trama binaria estructurada con delimitador MAGIC (`0xAA55`), comandos (PING, TEMP, LED_ON, LED_OFF) y checksum XOR. |
 | **Control de Energía (ACPI / 8042)** | **REAL** | Puertos de apagado ACPI en emulador (`0x604`, `0x0804`, `0x4004`) y reinicio por teclado 8042. |

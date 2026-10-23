@@ -18,5 +18,7 @@ bool acl_check_permission(enum nova_profile profile, enum sec_operation op);
 uint32_t acl_get_violations_count(void);
 void acl_log_violation(enum nova_profile profile, enum sec_operation op, const char* context);
 void acl_list_permissions(enum nova_profile profile);
+enum nova_profile acl_get_active_profile(void);
+void acl_set_active_profile(enum nova_profile profile);
 
 #endif

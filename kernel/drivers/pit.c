@@ -28,6 +28,9 @@ void pit_init(uint32_t frequency) {
 
     // Registrar handler de IRQ0 (vector 32 en IDT tras remapeo PIC)
     register_interrupt_handler(32, timer_callback);
+
+    // Desmascarar IRQ0 en el PIC maestro
+    pic_clear_mask(0);
 }
 
 uint32_t pit_get_ticks(void) {

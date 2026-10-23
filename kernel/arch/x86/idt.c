@@ -118,8 +118,45 @@ static void pic_remap(void) {
     io_wait();
     outb(0xA1, 0x01);
     io_wait();
-    outb(0x21, 0x00); // Máscara: habilitar todas las IRQs
-    outb(0xA1, 0x00);
+    // Enmascarar todas las IRQs por defecto salvo la línea de cascada IRQ2 (bit 2 = 0 -> 0xFB)
+    outb(0x21, 0xFB);
+    outb(0xA1, 0xFF);
+#endif
+}
+
+void pic_clear_mask(uint8_t irq) {
+#if defined(__KERNEL__)
+    uint16_t port;
+    uint8_t value;
+
+    if (irq < 8) {
+        port = 0x21;
+    } else {
+        port = 0xA1;
+        irq -= 8;
+    }
+    value = inb(port) & ~(1 << irq);
+    outb(port, value);
+#else
+    (void)irq;
+#endif
+}
+
+void pic_set_mask(uint8_t irq) {
+#if defined(__KERNEL__)
+    uint16_t port;
+    uint8_t value;
+
+    if (irq < 8) {
+        port = 0x21;
+    } else {
+        port = 0xA1;
+        irq -= 8;
+    }
+    value = inb(port) | (1 << irq);
+    outb(port, value);
+#else
+    (void)irq;
 #endif
 }
 

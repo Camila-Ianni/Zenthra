@@ -86,10 +86,11 @@ $(BIN_NAME): $(OBJS)
 
 check-multiboot: $(BIN_NAME)
 	@if command -v grub-file >/dev/null 2>&1; then \
-		grub-file --is-x86-multiboot $(BIN_NAME) || (echo "[-] Error: El binario no cumple con la especificacion Multiboot 1." && exit 1); \
+		grub-file --is-x86-multiboot $(BIN_NAME) || (echo "[-] Error fatal: El binario no cumple con la especificacion Multiboot 1." && exit 1); \
 		echo "[OK] Cabecera Multiboot 1 validada estrictamente por grub-file."; \
 	else \
-		echo "[!] Advertencia: grub-file no instalado; omitiendo chequeo de cabecera."; \
+		echo "[-] Error fatal: 'grub-file' no esta instalado. Se requiere validacion estricta de Multiboot 1 antes de generar la ISO."; \
+		exit 1; \
 	fi
 
 # Creación de imagen ISO arrancable con GRUB (para VirtualBox / QEMU)

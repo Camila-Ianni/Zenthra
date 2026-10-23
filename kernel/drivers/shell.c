@@ -55,9 +55,21 @@ const char* profile_get_description(enum nova_profile prof) {
     return "";
 }
 
+enum nova_profile profile_get_active(void) {
+    return acl_get_active_profile();
+}
+
+void profile_set_active(enum nova_profile prof) {
+    if (prof < PROFILE_COUNT) {
+        current_profile = prof;
+        acl_set_active_profile(prof);
+    }
+}
+
 void shell_init(void) {
     line_len = 0;
     line_buf[0] = '\0';
+    acl_set_active_profile(current_profile);
     vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK));
     kprintf("zenthra [%s]# ", profile_names[current_profile]);
 }
@@ -141,7 +153,7 @@ void shell_execute(const char* cmd) {
             }
 
             if (num >= 0 && num < PROFILE_COUNT) {
-                current_profile = (enum nova_profile)num;
+                profile_set_active((enum nova_profile)num);
                 vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
                 kprintf("\n[PERFIL CAMBIADO] Ahora estas en el perfil: %s\n", profile_names[current_profile]);
                 kprintf("Descripcion: %s\n\n", profile_descriptions[current_profile]);

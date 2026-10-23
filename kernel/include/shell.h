@@ -24,5 +24,7 @@ void shell_step(void);
 void shell_execute(const char* cmdline);
 const char* profile_get_name(enum nova_profile prof);
 const char* profile_get_description(enum nova_profile prof);
+enum nova_profile profile_get_active(void);
+void profile_set_active(enum nova_profile prof);
 
 #endif

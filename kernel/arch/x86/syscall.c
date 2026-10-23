@@ -2,6 +2,7 @@
 #include "vga.h"
 #include "klib.h"
 #include "nova_iot.h"
+#include "acl_security.h"
 
 /*
  * Validación de punteros de usuario:
@@ -112,13 +113,35 @@ void syscall_dispatcher(struct registers* regs) {
             // ebx: comando (1: ping, 2: led on, 3: led off, 4: get temp)
             // ecx: puntero en userland para almacenar el resultado
             uint32_t cmd = regs->ebx;
-            if (cmd == 1) {
+            enum nova_profile prof = acl_get_active_profile();
+
+            if (cmd == 1) { // PING
+                if (!acl_check_permission(prof, OP_ARDUINO_READ)) {
+                    acl_log_violation(prof, OP_ARDUINO_READ, "SYS_ARDUINO_CMD_PING");
+                    regs->eax = (uint32_t)-13; // -EACCES
+                    break;
+                }
                 regs->eax = nova_iot_ping() ? 0 : 1;
-            } else if (cmd == 2) {
+            } else if (cmd == 2) { // LED ON
+                if (!acl_check_permission(prof, OP_ARDUINO_WRITE)) {
+                    acl_log_violation(prof, OP_ARDUINO_WRITE, "SYS_ARDUINO_CMD_LED_ON");
+                    regs->eax = (uint32_t)-13; // -EACCES
+                    break;
+                }
                 regs->eax = nova_iot_set_led(true) ? 0 : 1;
-            } else if (cmd == 3) {
+            } else if (cmd == 3) { // LED OFF
+                if (!acl_check_permission(prof, OP_ARDUINO_WRITE)) {
+                    acl_log_violation(prof, OP_ARDUINO_WRITE, "SYS_ARDUINO_CMD_LED_OFF");
+                    regs->eax = (uint32_t)-13; // -EACCES
+                    break;
+                }
                 regs->eax = nova_iot_set_led(false) ? 0 : 1;
-            } else if (cmd == 4) {
+            } else if (cmd == 4) { // GET TEMP
+                if (!acl_check_permission(prof, OP_ARDUINO_READ)) {
+                    acl_log_violation(prof, OP_ARDUINO_READ, "SYS_ARDUINO_CMD_GET_TEMP");
+                    regs->eax = (uint32_t)-13; // -EACCES
+                    break;
+                }
                 void* user_out_ptr = (void*)(uintptr_t)regs->ecx;
                 uint16_t kernel_temp = 0;
                 bool ok = nova_iot_get_temp(&kernel_temp);
@@ -134,6 +157,28 @@ void syscall_dispatcher(struct registers* regs) {
                 }
             } else {
                 regs->eax = (uint32_t)-1; // Comando no permitido
+            }
+            break;
+        }
+
+        case SYS_GET_PROFILE: {
+            regs->eax = (uint32_t)acl_get_active_profile();
+            break;
+        }
+
+        case SYS_SET_PROFILE: {
+            uint32_t new_prof = regs->ebx;
+            enum nova_profile curr_prof = acl_get_active_profile();
+            if (!acl_check_permission(curr_prof, OP_SYSTEM_ADMIN)) {
+                acl_log_violation(curr_prof, OP_SYSTEM_ADMIN, "SYS_SET_PROFILE");
+                regs->eax = (uint32_t)-13; // -EACCES
+                break;
+            }
+            if (new_prof < PROFILE_COUNT) {
+                acl_set_active_profile((enum nova_profile)new_prof);
+                regs->eax = 0;
+            } else {
+                regs->eax = (uint32_t)-1;
             }
             break;
         }

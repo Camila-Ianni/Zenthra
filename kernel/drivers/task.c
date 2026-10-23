@@ -2,6 +2,7 @@
 #include "kheap.h"
 #include "klib.h"
 #include "vga.h"
+#include "gdt.h"
 
 #if defined(__KERNEL__)
 extern void switch_context(uint32_t* old_esp_ptr, uint32_t new_esp);
@@ -55,16 +56,17 @@ int task_create(const char* name, void (*entry_point)(void)) {
             task_table[i].state = TASK_READY;
             task_table[i].runtime_ticks = 0;
 
-            // Marco de pila exacto para switch_context (retorno vía 'ret' y popfl/pop registers)
+            // Marco de pila exacto para switch_context:
+            // Orden de restauración por CPU: popfl -> pop edi -> pop esi -> pop ebx -> pop ebp -> ret (entry_point) -> ret (task_exit)
             uint32_t* sp = (uint32_t*)(stack + TASK_STACK_SIZE);
 
-            *(--sp) = (uintptr_t)task_exit;   // Dirección si entry_point() termina
-            *(--sp) = (uintptr_t)entry_point; // EIP inicial desapilado por 'ret' en switch_context
-            *(--sp) = 0x202;                  // EFLAGS (IF=1 para interrupciones activas)
-            *(--sp) = 0;                      // EDI
-            *(--sp) = 0;                      // ESI
-            *(--sp) = 0;                      // EBX
-            *(--sp) = 0;                      // EBP
+            *(--sp) = (uintptr_t)task_exit;   // Retorno al terminar entry_point() [sp + 24]
+            *(--sp) = (uintptr_t)entry_point; // EIP inicial desapilado por ret en switch_context [sp + 20]
+            *(--sp) = 0;                      // EBP: desapilado por popl %ebp [sp + 16]
+            *(--sp) = 0;                      // EBX: desapilado por popl %ebx [sp + 12]
+            *(--sp) = 0;                      // ESI: desapilado por popl %esi [sp + 8]
+            *(--sp) = 0;                      // EDI: desapilado por popl %edi [sp + 4]
+            *(--sp) = 0x202;                  // EFLAGS: desapilado por popfl (IF=1) [sp + 0]
 
             task_table[i].esp = (uint32_t)(uintptr_t)sp;
             return (int)task_table[i].id;
@@ -121,6 +123,7 @@ void task_yield(void) {
     current_task_idx = next_idx;
     task_table[current_task_idx].state = TASK_RUNNING;
     task_table[current_task_idx].runtime_ticks++;
+    tss_set_kernel_stack(task_table[current_task_idx].esp);
 
     switch_context(&task_table[prev_idx].esp, task_table[current_task_idx].esp);
 

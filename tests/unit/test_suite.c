@@ -430,6 +430,33 @@ void test_syscall_boundary_and_abi(void) {
     TEST_ASSERT(is_user_pointer((void*)USER_MEMORY_LIMIT, 4) == false, "is_user_pointer rechaza direccion base en el limite del kernel");
     TEST_ASSERT(is_user_pointer((void*)(USER_MEMORY_LIMIT + 0x1000), 16) == false, "is_user_pointer rechaza direccion en espacio del kernel");
     TEST_ASSERT(is_user_pointer((void*)0x1000UL, (size_t)-1) == false, "is_user_pointer rechaza desbordamiento por tamano extremo");
+
+    // Verificación de autorización ACL centralizada en la ruta de Syscall (SYS_ARDUINO_CMD)
+    acl_init();
+    acl_set_active_profile(PROFILE_STUDENT);
+    struct registers regs_acl;
+    k_memset(&regs_acl, 0, sizeof(struct registers));
+    regs_acl.eax = SYS_ARDUINO_CMD;
+    regs_acl.ebx = 2; // LED ON (requiere OP_ARDUINO_WRITE)
+    syscall_dispatcher(&regs_acl);
+    TEST_ASSERT(regs_acl.eax == (uint32_t)-13, "SYS_ARDUINO_CMD bloquea actuadores (-13 EACCES) para perfil sin permiso (Estudiante)");
+
+    acl_set_active_profile(PROFILE_IOT_HARDWARE);
+    regs_acl.eax = SYS_ARDUINO_CMD;
+    regs_acl.ebx = 2; // LED ON
+    syscall_dispatcher(&regs_acl);
+    TEST_ASSERT(regs_acl.eax == 0, "SYS_ARDUINO_CMD autoriza actuadores fisicos para perfil Hardware-IoT");
+
+    // Verificación de llamadas al sistema de perfiles
+    regs_acl.eax = SYS_GET_PROFILE;
+    syscall_dispatcher(&regs_acl);
+    TEST_ASSERT(regs_acl.eax == (uint32_t)PROFILE_IOT_HARDWARE, "SYS_GET_PROFILE retorna el perfil activo en el kernel");
+
+    regs_acl.eax = SYS_SET_PROFILE;
+    regs_acl.ebx = PROFILE_STUDENT;
+    syscall_dispatcher(&regs_acl);
+    TEST_ASSERT(regs_acl.eax == 0, "SYS_SET_PROFILE cambia el perfil activo con permisos de administracion");
+    TEST_ASSERT(acl_get_active_profile() == PROFILE_STUDENT, "Perfil activo verificado tras SYS_SET_PROFILE");
 }
 
 int main(void) {

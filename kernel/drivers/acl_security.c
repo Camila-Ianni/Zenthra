@@ -6,9 +6,21 @@
 /* Máscara de permisos por perfil */
 static uint8_t profile_acl[PROFILE_COUNT];
 static uint32_t security_violations_count = 0;
+static enum nova_profile active_profile = PROFILE_GENERAL;
+
+enum nova_profile acl_get_active_profile(void) {
+    return active_profile;
+}
+
+void acl_set_active_profile(enum nova_profile profile) {
+    if (profile < PROFILE_COUNT) {
+        active_profile = profile;
+    }
+}
 
 void acl_init(void) {
     security_violations_count = 0;
+    active_profile = PROFILE_GENERAL;
 
     // Perfil General: Solo lectura de archivos y sensores básicos
     profile_acl[PROFILE_GENERAL] = OP_FS_READ | OP_ARDUINO_READ;
