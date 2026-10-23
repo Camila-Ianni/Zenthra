@@ -9,7 +9,7 @@ void ramfs_init(void) {
 
     // Archivo de bienvenida predeterminado del sistema
     ramfs_create("bienvenida.txt");
-    const char* default_msg = "Bienvenido a NOVA OS (2026).\nSistema Operativo Experimental con soporte IoT Arduino.\n";
+    const char* default_msg = "Bienvenido a Zenthra OS (2026).\nSistema Operativo Experimental con soporte IoT Arduino.\n";
     ramfs_write("bienvenida.txt", (const uint8_t*)default_msg, k_strlen(default_msg));
 }
 

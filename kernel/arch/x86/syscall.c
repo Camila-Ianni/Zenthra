@@ -145,8 +145,17 @@ static void syscall_dispatcher(struct registers* regs) {
     }
 }
 
+#if defined(__KERNEL__)
+extern void isr128(void);
+#endif
+
 void syscall_init(void) {
-    // Interrupción de software 0x80 (128 decimal) accesible desde Ring 3 (DPL=3)
+    // Interrupción de software 0x80 (128 decimal) accesible desde Ring 3 (DPL=3 / 0xEE)
+    // Se utiliza el stub isr128 que construye el marco completo struct registers y retorna con IRET
+#if defined(__KERNEL__)
+    idt_set_gate(0x80, (uint32_t)(uintptr_t)isr128, 0x08, 0xEE);
+#else
     idt_set_gate(0x80, (uint32_t)(uintptr_t)syscall_dispatcher, 0x08, 0xEE);
+#endif
     register_interrupt_handler(0x80, syscall_dispatcher);
 }

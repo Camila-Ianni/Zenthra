@@ -128,6 +128,38 @@ irq_common_stub:
     iret
 
 /*
+ * isr128:
+ *   Stub en ensamblador para Syscalls (int 0x80).
+ *   Construye un marco completo de tipo 'struct registers',
+ *   establece los selectores de datos del kernel (0x10),
+ *   pasa el puntero %esp a syscall_dispatcher(struct registers* regs),
+ *   y retorna con IRET preservando el valor devuelto en EAX.
+ */
+.extern syscall_dispatcher
+.global isr128
+.type isr128, @function
+isr128:
+    pushl $0            /* Código de error ficticio */
+    pushl $128          /* Vector 128 (0x80) */
+    pusha               /* Guarda EDI, ESI, EBP, ESP, EBX, EDX, ECX, EAX */
+    pushl %ds           /* Guarda selector de segmento de datos */
+
+    movw $0x10, %ax     /* Selector de datos del kernel */
+    movw %ax, %ds
+    movw %ax, %es
+    movw %ax, %fs
+    movw %ax, %gs
+
+    pushl %esp          /* Puntero a struct registers */
+    call syscall_dispatcher
+    addl $4, %esp       /* Desapilar puntero */
+
+    popl %ds            /* Restaurar segmento de datos */
+    popa                /* Restaura registros (con %eax actualizado) */
+    addl $8, %esp       /* Desapilar vector y código de error */
+    iret
+
+/*
  * switch_context:
  *   Cambio real de contexto de tarea x86.
  *   Prototipo C: void switch_context(uint32_t* old_esp_ptr, uint32_t new_esp);

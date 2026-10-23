@@ -46,7 +46,7 @@ static void register_pkg(const char* id, const char* name, const char* ver, cons
     p->size_bytes = size;
 
     // Calcular firma CRC32 estándar sobre el binario/payload predeterminado
-    const char* default_payload = "NOVA_APP_EXEC_V1";
+    const char* default_payload = "ZENTHRA_APP_EXEC_V1";
     p->expected_crc32 = pkg_compute_crc32((const uint8_t*)default_payload, k_strlen(default_payload));
     p->installed = false;
 }
@@ -68,25 +68,25 @@ void pkg_init(void) {
     k_memset(catalog, 0, sizeof(catalog));
 
     // 1. Perfil Estudiante (Ofimática, apuntes, lecturas)
-    register_pkg("office", "NOVA Office Suite", "2.1", "Procesador de textos, calculo y diapositivas", PROFILE_STUDENT, 4096);
+    register_pkg("office", "Zenthra Office Suite", "2.1", "Procesador de textos, calculo y diapositivas", PROFILE_STUDENT, 4096);
     register_pkg("pdf-reader", "PDF Scholar", "1.4", "Lector de documentos academicos y anotaciones", PROFILE_STUDENT, 1024);
-    register_pkg("flashcards", "AnkiNova Cards", "1.0", "Tarjetas mnemotecnicas de estudio espaciado", PROFILE_STUDENT, 512);
+    register_pkg("flashcards", "AnkiZenthra Cards", "1.0", "Tarjetas mnemotecnicas de estudio espaciado", PROFILE_STUDENT, 512);
 
     // 2. Perfil Desarrollador Front-end (Figma, VS Code, Node, Browser)
     register_pkg("vscode", "VS Code Core", "1.85", "Editor de codigo extensible con resaltado", PROFILE_FRONTEND, 3072);
     register_pkg("figma", "Figma Desktop", "2.0", "Editor de interfaces UI/UX y prototipado", PROFILE_FRONTEND, 2048);
     register_pkg("nodejs", "Node.js Runtime", "20.1", "Entorno JavaScript/TypeScript y gestor npm", PROFILE_FRONTEND, 2560);
-    register_pkg("dev-browser", "NOVA Web Browser", "1.0", "Navegador con inspector de elementos y consola", PROFILE_FRONTEND, 4096);
+    register_pkg("dev-browser", "Zenthra Web Browser", "1.0", "Navegador con inspector de elementos y consola", PROFILE_FRONTEND, 4096);
 
     // 3. Perfil Desarrollador Back-end (Docker, DBs, Postman, Go/Python)
     register_pkg("docker", "Docker Engine", "24.0", "Gestor de contenedores y microservicios", PROFILE_BACKEND, 4096);
     register_pkg("postgres", "PostgreSQL Client", "16.0", "Cliente SQL y visor relacional de bases de datos", PROFILE_BACKEND, 2048);
-    register_pkg("api-postman", "NOVA API Client", "1.2", "Probador de endpoints REST/GraphQL", PROFILE_BACKEND, 1536);
+    register_pkg("api-postman", "Zenthra API Client", "1.2", "Probador de endpoints REST/GraphQL", PROFILE_BACKEND, 1536);
     register_pkg("git-cli", "Git Version Control", "2.42", "Control de versiones distribuido", PROFILE_BACKEND, 1024);
 
     // 4. Perfil Desarrollador Full-Stack (Integración completa)
     register_pkg("fullstack-sdk", "FullStack SDK Suite", "1.0", "Compiladores C/Rust, Node.js y Docker integrados", PROFILE_FULLSTACK, 5120);
-    register_pkg("terminal-pro", "NOVA Terminal Pro", "2.0", "Multiplexor de terminales con pestañas", PROFILE_FULLSTACK, 1024);
+    register_pkg("terminal-pro", "Zenthra Terminal Pro", "2.0", "Multiplexor de terminales con pestañas", PROFILE_FULLSTACK, 1024);
 
     // 5. Perfil Diseñador / Creativo (Edición visual, vectores, paletas)
     register_pkg("vector-draw", "Vector Master", "1.5", "Ilustracion vectorial y diseno de logos", PROFILE_DESIGNER, 3584);
@@ -94,12 +94,12 @@ void pkg_init(void) {
     register_pkg("font-manager", "TypeVault Fonts", "1.0", "Organizador y previsualizador de fuentes", PROFILE_DESIGNER, 768);
 
     // 6. Perfil Hardware / IoT (Herramientas Arduino, Serie, Osciloscopio)
-    register_pkg("arduino-ide", "Arduino NOVA Studio", "2.2", "Entorno de compilacion y flasheo de placas", PROFILE_IOT_HARDWARE, 3072);
+    register_pkg("arduino-ide", "Arduino Zenthra Studio", "2.2", "Entorno de compilacion y flasheo de placas", PROFILE_IOT_HARDWARE, 3072);
     register_pkg("serial-mon", "UART Logic Analyzer", "1.3", "Monitor de puertos COM con graficos de senales", PROFILE_IOT_HARDWARE, 1536);
     register_pkg("relay-ctl", "Power Actuator Hub", "1.0", "Control de reles y conmutacion digital", PROFILE_IOT_HARDWARE, 896);
 
     // 7. Perfil Científico de Datos / IA (Jupyter, Python, Visualización)
-    register_pkg("jupyter-nb", "NOVA Notebooks", "3.0", "Cuadernos interactivos para analisis de datos", PROFILE_DATA_SCIENTIST, 3584);
+    register_pkg("jupyter-nb", "Zenthra Notebooks", "3.0", "Cuadernos interactivos para analisis de datos", PROFILE_DATA_SCIENTIST, 3584);
     register_pkg("stats-plot", "DataPlot Lib", "1.2", "Generador de diagramas y graficos estadisticos", PROFILE_DATA_SCIENTIST, 1792);
 
     // 8. Perfil Ciberseguridad / Pentesting (Wireshark, Scanner de puertos)
@@ -107,21 +107,21 @@ void pkg_init(void) {
     register_pkg("pkt-analyzer", "Packet Sniffer", "1.4", "Captura e inspeccion de paquetes de red", PROFILE_CYBERSECURITY, 2048);
 
     // 9. Perfil Ofimática / Administración (Hojas de cálculo, Contabilidad)
-    register_pkg("calc-pro", "NOVA Spreadsheets", "2.0", "Planillas de calculo con tablas dinamicas", PROFILE_OFFICE_ADMIN, 2048);
+    register_pkg("calc-pro", "Zenthra Spreadsheets", "2.0", "Planillas de calculo con tablas dinamicas", PROFILE_OFFICE_ADMIN, 2048);
     register_pkg("invoice-mgr", "Billing & Invoices", "1.0", "Gestion de facturacion y contabilidad local", PROFILE_OFFICE_ADMIN, 1024);
 
     // 10. Perfil Gamer / Streamer (Grabador, Overlay, Optimizador de FPS)
-    register_pkg("game-launcher", "GameHub NOVA", "1.0", "Lanzador de juegos y optimizador de rendimiento", PROFILE_GAMER_STREAMER, 2048);
-    register_pkg("stream-obs", "OBS NOVA Streamer", "1.2", "Captura de pantalla, audio y streaming en vivo", PROFILE_GAMER_STREAMER, 4096);
+    register_pkg("game-launcher", "GameHub Zenthra", "1.0", "Lanzador de juegos y optimizador de rendimiento", PROFILE_GAMER_STREAMER, 2048);
+    register_pkg("stream-obs", "OBS Zenthra Streamer", "1.2", "Captura de pantalla, audio y streaming en vivo", PROFILE_GAMER_STREAMER, 4096);
 
     // Perfil General / Usuario Diario
-    register_pkg("media-player", "NOVA Media Player", "1.1", "Reproductor de audio y video multiformato", PROFILE_GENERAL, 1024);
-    register_pkg("calc", "NOVA Basic Calc", "1.0", "Calculadora basica de escritorio", PROFILE_GENERAL, 384);
+    register_pkg("media-player", "Zenthra Media Player", "1.1", "Reproductor de audio y video multiformato", PROFILE_GENERAL, 1024);
+    register_pkg("calc", "Zenthra Basic Calc", "1.0", "Calculadora basica de escritorio", PROFILE_GENERAL, 384);
 }
 
 void pkg_list_catalog(void) {
     vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
-    kprintf("Catalogo de Aplicaciones NOVA Store (%u disponibles):\n", catalog_count);
+    kprintf("Catalogo de Aplicaciones Zenthra Store (%u disponibles):\n", catalog_count);
     for (size_t i = 0; i < catalog_count; i++) {
         const char* status = catalog[i].installed ? "[INSTALADO]" : "[DISPONIBLE]";
         kprintf("  - %s (%s, v%s, %u B) %s\n    %s\n",
@@ -170,7 +170,7 @@ int pkg_install(const char* pkg_id) {
                 return 1; // Ya estaba instalado
             }
             // Verificación obligatoria de integridad por Checksum CRC32
-            const char* app_meta = "NOVA_APP_EXEC_V1";
+            const char* app_meta = "ZENTHRA_APP_EXEC_V1";
             if (!pkg_verify_integrity(pkg_id, (const uint8_t*)app_meta, k_strlen(app_meta))) {
                 vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK));
                 kprintf("\n[ERROR DE SEGURIDAD] Fallo de integridad CRC32 en paquete '%s'. Instalacion cancelada.\n", pkg_id);

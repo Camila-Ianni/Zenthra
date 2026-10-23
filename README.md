@@ -29,12 +29,12 @@ Para máxima transparencia técnica, el estado del código se clasifica rigurosa
 | **Planificador y Multitarea** | **REAL / PARCIAL** | Scheduler Round-Robin con cambio real de contexto en ensamblador (`switch_context`), pilas dedicadas por tarea y tareas alternantes. Paginación por proceso pendiente. |
 | **Gestión de Memoria Dinámica (Heap)** | **REAL** | Asignador `kmalloc`/`kfree` de bloques con cabeceras de tamaño, flag de ocupado y coalescencia de fragmentos contiguos (2 MiB iniciales en 0x00400000). |
 | **Sistema de Archivos (RAMFS)** | **REAL (Volátil)** | Sistema de archivos en RAM con inodos, operaciones de creación, lectura, escritura y borrado. Almacenamiento persistente en disco pendiente. |
-| **Llamadas al Sistema (Syscalls)** | **PARCIAL** | Despachador `int 0x80` con comprobaciones seguras de punteros (`is_user_pointer`, `copy_from_user`, `copy_to_user`). Requiere paging para aislamiento total. |
+| **Llamadas al Sistema (Syscalls)** | **PROTOTIPO** | Despachador `int 0x80` mediante stub assembly `isr128` con marco `struct registers` e `iret`. Comprobaciones seguras de punteros (`is_user_pointer`, `copy_from_user`, `copy_to_user`). Requiere paging para aislamiento total. |
 | **Seguridad y Perfiles de Usuario** | **REAL** | Matriz de control de acceso (ACL) con 11 perfiles de usuario, operaciones diferenciadas y registro en `security.log`. |
 | **Gestor de Paquetes / Store** | **SIMULADA** | Catálogo demostrativo de aplicaciones con verificación de integridad por CRC32 (IEEE 802.3). Formato `.zpkg` firmado planificado para Fase 6. |
 | **Protocolo de Enlace Arduino (IoT)** | **REAL** | Trama binaria estructurada con delimitador MAGIC (`0xAA55`), comandos (PING, TEMP, LED_ON, LED_OFF) y checksum XOR. |
 | **Control de Energía (ACPI / 8042)** | **REAL** | Puertos de apagado ACPI en emulador (`0x604`, `0x0804`, `0x4004`) y reinicio por teclado 8042. |
-| **Interfaz de Usuario Actual** | **REAL** | Consola de texto VGA color de 80x25 con prompt interactivo y comandos integrados. |
+| **Interfaz de Usuario Actual** | **REAL** | Consola de texto VGA color de 80x25 con prompt interactivo y comandos integrados (modo de rescate). |
 | **Interfaz Gráfica de Escritorio (GUI)** | **PENDIENTE** | Diseñada en arquitectura (Fase 5): Framebuffer VESA 1024x768, primitivas 2D, mouse PS/2 y gestor de ventanas. |
 
 ---
@@ -62,14 +62,13 @@ make test
 # Limpiar binarios y objetos anteriores
 make clean
 
-# Ejecutar suite de pruebas unitarias automatizadas (82 tests)
+# Ejecutar suite de pruebas unitarias automatizadas (92 tests)
 make test
 
 # Compilar kernel ELF y generar la imagen ISO arrancable
 make iso
 
 # Validar el arranque automatizado en QEMU y alternancia de tareas
-make verify-qemu
 ```
 
 ---

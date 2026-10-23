@@ -256,7 +256,7 @@ void test_package_manager(void) {
     TEST_ASSERT(crc_vector == 0xCBF43926, "pkg_compute_crc32 cumple con vector de prueba IEEE 802.3 (0xCBF43926)");
 
     // Verificación de integridad con payload auténtico
-    const char* valid_payload = "NOVA_APP_EXEC_V1";
+    const char* valid_payload = "ZENTHRA_APP_EXEC_V1";
     TEST_ASSERT(pkg_verify_integrity("arduino-ide", (const uint8_t*)valid_payload, k_strlen(valid_payload)) == true,
                 "pkg_verify_integrity aprueba payload autentico con CRC32 esperado");
 
@@ -401,6 +401,37 @@ void test_multiboot_and_power(void) {
     TEST_ASSERT(true, "qemu_poweroff ejecuta puertos ACPI (0x604, 0x0804, 0x4004) de forma determinista");
 }
 
+static void exiting_worker(void) {
+    task_exit();
+}
+
+void test_task_lifecycle_and_cleanup(void) {
+    printf("[*] Ejecutando: test_task_lifecycle_and_cleanup...\n");
+    scheduler_init();
+    int pid = task_create("exit_test", exiting_worker);
+    TEST_ASSERT(pid > 0, "Creacion exitosa de tarea para prueba de finalizacion");
+    task_yield(); // Conmuta a la tarea exit_test
+    TEST_ASSERT(task_get_current()->id == (uint32_t)pid, "Tarea exit_test activa antes de su finalizacion");
+    task_exit();  // Finaliza tarea, guarda zombie stack y conmuta de regreso
+    struct task* cur = task_get_current();
+    TEST_ASSERT(cur->id == 1, "Scheduler conmuta de regreso a tarea principal tras task_exit sin fallos");
+    task_yield(); // Ejecuta ciclo adicional para comprobar liberación segura sin fallar
+    TEST_ASSERT(task_get_current()->state == TASK_RUNNING, "Pila liberada de forma diferida sin corrupcion de heap ni use-after-free");
+}
+
+void test_syscall_boundary_and_abi(void) {
+    printf("[*] Ejecutando: test_syscall_boundary_and_abi...\n");
+    syscall_init();
+
+    // Verificación estricta de límites de memoria
+    TEST_ASSERT(is_user_pointer((void*)0x1000UL, 1024) == true, "is_user_pointer acepta puntero valido en espacio de usuario");
+    TEST_ASSERT(is_user_pointer((void*)(USER_MEMORY_LIMIT - 100), 100) == true, "is_user_pointer acepta rango exacto hasta USER_MEMORY_LIMIT");
+    TEST_ASSERT(is_user_pointer((void*)(USER_MEMORY_LIMIT - 50), 100) == false, "is_user_pointer rechaza rango que sobrepasa USER_MEMORY_LIMIT sin wrap-around");
+    TEST_ASSERT(is_user_pointer((void*)USER_MEMORY_LIMIT, 4) == false, "is_user_pointer rechaza direccion base en el limite del kernel");
+    TEST_ASSERT(is_user_pointer((void*)(USER_MEMORY_LIMIT + 0x1000), 16) == false, "is_user_pointer rechaza direccion en espacio del kernel");
+    TEST_ASSERT(is_user_pointer((void*)0x1000UL, (size_t)-1) == false, "is_user_pointer rechaza desbordamiento por tamano extremo");
+}
+
 int main(void) {
     printf("====================================================\n");
     printf("    ZENTHRA OS — SUITE DE PRUEBAS AUTOMATIZADAS     \n");
@@ -418,6 +449,8 @@ int main(void) {
     test_bidirectional_simulation();
     test_x86_structures();
     test_multiboot_and_power();
+    test_task_lifecycle_and_cleanup();
+    test_syscall_boundary_and_abi();
 
     printf("\n----------------------------------------------------\n");
     printf("Resultados: %d Aprobados | %d Fallidos\n", tests_passed, tests_failed);

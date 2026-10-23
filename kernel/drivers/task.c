@@ -20,6 +20,7 @@ static uint32_t next_task_id = 1;
 
 void scheduler_init(void) {
     k_memset(task_table, 0, sizeof(task_table));
+    next_task_id = 1;
 
     // Tarea 0: Tarea Principal del Kernel / Shell
     task_table[0].id = next_task_id++;
@@ -72,21 +73,32 @@ int task_create(const char* name, void (*entry_point)(void)) {
     return -3; // Tabla de tareas llena
 }
 
+static uint8_t* zombie_stack_to_free = NULL;
+
 struct task* task_get_current(void) {
     return &task_table[current_task_idx];
 }
 
 void task_exit(void) {
     task_table[current_task_idx].state = TASK_TERMINATED;
-    if (task_table[current_task_idx].stack != NULL) {
-        kfree(task_table[current_task_idx].stack);
-        task_table[current_task_idx].stack = NULL;
-    }
+    // Marcar la pila para liberación diferida: la CPU sigue ejecutando en ella hasta el switch_context
+    zombie_stack_to_free = task_table[current_task_idx].stack;
+    task_table[current_task_idx].stack = NULL;
+
     task_yield();
+#if defined(__KERNEL__)
     while (1);
+#endif
 }
 
 void task_yield(void) {
+    // Si quedó una pila pendiente de liberar de una tarea terminada previamente,
+    // la liberamos si no es la pila que estamos ejecutando actualmente
+    if (zombie_stack_to_free != NULL && zombie_stack_to_free != task_table[current_task_idx].stack) {
+        kfree(zombie_stack_to_free);
+        zombie_stack_to_free = NULL;
+    }
+
     // Round-Robin simple: buscar siguiente tarea lista
     int next_idx = -1;
     for (int i = 1; i <= MAX_TASKS; i++) {
@@ -111,35 +123,17 @@ void task_yield(void) {
     task_table[current_task_idx].runtime_ticks++;
 
     switch_context(&task_table[prev_idx].esp, task_table[current_task_idx].esp);
-}
 
-uint32_t scheduler_schedule(uint32_t current_esp) {
-    task_table[current_task_idx].esp = current_esp;
-    task_table[current_task_idx].runtime_ticks++;
-
-    int next_idx = -1;
-    for (int i = 1; i <= MAX_TASKS; i++) {
-        int idx = (current_task_idx + i) % MAX_TASKS;
-        if (task_table[idx].state == TASK_READY || task_table[idx].state == TASK_RUNNING) {
-            next_idx = idx;
-            break;
-        }
+    // Al retornar a este punto, la CPU está ejecutando en el contexto de la nueva tarea activa
+    if (zombie_stack_to_free != NULL && zombie_stack_to_free != task_table[current_task_idx].stack) {
+        kfree(zombie_stack_to_free);
+        zombie_stack_to_free = NULL;
     }
-
-    if (next_idx != -1) {
-        if (task_table[current_task_idx].state == TASK_RUNNING) {
-            task_table[current_task_idx].state = TASK_READY;
-        }
-        current_task_idx = next_idx;
-        task_table[current_task_idx].state = TASK_RUNNING;
-    }
-
-    return task_table[current_task_idx].esp;
 }
 
 void task_list(void) {
     vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
-    kprintf("Tabla de Procesos y Tareas de NOVA OS:\n");
+    kprintf("Tabla de Procesos y Tareas de Zenthra OS:\n");
     for (int i = 0; i < MAX_TASKS; i++) {
         if (task_table[i].state != TASK_UNUSED) {
             const char* state_str = "DESCONOCIDO";

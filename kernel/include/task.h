@@ -42,6 +42,5 @@ void task_yield(void);
 void task_exit(void);
 void task_list(void);
 struct task* task_get_current(void);
-uint32_t scheduler_schedule(uint32_t current_esp);
 
 #endif

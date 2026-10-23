@@ -1,7 +1,7 @@
-# Documentación Técnica y Estado de Implementación — NOVA OS
+# Documentación Técnica y Estado de Implementación — Zenthra OS
 
 ## 1. Resumen de Ejecución
-Este documento consolida el estado técnico del sistema operativo experimental **NOVA OS**, implementado bajo la arquitectura x86 en modo protegido de 32 bits, con integración física mediante el protocolo serie **NOVA-Link** hacia microcontroladores Arduino.
+Este documento consolida el estado técnico del sistema operativo experimental **Zenthra OS**, implementado bajo la arquitectura x86 en modo protegido de 32 bits, con integración física mediante el protocolo serie **ZIoT / Zenthra-Link** hacia microcontroladores Arduino.
 
 ---
 
@@ -195,4 +195,4 @@ Resultados: 82 Aprobados | 0 Fallidos
 ---
 
 ## 4. Pipeline de CI/CD
-Se configuró un flujo en [`.github/workflows/ci.yml`](file:///Users/cami/Desktop/NOVA/.github/workflows/ci.yml) para compilar en Linux, validar la especificación Multiboot con `grub-file` y generar la ISO arrancable `nova_os.iso` como artefacto de descarga en cada commit.
+Se configuró un flujo en [`.github/workflows/ci.yml`](file:///Users/cami/Desktop/zenthra/.github/workflows/ci.yml) para compilar en Linux, validar la especificación Multiboot con `grub-file`, generar la ISO arrancable `zenthra_os.iso` y verificar el arranque en QEMU con captura de logs en cada commit.

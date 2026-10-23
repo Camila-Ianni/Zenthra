@@ -133,19 +133,32 @@ test:
 # Verificación automatizada de arranque en QEMU y captura serial
 verify-qemu: $(ISO_NAME)
 	@echo "=== Verificando arranque de Zenthra OS en QEMU (Headless) ==="
+	@if ! command -v qemu-system-i386 >/dev/null 2>&1; then \
+		echo "[-] Error: 'qemu-system-i386' no esta disponible en el sistema."; \
+		exit 1; \
+	fi
 	@rm -f $(BUILD_DIR)/serial.log
-	timeout 8s qemu-system-i386 -cdrom $(ISO_NAME) -serial file:$(BUILD_DIR)/serial.log -display none || true
-	@if [ ! -f $(BUILD_DIR)/serial.log ]; then \
-		echo "[-] Error: QEMU no genero el archivo serial.log"; \
+	@qemu_status=0; timeout 8s qemu-system-i386 -cdrom $(ISO_NAME) -serial file:$(BUILD_DIR)/serial.log -display none || qemu_status=$$?; \
+	if [ $$qemu_status -ne 0 ] && [ $$qemu_status -ne 124 ]; then \
+		echo "[-] Error fatal: QEMU aborto con fallo anomalo (exit code $$qemu_status)"; \
+		exit 1; \
+	fi
+	@if [ ! -s $(BUILD_DIR)/serial.log ]; then \
+		echo "[-] Error: QEMU no genero salida serial o el archivo serial.log esta vacio"; \
 		exit 1; \
 	fi
 	@echo "--- Contenido del Log Serial de Zenthra OS ---"
 	@cat $(BUILD_DIR)/serial.log
 	@echo "-----------------------------------------------"
+	@if grep -q "CPU PANIC" $(BUILD_DIR)/serial.log; then \
+		echo "[-] Error: Se detecto un Panic de CPU no controlado en serial.log"; \
+		exit 1; \
+	fi
 	@grep -q "ZENTHRA OS SERIAL LOG" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se encontro el banner serial del kernel" && exit 1)
 	@grep -q "Worker A" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se registro la ejecucion del Worker A" && exit 1)
 	@grep -q "Worker B" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se registro la ejecucion del Worker B" && exit 1)
-	@echo "[+] [PASS] Arranque del kernel y alternancia de tareas verificados en QEMU con exito."
+	@grep -q "Interrupcion IRQ0" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se registraron ticks de interrupcion de PIT IRQ0" && exit 1)
+	@echo "[+] [PASS] Arranque verificado: Banner presente, PIT IRQ0 activo y alternancia Worker A/B exitosa."
 
 qemu: $(BIN_NAME)
 	qemu-system-i386 -kernel $(BIN_NAME) -serial stdio
