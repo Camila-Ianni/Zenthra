@@ -30,4 +30,7 @@ void mouse_set_bounds(uint32_t width, uint32_t height);
 /* Dibujar el cursor gráfico de flecha sobre el backbuffer */
 void mouse_draw_cursor(void);
 
+/* Consultar si el hardware de ratón auxiliar PS/2 fue detectado y está activo */
+bool mouse_is_present(void);
+
 #endif

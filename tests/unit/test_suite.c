@@ -588,6 +588,17 @@ void test_virtual_memory_paging(void) {
     TEST_ASSERT(vmm_is_mapped(pdir, proc_virt) == true, "Pagina privada mapeada en directorio de proceso");
     TEST_ASSERT(vmm_is_mapped(kdir, proc_virt) == false, "Aislamiento estricto: la pagina privada NO existe en el kernel");
 
+    // Seguridad: rechazar páginas de usuario (PTE_USER) en el espacio reservado del kernel (< 16 MiB)
+    int intrusion_res = vmm_map_page(pdir, 0x000B8000, phys_target, PTE_PRESENT | PTE_USER);
+    TEST_ASSERT(intrusion_res == -1, "VMM rechaza mapeo de usuario (PTE_USER) en el espacio del kernel (< 16 MiB)");
+
+    // Mapeo contiguo de rangos (vmm_map_range, requerido para Framebuffer / MMIO)
+    uintptr_t range_virt = 0x50000000;
+    uintptr_t range_phys = 0x60000000;
+    int range_res = vmm_map_range(pdir, range_virt, range_phys, 16384, PTE_PRESENT | PTE_WRITABLE);
+    TEST_ASSERT(range_res == 0, "vmm_map_range mapea rango contiguo de 16 KiB (4 paginas) exitosamente");
+    TEST_ASSERT(vmm_virt_to_phys(pdir, range_virt + 8192) == range_phys + 8192, "Traduccion virtual a fisica en medio del rango mapeado");
+
     // Destrucción de directorio de proceso
     vmm_destroy_process_directory(pdir);
     pmm_free_frame(phys_target);
@@ -777,12 +788,35 @@ void test_window_manager_and_desktop(void) {
     int32_t close_y = win_app->y + 10;
     wm_handle_mouse(close_x, close_y, true);
 
-    TEST_ASSERT(win_app->is_visible == false, "Clic en boton [X] cierra la ventana (is_visible=false)");
+    // Simular entrada interactiva de teclado en la ventana de Terminal (id 1)
+    wm_focus_window(1);
+    TEST_ASSERT(wm_needs_redraw() == true, "wm_focus_window solicita redibujado");
+
+    wm_handle_keyboard('h');
+    wm_handle_keyboard('e');
+    wm_handle_keyboard('l');
+    wm_handle_keyboard('p');
+    wm_handle_keyboard('\n');
+    TEST_ASSERT(wm_needs_redraw() == true, "Entrada de comando en terminal grafica procesada y solicita redibujado");
+
+    // Simular clic en Launcher Zenthra en la Taskbar (abrir menu)
+    // Barra de tareas: y = 564 a 600, Boton Zenthra: x in [8, 96], y in [569, 595]
+    wm_handle_mouse(30, 580, true);
+    wm_handle_mouse(30, 580, false);
+    TEST_ASSERT(wm_needs_redraw() == true, "Clic en boton Zenthra conmuta launcher y solicita redibujado");
+
+    // Simular clic en opcion 1 del Launcher (restaurar y enfocar Terminal)
+    // Menu popup en ly = 564 - 92 = 472. Opcion 1: y in [472, 502]
+    wm_handle_mouse(30, 485, true);
+    wm_handle_mouse(30, 485, false);
+    struct window* term_refocus = wm_get_window(0);
+    TEST_ASSERT(term_refocus->is_focused == true, "Opcion del Launcher enfoca la ventana Terminal");
 
     // Comprobar actualización de reloj y renderizado de escritorio
     wm_update_clock(12500); // 125 segundos
     wm_render_desktop();
     TEST_ASSERT(fb_mock[0] != 0, "wm_render_desktop renderiza gradiente corporativo en el framebuffer");
+    TEST_ASSERT(wm_needs_redraw() == false, "Redibujado bajo demanda completado: needs_redraw desactivado");
 
     free(fb_mock);
 }

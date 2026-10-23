@@ -113,7 +113,7 @@ int task_create(const char* name, void (*entry_point)(void)) {
     return task_create_with_profile(name, entry_point, inherited);
 }
 
-static uint8_t* zombie_stack_to_free = NULL;
+static uint8_t* pending_free_stack = NULL;
 
 struct task* task_get_current(void) {
     return &task_table[current_task_idx];
@@ -127,10 +127,9 @@ void task_set_current_profile(enum nova_profile profile) {
 }
 
 void task_exit(void) {
+    // Marcar la tarea como terminada. La pila sigue siendo utilizada por la CPU
+    // hasta que switch_context transfiera la ejecución a otra tarea activa.
     task_table[current_task_idx].state = TASK_TERMINATED;
-    // Marcar la pila para liberación diferida: la CPU sigue ejecutando en ella hasta el switch_context
-    zombie_stack_to_free = task_table[current_task_idx].stack;
-    task_table[current_task_idx].stack = NULL;
 
     task_yield();
 #if defined(__KERNEL__)
@@ -180,13 +179,6 @@ void task_schedule_tick(void) {
 }
 
 void task_yield(void) {
-    // Si quedó una pila pendiente de liberar de una tarea terminada previamente,
-    // la liberamos si no es la pila que estamos ejecutando actualmente
-    if (zombie_stack_to_free != NULL && zombie_stack_to_free != task_table[current_task_idx].stack) {
-        kfree(zombie_stack_to_free);
-        zombie_stack_to_free = NULL;
-    }
-
     // Round-Robin: buscar la siguiente tarea en estado TASK_READY (ignora TASK_SLEEPING)
     int next_idx = -1;
     for (int i = 1; i <= MAX_TASKS; i++) {
@@ -217,6 +209,11 @@ void task_yield(void) {
     int prev_idx = current_task_idx;
     if (task_table[prev_idx].state == TASK_RUNNING) {
         task_table[prev_idx].state = TASK_READY;
+    } else if (task_table[prev_idx].state == TASK_TERMINATED) {
+        // La tarea previa ha terminado: registrar su pila para liberarla sólo después
+        // de que switch_context haya conmutado de forma segura a otra pila.
+        pending_free_stack = task_table[prev_idx].stack;
+        task_table[prev_idx].stack = NULL;
     }
 
     current_task_idx = next_idx;
@@ -227,10 +224,11 @@ void task_yield(void) {
 
     switch_context(&task_table[prev_idx].esp, task_table[current_task_idx].esp);
 
-    // Al retornar a este punto, la CPU está ejecutando en el contexto de la nueva tarea activa
-    if (zombie_stack_to_free != NULL && zombie_stack_to_free != task_table[current_task_idx].stack) {
-        kfree(zombie_stack_to_free);
-        zombie_stack_to_free = NULL;
+    // Al retornar a este punto, la CPU está ejecutando en el contexto de la nueva tarea activa.
+    // Es completamente seguro liberar la pila de la tarea que acaba de terminar.
+    if (pending_free_stack != NULL && pending_free_stack != task_table[current_task_idx].stack) {
+        kfree(pending_free_stack);
+        pending_free_stack = NULL;
     }
 }
 

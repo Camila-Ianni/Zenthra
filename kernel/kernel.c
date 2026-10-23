@@ -262,6 +262,10 @@ void kernel_main(uint32_t magic, uintptr_t mbi_addr) {
     // 19. Bucle principal del sistema con renderizado GUI o multiplexación Shell
     while (1) {
         if (gfx_is_active()) {
+            char key = keyboard_getchar_nonblocking();
+            if (key) {
+                wm_handle_keyboard(key);
+            }
             struct mouse_state* ms = mouse_get_state();
             wm_handle_mouse(ms->x, ms->y, ms->left_button);
             wm_update_clock(pit_get_ticks());

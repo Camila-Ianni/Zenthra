@@ -11,7 +11,99 @@ static struct window windows[MAX_WINDOWS];
 static size_t window_count = 0;
 static int32_t focused_id = -1;
 static uint32_t uptime_ticks = 0;
+static uint32_t last_clock_sec = 0xFFFFFFFF;
 static bool prev_left_btn = false;
+static bool needs_redraw = true;
+static bool launcher_open = false;
+
+#define TERM_MAX_LINES 5
+#define TERM_LINE_LEN  46
+static char term_history[TERM_MAX_LINES][TERM_LINE_LEN];
+static size_t term_hist_count = 0;
+static char term_input[TERM_LINE_LEN] = {0};
+static size_t term_input_len = 0;
+
+void wm_request_redraw(void) {
+    needs_redraw = true;
+}
+
+bool wm_needs_redraw(void) {
+    return needs_redraw;
+}
+
+static void term_add_line(const char* text) {
+    if (!text) return;
+    if (term_hist_count >= TERM_MAX_LINES) {
+        // Desplazar líneas hacia arriba
+        for (size_t i = 1; i < TERM_MAX_LINES; i++) {
+            k_memcpy(term_history[i - 1], term_history[i], TERM_LINE_LEN);
+        }
+        term_hist_count = TERM_MAX_LINES - 1;
+    }
+    size_t len = k_strlen(text);
+    if (len >= TERM_LINE_LEN - 1) len = TERM_LINE_LEN - 2;
+    k_memcpy(term_history[term_hist_count], text, len);
+    term_history[term_hist_count][len] = '\0';
+    term_hist_count++;
+}
+
+static void term_execute_command(const char* cmd) {
+    if (!cmd || k_strlen(cmd) == 0) return;
+
+    char echo_buf[TERM_LINE_LEN];
+    echo_buf[0] = '>'; echo_buf[1] = ' ';
+    size_t cmd_len = k_strlen(cmd);
+    if (cmd_len > TERM_LINE_LEN - 3) cmd_len = TERM_LINE_LEN - 3;
+    k_memcpy(&echo_buf[2], cmd, cmd_len);
+    echo_buf[2 + cmd_len] = '\0';
+    term_add_line(echo_buf);
+
+    if (k_strcmp(cmd, "help") == 0) {
+        term_add_line("Comandos: help, sysinfo, mem, tasks, clear");
+    } else if (k_strcmp(cmd, "sysinfo") == 0) {
+        term_add_line("Zenthra x86 i686 Ring 0/3 - Paging CR0.PG Activo");
+    } else if (k_strcmp(cmd, "mem") == 0) {
+        char buf[32];
+        uitoa((uint32_t)pmm_get_free_memory_kib(), buf, 10);
+        char out[40];
+        k_memcpy(out, "RAM Libre: ", 11);
+        size_t blen = k_strlen(buf);
+        k_memcpy(&out[11], buf, blen);
+        k_memcpy(&out[11 + blen], " KiB", 5);
+        term_add_line(out);
+    } else if (k_strcmp(cmd, "tasks") == 0) {
+        term_add_line("Tareas: kernel_shell, worker_a/b, iot_daemon");
+    } else if (k_strcmp(cmd, "clear") == 0) {
+        term_hist_count = 0;
+    } else {
+        term_add_line("Comando no reconocido. Escriba 'help'.");
+    }
+}
+
+void wm_handle_keyboard(char c) {
+    // Si la ventana enfocada es la Terminal (id == 1)
+    if (focused_id != 1) return;
+
+    if (c == '\n' || c == '\r') {
+        term_input[term_input_len] = '\0';
+        term_execute_command(term_input);
+        term_input_len = 0;
+        term_input[0] = '\0';
+        wm_request_redraw();
+    } else if (c == '\b') {
+        if (term_input_len > 0) {
+            term_input_len--;
+            term_input[term_input_len] = '\0';
+            wm_request_redraw();
+        }
+    } else if (c >= 32 && c <= 126) {
+        if (term_input_len < TERM_LINE_LEN - 2) {
+            term_input[term_input_len++] = c;
+            term_input[term_input_len] = '\0';
+            wm_request_redraw();
+        }
+    }
+}
 
 /* Ventana 1: Terminal Interactiva Zenthra */
 static void paint_terminal_window(struct window* win) {
@@ -23,13 +115,24 @@ static void paint_terminal_window(struct window* win) {
     gfx_fill_rect(cx, cy, cw, ch, 0xFF0A0E17); // Fondo negro consola
     gfx_draw_rect(cx, cy, cw, ch, 0xFF1E293B);
 
-    gfx_draw_string(cx + 8, cy + 8,  "Zenthra OS (Terminal Nativa x86) - 2026", COLOR_ACCENT_CYAN, 0);
-    gfx_draw_string(cx + 8, cy + 28, "zenthra:~$ sysinfo", COLOR_ACCENT_GREEN, 0);
-    gfx_draw_string(cx + 8, cy + 48, "Arquitectura : i686 Modo Protegido (Ring 0 / Ring 3)", COLOR_TEXT_WHITE, 0);
-    gfx_draw_string(cx + 8, cy + 68, "Memoria      : PMM 4 KiB Frames / Paging Activo (CR0.PG)", COLOR_TEXT_WHITE, 0);
-    gfx_draw_string(cx + 8, cy + 88, "Multitarea   : Round-Robin Preemptivo (Timer PIT 100 Hz)", COLOR_TEXT_WHITE, 0);
-    gfx_draw_string(cx + 8, cy + 108, "Enlace IoT   : Arduino Uno COM1 [ONLINE]", COLOR_ACCENT_GREEN, 0);
-    gfx_draw_string(cx + 8, cy + 132, "zenthra:~$ _", COLOR_TEXT_WHITE, 0);
+    gfx_draw_string(cx + 8, cy + 6, "Zenthra OS (Terminal Interactiva x86)", COLOR_ACCENT_CYAN, 0);
+
+    // Dibujar historial de comandos
+    uint32_t line_y = cy + 26;
+    for (size_t i = 0; i < term_hist_count; i++) {
+        gfx_draw_string(cx + 8, line_y, term_history[i], COLOR_TEXT_WHITE, 0);
+        line_y += 18;
+    }
+
+    // Dibujar prompt y buffer de entrada editable
+    char prompt_buf[TERM_LINE_LEN + 16];
+    const char* prefix = "zenthra:~$ ";
+    k_memcpy(prompt_buf, prefix, 11);
+    k_memcpy(&prompt_buf[11], term_input, term_input_len);
+    prompt_buf[11 + term_input_len] = '_';
+    prompt_buf[11 + term_input_len + 1] = '\0';
+
+    gfx_draw_string(cx + 8, cy + ch - 22, prompt_buf, COLOR_ACCENT_GREEN, 0);
 }
 
 /* Ventana 2: Monitor del Sistema y Sensores IoT */
@@ -42,7 +145,7 @@ static void paint_monitor_window(struct window* win) {
     gfx_fill_rect(cx, cy, cw, ch, 0xFF1E293B);
     gfx_draw_rect(cx, cy, cw, ch, 0xFF334155);
 
-    gfx_draw_string(cx + 8, cy + 8, "Monitor del Sistema y Telemetria", COLOR_TEXT_WHITE, 0);
+    gfx_draw_string(cx + 8, cy + 8, "Monitor del Sistema (Telemetria)", COLOR_TEXT_WHITE, 0);
 
     char buf[32];
     gfx_draw_string(cx + 8, cy + 30, "RAM Libre    : ", COLOR_TEXT_MUTED, 0);
@@ -55,7 +158,7 @@ static void paint_monitor_window(struct window* win) {
     gfx_draw_string(cx + 120, cy + 50, buf, COLOR_ACCENT_CYAN, 0);
 
     gfx_draw_string(cx + 8, cy + 70, "Planificador : Preemptivo 100 Hz", COLOR_TEXT_MUTED, 0);
-    gfx_draw_string(cx + 8, cy + 90, "Sensor Temp  : 25.0 C [OPTIMO]", COLOR_ACCENT_GREEN, 0);
+    gfx_draw_string(cx + 8, cy + 90, "Sensor Temp  : 25.0 C [SIMULADO IoT]", COLOR_ACCENT_GREEN, 0);
     gfx_draw_string(cx + 8, cy + 110, "Actuador LED : ACTIVO (Pin 13)", COLOR_ACCENT_BLUE, 0);
 }
 
@@ -145,11 +248,16 @@ void wm_focus_window(uint32_t id) {
     for (size_t i = 0; i < window_count; i++) {
         windows[i].is_focused = (windows[i].id == id);
     }
+    wm_request_redraw();
 }
 
 void wm_handle_mouse(int32_t mx, int32_t my, bool left_button) {
     bool clicked = left_button && !prev_left_btn;
     bool released = !left_button && prev_left_btn;
+
+    struct framebuffer_info* fb = gfx_get_fb_info();
+    uint32_t sh = fb && fb->height > 0 ? fb->height : 768;
+    uint32_t ty = sh - TASKBAR_HEIGHT;
 
     // 1. Manejo de arrastre activo
     for (size_t i = 0; i < window_count; i++) {
@@ -160,35 +268,67 @@ void wm_handle_mouse(int32_t mx, int32_t my, bool left_button) {
 
                 // Restringir para no esconder la barra de título fuera de la pantalla
                 if (windows[i].y < 0) windows[i].y = 0;
-                struct framebuffer_info* fb = gfx_get_fb_info();
                 if (fb && fb->height > TASKBAR_HEIGHT + TITLEBAR_HEIGHT) {
                     if ((uint32_t)windows[i].y > fb->height - TASKBAR_HEIGHT - TITLEBAR_HEIGHT) {
                         windows[i].y = (int32_t)(fb->height - TASKBAR_HEIGHT - TITLEBAR_HEIGHT);
                     }
                 }
+                wm_request_redraw();
             }
             if (released) {
                 windows[i].is_dragging = false;
+                wm_request_redraw();
             }
         }
     }
 
-    // 2. Procesar nuevo clic (hit testing de arriba hacia abajo / frente hacia atras)
+    // 2. Procesar nuevo clic
     if (clicked) {
-        bool hit_any = false;
+        wm_request_redraw();
 
+        // Comprobar clic en Menú Launcher "Zenthra" en la barra de tareas
+        if (mx >= 8 && mx <= 96 && (uint32_t)my >= ty + 5 && (uint32_t)my <= ty + 31) {
+            launcher_open = !launcher_open;
+            prev_left_btn = left_button;
+            return;
+        }
+
+        // Si el launcher está abierto, comprobar interacción con sus elementos
+        if (launcher_open) {
+            int32_t ly = (int32_t)ty - 92;
+            if (mx >= 8 && mx <= 180 && my >= ly && (uint32_t)my < ty) {
+                if (my >= ly && my < ly + 30) {
+                    // Item 1: Terminal Zenthra
+                    if (window_count > 0) {
+                        windows[0].is_visible = true;
+                        wm_focus_window(windows[0].id);
+                    }
+                } else if (my >= ly + 30 && my < ly + 60) {
+                    // Item 2: Monitor del Sistema
+                    if (window_count > 1) {
+                        windows[1].is_visible = true;
+                        wm_focus_window(windows[1].id);
+                    }
+                }
+                launcher_open = false;
+                prev_left_btn = left_button;
+                return;
+            } else {
+                launcher_open = false;
+            }
+        }
+
+        // Hit testing en ventanas (de frente hacia atrás)
         for (int i = (int)window_count - 1; i >= 0; i--) {
             struct window* win = &windows[i];
             if (!win->is_visible) continue;
 
-            // Comprobar si el clic cayó dentro de los límites de la ventana
             if (mx >= win->x && mx < win->x + (int32_t)win->width &&
                 my >= win->y && my < win->y + (int32_t)win->height) {
 
                 wm_focus_window(win->id);
-                hit_any = true;
 
-                // Comprobar botón de cerrar [X] (ubicado en la esquina superior derecha del titlebar)
+                // Comprobar botón de cerrar [X]
                 int32_t btn_x = win->x + (int32_t)win->width - 20;
                 int32_t btn_y = win->y + 3;
                 if (mx >= btn_x && mx <= btn_x + 16 && my >= btn_y && my <= btn_y + 16) {
@@ -196,7 +336,7 @@ void wm_handle_mouse(int32_t mx, int32_t my, bool left_button) {
                     break;
                 }
 
-                // Si hizo clic en la barra de título, iniciar arrastre
+                // Clic en la barra de título -> iniciar arrastre
                 if (my < win->y + TITLEBAR_HEIGHT) {
                     win->is_dragging = true;
                     win->drag_off_x = mx - win->x;
@@ -206,8 +346,6 @@ void wm_handle_mouse(int32_t mx, int32_t my, bool left_button) {
                 break;
             }
         }
-
-        (void)hit_any;
     }
 
     prev_left_btn = left_button;
@@ -215,6 +353,11 @@ void wm_handle_mouse(int32_t mx, int32_t my, bool left_button) {
 
 void wm_update_clock(uint32_t ticks) {
     uptime_ticks = ticks;
+    uint32_t current_sec = ticks / 100;
+    if (current_sec != last_clock_sec) {
+        last_clock_sec = current_sec;
+        wm_request_redraw();
+    }
 }
 
 size_t wm_get_window_count(void) {
@@ -262,6 +405,7 @@ static void draw_single_window(struct window* win) {
 
 void wm_render_desktop(void) {
     if (!gfx_is_active()) return;
+    if (!needs_redraw) return;
 
     struct framebuffer_info* fb = gfx_get_fb_info();
     uint32_t sw = fb->width;
@@ -269,7 +413,6 @@ void wm_render_desktop(void) {
 
     // 1. Dibujar Fondo de Pantalla (Gradiente corporativo Slate/Navy)
     for (uint32_t y = 0; y < sh - TASKBAR_HEIGHT; y++) {
-        // Interpolar suavemente entre azul oscuro y gris pizarra
         uint8_t r = (uint8_t)(0x0F + (y * (0x1E - 0x0F)) / sh);
         uint8_t g = (uint8_t)(0x17 + (y * (0x29 - 0x17)) / sh);
         uint8_t b = (uint8_t)(0x2A + (y * (0x3B - 0x2A)) / sh);
@@ -296,7 +439,7 @@ void wm_render_desktop(void) {
     // 3. Renderizar Barra de Tareas Inferior (Taskbar)
     uint32_t ty = sh - TASKBAR_HEIGHT;
     gfx_fill_rect(0, ty, sw, TASKBAR_HEIGHT, COLOR_TASKBAR);
-    gfx_fill_rect(0, ty, sw, 1, COLOR_WIN_BORDER); // Línea divisoria superior
+    gfx_fill_rect(0, ty, sw, 1, COLOR_WIN_BORDER);
 
     // Botón de Inicio / Launcher "Zenthra"
     gfx_fill_rect(8, ty + 5, 88, 26, COLOR_ACCENT_BLUE);
@@ -327,9 +470,20 @@ void wm_render_desktop(void) {
 
     gfx_draw_string(sw - 70, ty + 10, clock_str, COLOR_TEXT_WHITE, 0);
 
-    // 4. Dibujar Cursor del Ratón
+    // 4. Renderizar Menú Popup del Launcher (si está desplegado)
+    if (launcher_open) {
+        uint32_t ly = ty - 92;
+        gfx_fill_rect(8, ly, 172, 90, 0xFF0F172A);
+        gfx_draw_rect(8, ly, 172, 90, COLOR_ACCENT_BLUE);
+        gfx_draw_string(16, ly + 8,  "> Terminal Zenthra", COLOR_TEXT_WHITE, 0);
+        gfx_draw_string(16, ly + 36, "> Monitor Sistema", COLOR_TEXT_WHITE, 0);
+        gfx_draw_string(16, ly + 64, "> [X] Ocultar Menu", COLOR_TEXT_MUTED, 0);
+    }
+
+    // 5. Dibujar Cursor del Ratón
     mouse_draw_cursor();
 
-    // 5. Volcar búfer de composición a pantalla
+    // 6. Volcar búfer de composición a pantalla
     gfx_flip();
+    needs_redraw = false;
 }

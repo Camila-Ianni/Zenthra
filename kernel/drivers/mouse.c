@@ -33,34 +33,42 @@ static const uint8_t cursor_bitmap[18][12] = {
     { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
 };
 
+static bool mouse_present = false;
+
 #if defined(__KERNEL__)
-static void mouse_wait(uint8_t type) {
-    uint32_t timeout = 100000;
-    if (type == 0) {
-        // Esperar datos disponibles para lectura
-        while (timeout--) {
-            if (inb(0x64) & 1) return;
-        }
-    } else {
-        // Esperar que el búfer de entrada esté listo para escritura
-        while (timeout--) {
-            if (!(inb(0x64) & 2)) return;
-        }
+static bool mouse_wait_input(void) {
+    uint32_t timeout = 50000;
+    while (timeout--) {
+        if (inb(0x64) & 1) return true;
     }
+    return false;
 }
 
-static void mouse_write(uint8_t val) {
-    mouse_wait(1);
-    outb(0x64, 0xD4); // Indicar al controlador que el siguiente byte va al ratón
-    mouse_wait(1);
+static bool mouse_wait_output(void) {
+    uint32_t timeout = 50000;
+    while (timeout--) {
+        if (!(inb(0x64) & 2)) return true;
+    }
+    return false;
+}
+
+static bool mouse_write_byte(uint8_t val) {
+    if (!mouse_wait_output()) return false;
+    outb(0x64, 0xD4);
+    if (!mouse_wait_output()) return false;
     outb(0x60, val);
+    return true;
 }
 
-static uint8_t mouse_read(void) {
-    mouse_wait(0);
-    return inb(0x60);
+static int mouse_read_byte(void) {
+    if (!mouse_wait_input()) return -1;
+    return (int)inb(0x60);
 }
 #endif
+
+bool mouse_is_present(void) {
+    return mouse_present;
+}
 
 void mouse_init(uint32_t width, uint32_t height) {
     current_mouse.x = width > 0 ? (int32_t)(width / 2) : 512;
@@ -73,38 +81,49 @@ void mouse_init(uint32_t width, uint32_t height) {
     screen_h = height > 0 ? height : 768;
 
     mouse_cycle = 0;
+    mouse_present = false;
 
     // Registrar manejador de interrupción en la IDT (Vector 44 = IRQ 12)
     register_interrupt_handler(44, mouse_handler);
 
-    // Habilitar IRQ 12 e IRQ 2 (cascada PIC Slave)
-    pic_clear_mask(2);
-    pic_clear_mask(12);
-
 #if defined(__KERNEL__)
-    // Inicialización del controlador PS/2 para el ratón auxiliar
-    mouse_wait(1);
+    // Comprobar presencia del controlador 8042
+    if (!mouse_wait_output()) {
+        serial_write_string("[MOUSE] Controlador 8042 no responde (timeout). Modo sin raton.\r\n");
+        return;
+    }
     outb(0x64, 0xA8); // Habilitar puerto auxiliar
 
-    mouse_wait(1);
+    if (!mouse_wait_output()) return;
     outb(0x64, 0x20); // Leer byte de configuración
-    mouse_wait(0);
+    if (!mouse_wait_input()) return;
     uint8_t status = inb(0x60);
     status |= 0x02;   // Habilitar IRQ 12
     status &= ~0x20;  // Deshabilitar desactivación de reloj del ratón
 
-    mouse_wait(1);
+    if (!mouse_wait_output()) return;
     outb(0x64, 0x60); // Escribir byte de configuración
-    mouse_wait(1);
+    if (!mouse_wait_output()) return;
     outb(0x60, status);
 
-    // Activar modo de reporte de datos del ratón (Streaming)
-    mouse_write(0xF6); // Set defaults
-    mouse_read();      // Acknowledge
+    // Set defaults (0xF6) y verificar ACK (0xFA)
+    if (!mouse_write_byte(0xF6) || mouse_read_byte() != 0xFA) {
+        serial_write_string("[MOUSE] Ratón auxiliar no devolvió ACK (0xF6). Modo sin ratón.\r\n");
+        return;
+    }
 
-    mouse_write(0xF4); // Enable data reporting
-    mouse_read();      // Acknowledge
+    // Enable data reporting (0xF4) y verificar ACK (0xFA)
+    if (!mouse_write_byte(0xF4) || mouse_read_byte() != 0xFA) {
+        serial_write_string("[MOUSE] Ratón auxiliar no devolvió ACK (0xF4). Modo sin ratón.\r\n");
+        return;
+    }
 #endif
+
+    mouse_present = true;
+
+    // Habilitar IRQ 12 e IRQ 2 (cascada PIC Slave) sólo si el dispositivo está confirmado
+    pic_clear_mask(2);
+    pic_clear_mask(12);
 
     serial_write_string("[MOUSE] Driver PS/2 (IRQ 12) inicializado en modo streaming.\r\n");
 }
@@ -178,7 +197,7 @@ struct mouse_state* mouse_get_state(void) {
 }
 
 void mouse_draw_cursor(void) {
-    if (!gfx_is_active()) return;
+    if (!gfx_is_active() || !mouse_present) return;
 
     int32_t mx = current_mouse.x;
     int32_t my = current_mouse.y;

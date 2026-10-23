@@ -74,6 +74,11 @@ int vmm_map_page(struct page_directory* pd, uintptr_t virt_addr, uintptr_t phys_
     size_t pde_idx = (virt_addr >> 22) & 0x3FF;
     size_t pte_idx = (virt_addr >> 12) & 0x3FF;
 
+    // Proteger estrictamente los primeros 16 MiB: denegar mapeos de usuario (PTE_USER) en el espacio del kernel
+    if ((flags & PTE_USER) && pde_idx < KERNEL_IDENTITY_TABLES) {
+        return -1; // Acceso denegado: el espacio del kernel no admite páginas de usuario
+    }
+
     // Si la tabla de páginas no existe en el directorio, asignar un nuevo marco físico
     if (!(pd->entries[pde_idx] & PDE_PRESENT)) {
 #if defined(__KERNEL__)
@@ -114,6 +119,20 @@ int vmm_map_page(struct page_directory* pd, uintptr_t virt_addr, uintptr_t phys_
         vmm_invlpg(virt_addr);
     }
 
+    return 0;
+}
+
+int vmm_map_range(struct page_directory* pd, uintptr_t virt_start, uintptr_t phys_start, size_t size, uint32_t flags) {
+    if (!pd || size == 0) return -1;
+
+    uintptr_t v = virt_start & PTE_FRAME_MASK;
+    uintptr_t p = phys_start & PTE_FRAME_MASK;
+    size_t aligned_size = (size + PAGE_SIZE - 1) & PTE_FRAME_MASK;
+
+    for (size_t offset = 0; offset < aligned_size; offset += PAGE_SIZE) {
+        int res = vmm_map_page(pd, v + offset, p + offset, flags);
+        if (res != 0) return res;
+    }
     return 0;
 }
 
@@ -180,9 +199,22 @@ struct page_directory* vmm_create_process_directory(void) {
 void vmm_destroy_process_directory(struct page_directory* pd) {
     if (!pd || pd == &kernel_pdir) return;
 
-    // Liberar tablas de páginas asignadas a nivel de usuario (índices 4 a 1023)
+    // Liberar marcos de usuario y tablas de páginas asignadas en el espacio privado (índices 4 a 1023)
     for (size_t i = KERNEL_IDENTITY_TABLES; i < ENTRIES_PER_PAGE_DIR; i++) {
         if (pd->entries[i] & PDE_PRESENT) {
+            struct page_table* pt = vmm_get_pt(pd, i);
+            if (pt) {
+                for (size_t pte_idx = 0; pte_idx < ENTRIES_PER_PAGE_TABLE; pte_idx++) {
+                    if ((pt->entries[pte_idx] & PTE_PRESENT) && (pt->entries[pte_idx] & PTE_USER)) {
+#if defined(__KERNEL__)
+                        uintptr_t page_frame = pt->entries[pte_idx] & PTE_FRAME_MASK;
+                        pmm_free_frame(page_frame);
+#endif
+                        pt->entries[pte_idx] = 0;
+                    }
+                }
+            }
+
 #if defined(__KERNEL__)
             uintptr_t pt_frame = pd->entries[i] & PDE_FRAME_MASK;
             pmm_free_frame(pt_frame);

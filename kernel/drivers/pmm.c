@@ -89,8 +89,29 @@ void pmm_init(uint32_t magic, uintptr_t mbi_addr) {
                 struct multiboot_mmap_entry* entry = (struct multiboot_mmap_entry*)mmap_curr;
 
                 if (entry->type == MULTIBOOT_MEMORY_AVAILABLE) {
-                    uintptr_t base = entry->addr_low;
-                    size_t len = entry->len_low;
+                    uint64_t base64 = ((uint64_t)entry->addr_high << 32) | (uint64_t)entry->addr_low;
+                    uint64_t len64  = ((uint64_t)entry->len_high << 32) | (uint64_t)entry->len_low;
+                    uint64_t max_limit = (uint64_t)PMM_MAX_FRAMES * PAGE_SIZE;
+
+                    // Ignorar rangos corruptos o con overflow
+                    if (base64 + len64 < base64 || len64 == 0) {
+                        mmap_curr += entry->size + sizeof(uint32_t);
+                        continue;
+                    }
+
+                    // Ignorar memoria física ubicada íntegramente por encima de 1 GiB
+                    if (base64 >= max_limit) {
+                        mmap_curr += entry->size + sizeof(uint32_t);
+                        continue;
+                    }
+
+                    // Recortar longitud si se extiende más allá de 1 GiB
+                    if (base64 + len64 > max_limit) {
+                        len64 = max_limit - base64;
+                    }
+
+                    uintptr_t base = (uintptr_t)base64;
+                    size_t len = (size_t)len64;
 
                     if (base + len > total_memory_bytes) {
                         total_memory_bytes = base + len;

@@ -10,6 +10,8 @@ static struct framebuffer_info current_fb;
 #include <stdlib.h>
 #endif
 
+#include "vmm.h"
+
 bool gfx_init(uint32_t magic, uintptr_t mbi_addr) {
     k_memset(&current_fb, 0, sizeof(struct framebuffer_info));
 
@@ -31,22 +33,49 @@ bool gfx_init(uint32_t magic, uintptr_t mbi_addr) {
     current_fb.pitch = mbi->framebuffer_pitch;
     current_fb.bpp = mbi->framebuffer_bpp;
 
-    // Validación básica de parámetros de vídeo entregados por hardware
-    if (current_fb.width == 0 || current_fb.height == 0 || current_fb.bpp < 24) {
-        serial_write_string("[GFX] Parametros de framebuffer incompatibles o corruptos.\r\n");
+    // Validación estricta de parámetros para el MVP: exclusivamente 32 bpp (ARGB 8888)
+    if (current_fb.bpp != 32) {
+        serial_write_string("[GFX] Modo de color no soportado (se requiere bpp == 32). Modo VGA texto activo.\r\n");
         return false;
     }
 
-    size_t buffer_size = current_fb.height * current_fb.pitch;
+    if (current_fb.width < 320 || current_fb.width > 2560 || 
+        current_fb.height < 200 || current_fb.height > 1600) {
+        serial_write_string("[GFX] Resolucion fuera de limites soportados (320x200 a 2560x1600).\r\n");
+        return false;
+    }
+
+    if (current_fb.pitch < current_fb.width * 4 || (current_fb.pitch % 4) != 0) {
+        serial_write_string("[GFX] Pitch invalido o no alineado a 4 bytes. Modo VGA texto activo.\r\n");
+        return false;
+    }
+
+    // Cálculo seguro de tamaño de buffer con protección contra desbordamiento de enteros
+    uint64_t total_size = (uint64_t)current_fb.height * (uint64_t)current_fb.pitch;
+    if (total_size == 0 || total_size > 32 * 1024 * 1024) { // Límite de seguridad: 32 MiB
+        serial_write_string("[GFX] Tamano de buffer excede limites seguros de memoria.\r\n");
+        return false;
+    }
+    size_t buffer_size = (size_t)total_size;
 
 #if defined(__KERNEL__)
+    // Mapear la región física del Linear Framebuffer en el VMM si la paginación está activa
+    uintptr_t fb_phys = (uintptr_t)mbi->framebuffer_addr;
+    if (vmm_is_paging_enabled()) {
+        int map_err = vmm_map_range(vmm_get_kernel_directory(), fb_phys, fb_phys, buffer_size, PTE_PRESENT | PTE_WRITABLE);
+        if (map_err != 0) {
+            serial_write_string("[GFX] Error: no se pudo mapear la region MMIO del Framebuffer en VMM.\r\n");
+            return false;
+        }
+    }
+
     current_fb.backbuffer = (uint32_t*)kmalloc(buffer_size);
 #else
     current_fb.backbuffer = (uint32_t*)malloc(buffer_size);
 #endif
 
     if (!current_fb.backbuffer) {
-        // Si no hay memoria suficiente para doble búfer, dibujar directamente en frontbuffer
+        // Si no hay memoria suficiente para doble búfer en RAM, dibujar directamente en frontbuffer
         current_fb.backbuffer = current_fb.address;
     } else {
         k_memset(current_fb.backbuffer, 0, buffer_size);
@@ -55,16 +84,16 @@ bool gfx_init(uint32_t magic, uintptr_t mbi_addr) {
     current_fb.is_active = true;
 
     char buf[16];
-    serial_write_string("[GFX] Framebuffer VESA inicializado: ");
+    serial_write_string("[GFX] Framebuffer VESA LFB inicializado: ");
     uitoa(current_fb.width, buf, 10);
     serial_write_string(buf);
     serial_write_string("x");
     uitoa(current_fb.height, buf, 10);
     serial_write_string(buf);
-    serial_write_string(" a ");
-    uitoa(current_fb.bpp, buf, 10);
+    serial_write_string(" a 32 bpp (Pitch: ");
+    uitoa(current_fb.pitch, buf, 10);
     serial_write_string(buf);
-    serial_write_string(" bpp (Doble bufer activo)\r\n");
+    serial_write_string(" bytes, Doble bufer activo)\r\n");
 
     return true;
 }

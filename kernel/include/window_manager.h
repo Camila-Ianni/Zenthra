@@ -40,6 +40,13 @@ void wm_focus_window(uint32_t id);
 /* Procesar eventos de interacción del cursor del ratón (clic, arrastre, cierre) */
 void wm_handle_mouse(int32_t mx, int32_t my, bool left_button);
 
+/* Entregar caracter de teclado a la ventana activa */
+void wm_handle_keyboard(char c);
+
+/* Solicitar redibujado de la escena en el próximo ciclo */
+void wm_request_redraw(void);
+bool wm_needs_redraw(void);
+
 /* Renderizar la escena completa (fondo, ventanas, barra de tareas, cursor) y volcar a pantalla */
 void wm_render_desktop(void);
 
