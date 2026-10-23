@@ -61,6 +61,40 @@ bool acl_check_permission(enum nova_profile profile, enum sec_operation op) {
     return (profile_acl[profile] & op) == op;
 }
 
+uint8_t acl_get_profile_mask(enum nova_profile profile) {
+    if (profile >= PROFILE_COUNT) return 0;
+    return profile_acl[profile];
+}
+
+/*
+ * Validación de transición de perfil sin escalamiento de privilegios (Auditoría v18):
+ * Una tarea solo puede cambiar su perfil desde userland (SYS_SET_PROFILE) si:
+ *   1. Ambos perfiles son válidos (< PROFILE_COUNT).
+ *   2. El perfil origen posee la capacidad administrativa OP_SYSTEM_ADMIN.
+ *   3. Monotonicidad de capacidades (No-Elevation): la máscara de permisos del perfil
+ *      destino ('to_mask') es un subconjunto estricto o igual de la máscara del perfil
+ *      origen ('from_mask'), es decir: (to_mask & ~from_mask) == 0.
+ *
+ * De este modo, ningún perfil de software con OP_SYSTEM_ADMIN (como Backend, Frontend,
+ * Fullstack o Ciberseguridad) puede autoelevarse a PROFILE_IOT_HARDWARE para obtener
+ * OP_ARDUINO_WRITE o OP_ARDUINO_READ que no poseía originalmente.
+ * La concesión inicial de un perfil con capacidades superiores sólo puede realizarla
+ * un supervisor de kernel confiable (task_create_with_profile / task_set_current_profile en Ring 0).
+ */
+bool acl_can_transition_profile(enum nova_profile from_prof, enum nova_profile to_prof) {
+    if (from_prof >= PROFILE_COUNT || to_prof >= PROFILE_COUNT) return false;
+    if (!acl_check_permission(from_prof, OP_SYSTEM_ADMIN)) return false;
+
+    uint8_t from_mask = profile_acl[from_prof];
+    uint8_t to_mask   = profile_acl[to_prof];
+
+    // Bloquear cualquier transición que introduzca al menos un bit de capacidad nuevo
+    if ((to_mask & (uint8_t)(~from_mask)) != 0) {
+        return false;
+    }
+    return true;
+}
+
 uint32_t acl_get_violations_count(void) {
     return security_violations_count;
 }

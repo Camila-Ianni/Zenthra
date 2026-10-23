@@ -85,9 +85,9 @@ Zenthra OS implementa **11 perfiles de usuario** especializados. Cada perfil cue
 
 ---
 
-### 3. Pruebas Automatizadas y Validación (Auditoría v17)
+### 3. Pruebas Automatizadas y Validación (Auditoría v18)
 
-Se ejecutó la suite de pruebas mediante `make test` (**423 pruebas automatizadas, 0 fallos, 0 warnings**):
+Se ejecutó la suite de pruebas mediante `make test` (**460 pruebas automatizadas, 0 fallos, 0 warnings**):
 
 ```
 ====================================================
@@ -98,7 +98,7 @@ Se ejecutó la suite de pruebas mediante `make test` (**423 pruebas automatizada
 [*] Ejecutando: test_kheap_allocator... (6 pruebas)
 [*] Ejecutando: test_syscall_security_checks... (16 pruebas: strnlen_user seguro con validación de páginas, SYS_WRITE binario POSIX, SYS_READ con PTE_WRITABLE, buffers multi-página y límites de memoria)
 [*] Ejecutando: test_multitasking_scheduler... (10 pruebas: Round-Robin, yield, estrés 40 tareas)
-[*] Ejecutando: test_acl_security... (27 pruebas: permisos granulares por proceso, aislamiento total de task_set_current_profile respecto de acl_get_active_profile, SYS_READ transaccional con keyboard_peek_queue / keyboard_discard_chars, preservación de cola ante fallos parciales, retorno -EAGAIN interactivo, códigos de error POSIX errno.h y prevención de desbordamiento de cola)
+[*] Ejecutando: test_acl_security... (53 pruebas: bloqueo de escalamiento de privilegios en SYS_SET_PROFILE desde Backend/Frontend/Fullstack/Ciberseguridad hacia PROFILE_IOT_HARDWARE, monotonicidad de capacidades acl_can_transition_profile, modo kernel fail-closed cuando paginación está desactivada, límite de 65536 bytes y escritura parcial exacta en SYS_WRITE, lectura transaccional sincronizada en SYS_READ y aislamiento total de perfiles)
 [*] Ejecutando: test_ramfs... (9 pruebas: CRUD, rechazo de sobreflujo >1024)
 [*] Ejecutando: test_profile_provisioning... (10 pruebas: 11 perfiles, auto-aprovisionamiento)
 [*] Ejecutando: test_package_manager... (12 pruebas: CRC32 IEEE 802.3, verificación, rollback)
@@ -107,16 +107,16 @@ Se ejecutó la suite de pruebas mediante `make test` (**423 pruebas automatizada
 [*] Ejecutando: test_x86_structures... (3 pruebas: GDT, IDT, TSS 104 bytes)
 [*] Ejecutando: test_multiboot_and_power... (11 pruebas: firmas, tags, salvaguardas ACPI)
 [*] Ejecutando: test_pmm_physical_allocator... (23 pruebas: 64-bit, alineación, límites, salvaguarda de desbordamiento)
-[*] Ejecutando: test_vmm_hardware_paging... (39 pruebas: Identity Mapping exacto a 64 MiB, CR0, CR3, accesibilidad, direct map, aislamiento de proceso, validación fail-closed de memoria de usuario, TLB invalidation)
-[*] Ejecutando: test_page_fault_handler... (8 pruebas: decodificación #PF CR2)
+[*] Ejecutando: test_vmm_hardware_paging... (40 pruebas: Identity Mapping exacto a 64 MiB, CR0, CR3, accesibilidad, direct map, aislamiento de proceso, validación fail-closed de memoria de usuario, escritura parcial exacta en frontera de página y TLB invalidation)
+[*] Ejecutando: test_page_fault_handler... (12 pruebas: decodificación #PF CR2 y ventana de recuperación fixup durante copia de usuario)
 [*] Ejecutando: test_pit_and_irq_masks... (10 pruebas: 100 Hz, máscaras PIC)
 [*] Ejecutando: test_gfx_and_lfb... (25 pruebas: 1024x768x32bpp, doble buffer, clipping)
 [*] Ejecutando: test_mouse_ps2... (17 pruebas: paquetes, botones, límites de pantalla)
 [*] Ejecutando: test_window_manager_and_desktop... (18 pruebas: drag, focus, launcher, terminal)
-[*] Ejecutando: test_ps2_keyboard_driver... (165 pruebas: Shift make/break, Caps Lock XOR, Layout Español/LatAm, telemetría y saturación de cola)
+[*] Ejecutando: test_ps2_keyboard_driver... (171 pruebas: Left/Right Shift independientes, protección anti-autorepetición de Caps Lock Make/Break, Layout Español Básico ASCII, telemetría y saturación de cola)
 
 ----------------------------------------------------
-Resultados: 423 Aprobados | 0 Fallidos
+Resultados: 460 Aprobados | 0 Fallidos
 ----------------------------------------------------
 [+] Todas las pruebas pasaron satisfactoriamente.
 ```
@@ -127,7 +127,7 @@ Resultados: 423 Aprobados | 0 Fallidos
 
 - **Flujo GitHub Actions (`.github/workflows/ci.yml`)**:
   - `make check-env`: Diagnóstico y reporte de herramientas del entorno.
-  - `make test`: Ejecución de las 423 pruebas unitarias sin dependencias externas (0 fallos, 0 warnings).
+  - `make test`: Ejecución de las 460 pruebas unitarias sin dependencias externas (0 fallos, 0 warnings).
   - `make kernel`: Compilación y enlace del ELF x86 de 32 bits (`i686`).
   - `grub-file`: Verificación estricta del encabezado Multiboot 1.
   - `make iso`: Creación de la imagen arrancable `build/zenthra_os.iso` con GRUB y generación de `build/BUILD_INFO.txt` con SHA-256.
@@ -142,10 +142,10 @@ Resultados: 423 Aprobados | 0 Fallidos
 
 ## 5. Prototipo de Escritorio & Jarvis Multi-Agente (`desktop_prototype/`)
 
-Como parte de los compromisos de las **Auditorías Técnicas v16 y v17**:
+Como parte de los compromisos de las **Auditorías Técnicas v16, v17 y v18**:
 - **Aislamiento Arquitectónico**: El kernel bare-metal en `kernel/` permanece libre de código de IA, librerías de alto nivel o credenciales.
 - **Prototipo Independiente en Userland**: Se construyó en `desktop_prototype/` una interfaz gráfica con Glassmorphism auténtico (`backdrop-filter`), barra superior con selector de modo Eco (bajo consumo para hardware limitado) y temas claro/oscuro, dock flotante animado con sincronización completa de foco/minimizado, terminal interactiva con simulación de comandos del sistema, monitor de telemetría IoT y el **Centro de 6 Agentes Especializados** (Backend, Ciberseguridad, Kernel/OS, Datos, Creativo/UI, Automatización) coordinados por **Jarvis AI Assistant**.
-- **Seguridad y Transparencia Operativa (v17)**:
+- **Seguridad y Transparencia Operativa (v17/v18)**:
   - **Prevención XSS (0 `innerHTML`)**: Construcción segura de elementos DOM mediante `document.createElement` y `textContent` tanto en la terminal como en el asistente Jarvis.
   - **Cancelación Modal Determinista**: El botón `⏹ Abortar Plan` cierra cualquier modal de aprobación abierto y resuelve de inmediato la promesa pendiente como cancelada, evitando bloqueos de estado.
   - **Etiquetado Honesto `[DEMO]` / `[SIMULADA]`**: Banner persistente de entorno demostrativo, métricas de hardware rotuladas como `[SIMULADA]`, estado `"Gateway Demo (No Conectado)"` y mensaje explícito de que no se ejecutan agentes reales ni se modifican archivos del sistema.

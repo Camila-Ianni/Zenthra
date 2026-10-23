@@ -21,4 +21,15 @@ size_t page_fault_get_count(void);
 uint32_t page_fault_get_last_address(void);
 uint32_t page_fault_get_last_error_code(void);
 
+/*
+ * Mecanismo de protección y recuperación (fixup) durante copias entre userland y kernel (Auditoría v18):
+ * Permite registrar una ventana activa de copia (copy_from_user / copy_to_user / strnlen_user)
+ * y detectar si se produjo un Page Fault inesperado durante la transferencia para abortar con -EFAULT.
+ */
+void page_fault_begin_user_copy(void);
+void page_fault_end_user_copy(void);
+bool page_fault_is_user_copy_active(void);
+bool page_fault_did_user_copy_fault(void);
+void page_fault_simulate_user_copy_fault(uint32_t fault_addr);
+
 #endif

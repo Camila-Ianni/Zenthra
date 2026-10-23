@@ -6,8 +6,8 @@
 #define KEYBOARD_QUEUE_CAPACITY 128
 
 enum keyboard_layout {
-    KEYBOARD_LAYOUT_US = 0,
-    KEYBOARD_LAYOUT_ES = 1
+    KEYBOARD_LAYOUT_US = 0,       /* US QWERTY estándar */
+    KEYBOARD_LAYOUT_ES = 1        /* Español Básico (ASCII Set 1; sin dead-keys ni AltGr extendido) */
 };
 
 void keyboard_init(void);

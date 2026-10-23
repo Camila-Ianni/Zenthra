@@ -5,11 +5,12 @@
 #define KEYBOARD_STATUS_PORT 0x64
 
 /* Scancodes de teclas especiales (Set 1 x86) */
-#define SCANCODE_LSHIFT_MAKE   0x2A
-#define SCANCODE_RSHIFT_MAKE   0x36
-#define SCANCODE_LSHIFT_BREAK  0xAA
-#define SCANCODE_RSHIFT_BREAK  0xB6
-#define SCANCODE_CAPSLOCK_MAKE 0x3A
+#define SCANCODE_LSHIFT_MAKE    0x2A
+#define SCANCODE_RSHIFT_MAKE    0x36
+#define SCANCODE_LSHIFT_BREAK   0xAA
+#define SCANCODE_RSHIFT_BREAK   0xB6
+#define SCANCODE_CAPSLOCK_MAKE  0x3A
+#define SCANCODE_CAPSLOCK_BREAK 0xBA
 
 /* Tablas US Estándar */
 static const char scancode_us_normal[128] = {
@@ -38,7 +39,14 @@ static const char scancode_us_shift[128] = {
     0,   /* Caps lock */
 };
 
-/* Tablas Distribución Español / Latinoamérica (Auditoría v16) */
+/*
+ * Tablas de Distribución Español Básico ASCII (Auditoría v16/v18):
+ * Mapeo base de scancodes Set 1 para signos y puntuación habituales en teclado Español
+ * dentro de ASCII de 7 bits (comillas, paréntesis, '=', '?', ';', ':', '_', '<', '>').
+ * Nota técnica: se documenta explícitamente como layout Español Básico ASCII; el soporte
+ * de caracteres multi-byte/ISO-8859-1 ('ñ', '¡', '¿'), dead-keys (tildes) y modificador
+ * AltGr (0xE0 0x38) corresponde a la fase de internacionalización extendida de terminal.
+ */
 static const char scancode_es_normal[128] = {
     0,   27,  '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '\'', '?', '\b',
     '\t', 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '`', '+', '\n',
@@ -65,9 +73,18 @@ static const char scancode_es_shift[128] = {
     0,   /* Caps lock */
 };
 
-/* Estado de modificadores, layout y telemetría de overflow (Auditoría v16) */
-static bool shift_pressed = false;
+/*
+ * Estado de modificadores, layout y telemetría de overflow (Auditoría v16..v18):
+ * - Se mantienen left_shift_pressed y right_shift_pressed por separado para que soltar
+ *   uno mientras el otro permanece presionado no desactive prematuramente el estado Shift.
+ * - Se mantiene capslock_key_down para alternar caps_lock_active únicamente en el flanco
+ *   de subida (transición liberada -> presionada), ignorando repeticiones de make por
+ *   autorepetición del controlador 8042 hasta recibir SCANCODE_CAPSLOCK_BREAK (0xBA).
+ */
+static bool left_shift_pressed = false;
+static bool right_shift_pressed = false;
 static bool caps_lock_active = false;
+static bool capslock_key_down = false;
 static enum keyboard_layout active_layout = KEYBOARD_LAYOUT_US;
 static size_t overflow_counter = 0;
 
@@ -94,7 +111,7 @@ void keyboard_reset_overflow_count(void) {
 }
 
 bool keyboard_is_shift_active(void) {
-    return shift_pressed;
+    return left_shift_pressed || right_shift_pressed;
 }
 
 bool keyboard_is_caps_active(void) {
@@ -145,8 +162,13 @@ ssize_t keyboard_read_queue(char* dest, size_t count) {
 }
 
 /*
- * Inspección no destructiva de la cola de teclado (Lectura Transaccional - Auditoría v17).
+ * Inspección no destructiva de la cola de teclado (Lectura Transaccional - Auditoría v17/v18).
  * Copia hasta 'count' caracteres disponibles hacia 'dest' sin avanzar la cabeza de la cola.
+ *
+ * Garantía de concurrencia (Auditoría v18):
+ * En SYS_READ, el par keyboard_peek_queue() + copy_to_user() + keyboard_discard_chars()
+ * se invoca bajo sección crítica con scheduler_lock() y con interrupciones deshabilitadas
+ * por el Interrupt Gate 0x80 en arquitectura UP (Uniprocesador).
  */
 size_t keyboard_peek_queue(char* dest, size_t count) {
     if (!dest || count == 0 || q_count == 0) return 0;
@@ -170,19 +192,34 @@ void keyboard_discard_chars(size_t count) {
     q_count -= count;
 }
 
-/* Procesamiento integral de scan codes con modificadores Shift y Caps Lock */
+/* Procesamiento integral de scan codes con modificadores Shift independiente y Caps Lock anti-repeat */
 void keyboard_process_scancode(uint8_t scancode) {
     // 1. Detección de teclas modificadoras Make/Break
-    if (scancode == SCANCODE_LSHIFT_MAKE || scancode == SCANCODE_RSHIFT_MAKE) {
-        shift_pressed = true;
+    if (scancode == SCANCODE_LSHIFT_MAKE) {
+        left_shift_pressed = true;
         return;
     }
-    if (scancode == SCANCODE_LSHIFT_BREAK || scancode == SCANCODE_RSHIFT_BREAK) {
-        shift_pressed = false;
+    if (scancode == SCANCODE_RSHIFT_MAKE) {
+        right_shift_pressed = true;
+        return;
+    }
+    if (scancode == SCANCODE_LSHIFT_BREAK) {
+        left_shift_pressed = false;
+        return;
+    }
+    if (scancode == SCANCODE_RSHIFT_BREAK) {
+        right_shift_pressed = false;
         return;
     }
     if (scancode == SCANCODE_CAPSLOCK_MAKE) {
-        caps_lock_active = !caps_lock_active;
+        if (!capslock_key_down) {
+            caps_lock_active = !caps_lock_active;
+            capslock_key_down = true;
+        }
+        return;
+    }
+    if (scancode == SCANCODE_CAPSLOCK_BREAK) {
+        capslock_key_down = false;
         return;
     }
 
@@ -196,6 +233,7 @@ void keyboard_process_scancode(uint8_t scancode) {
     }
 
     // 3. Resolución de carácter según layout activo y modificadores
+    bool shift_active = keyboard_is_shift_active();
     char c = 0;
     const char* normal_tbl = (active_layout == KEYBOARD_LAYOUT_ES) ? scancode_es_normal : scancode_us_normal;
     const char* shift_tbl  = (active_layout == KEYBOARD_LAYOUT_ES) ? scancode_es_shift  : scancode_us_shift;
@@ -203,11 +241,11 @@ void keyboard_process_scancode(uint8_t scancode) {
     char base_char = normal_tbl[scancode];
     if (base_char >= 'a' && base_char <= 'z') {
         // En letras, CapsLock y Shift actúan con XOR
-        bool uppercase = (shift_pressed ^ caps_lock_active);
+        bool uppercase = (shift_active ^ caps_lock_active);
         c = uppercase ? (base_char - 'a' + 'A') : base_char;
     } else {
         // En números y símbolos, solo Shift altera el glifo
-        c = shift_pressed ? shift_tbl[scancode] : normal_tbl[scancode];
+        c = shift_active ? shift_tbl[scancode] : normal_tbl[scancode];
     }
 
     if (c != 0) {
@@ -226,8 +264,10 @@ void keyboard_poll_hardware(void) {
 
 void keyboard_init(void) {
     keyboard_queue_clear();
-    shift_pressed = false;
+    left_shift_pressed = false;
+    right_shift_pressed = false;
     caps_lock_active = false;
+    capslock_key_down = false;
     overflow_counter = 0;
     active_layout = KEYBOARD_LAYOUT_US;
 #if defined(__KERNEL__)

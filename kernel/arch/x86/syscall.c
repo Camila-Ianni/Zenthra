@@ -5,11 +5,32 @@
 #include "acl_security.h"
 #include "task.h"
 #include "vmm.h"
+#include "page_fault.h"
 #include "keyboard.h"
 #include "errno.h"
 
 /*
- * Validación de punteros de usuario:
+ * En el binario real del kernel (__KERNEL__), se exige obligatoriamente que la paginación
+ * por hardware (CR0.PG) esté activa para permitir cualquier acceso a memoria de usuario.
+ * En pruebas de host sin VMM inicializado, puede configurarse explícitamente para probar
+ * tanto el camino de kernel estricto como los mocks básicos de punteros.
+ */
+#if defined(__KERNEL__)
+static bool strict_require_paging = true;
+#else
+static bool strict_require_paging = false;
+#endif
+
+void syscall_set_require_paging(bool require_paging) {
+    strict_require_paging = require_paging;
+}
+
+bool syscall_is_paging_required(void) {
+    return strict_require_paging;
+}
+
+/*
+ * Validación aritmética de punteros de usuario:
  * Comprueba que el rango [ptr, ptr + size) esté dentro del espacio de usuario válido,
  * no sea NULL y no desborde el límite de memoria del kernel ni wrap-around aritmético.
  */
@@ -27,91 +48,142 @@ bool is_user_pointer(const void* ptr, size_t size) {
 }
 
 /*
- * Validación estricta de páginas mapeadas para punteros de usuario (Auditoría v15/v16):
+ * Validación estricta de páginas mapeadas para punteros de usuario (Auditoría v15..v18):
  * Comprueba que todas las páginas del rango [ptr, ptr + size) estén presentes en el
  * directorio de páginas activo con permisos de usuario (PTE_USER) y, si corresponde,
  * de escritura (PTE_WRITABLE).
  *
- * POLÍTICA FAIL-CLOSED:
- * Si la paginación está activa y no existe un directorio de páginas de proceso válido
- * o es inaccesible, se RECHAZA de inmediato retornando false en lugar de validar contra
- * el espacio del kernel por defecto.
+ * POLÍTICA FAIL-CLOSED (Auditoría v18):
+ * 1. En modo kernel real (o cuando strict_require_paging == true), si la paginación
+ *    NO está activa, se RECHAZA inmediatamente retornando false (nunca se permite acceso
+ *    de usuario sin protección de paginación activa).
+ * 2. Si no existe un directorio de páginas de proceso válido o es inaccesible, se
+ *    RECHAZA de inmediato retornando false.
  */
 bool is_user_pages_accessible_failclosed(const void* ptr, size_t size, bool write_intent) {
     if (!is_user_pointer(ptr, size)) return false;
     if (size == 0) return true;
 
-    if (vmm_is_paging_enabled()) {
-        struct page_directory* cur_pd = vmm_get_current_directory();
-        // Fallar cerrado: si no hay un directorio de páginas activo o es inaccesible, rechazar
-        if (!cur_pd || !vmm_is_directory_accessible(cur_pd)) {
+    if (!vmm_is_paging_enabled()) {
+        if (strict_require_paging) {
+            return false; // Camino real de kernel: rechazar si paginación está desactivada
+        }
+        return true; // Solo permitido en tests unitarios tempranos de host antes de vmm_init()
+    }
+
+    struct page_directory* cur_pd = vmm_get_current_directory();
+    // Fallar cerrado: si no hay un directorio de páginas activo o es inaccesible, rechazar
+    if (!cur_pd || !vmm_is_directory_accessible(cur_pd)) {
+        return false;
+    }
+
+    uintptr_t start = (uintptr_t)ptr;
+    uintptr_t end = start + size;
+    uintptr_t start_page = start & PTE_FRAME_MASK;
+    uintptr_t end_page = (end + PAGE_SIZE - 1) & PTE_FRAME_MASK;
+
+    for (uintptr_t page = start_page; page < end_page; page += PAGE_SIZE) {
+        uint32_t flags = vmm_get_page_flags(cur_pd, page);
+        if (!(flags & PTE_PRESENT) || !(flags & PTE_USER)) {
             return false;
         }
-
-        uintptr_t start = (uintptr_t)ptr;
-        uintptr_t end = start + size;
-        uintptr_t start_page = start & PTE_FRAME_MASK;
-        uintptr_t end_page = (end + PAGE_SIZE - 1) & PTE_FRAME_MASK;
-
-        for (uintptr_t page = start_page; page < end_page; page += PAGE_SIZE) {
-            uint32_t flags = vmm_get_page_flags(cur_pd, page);
-            if (!(flags & PTE_PRESENT) || !(flags & PTE_USER)) {
-                return false;
-            }
-            if (write_intent && !(flags & PTE_WRITABLE)) {
-                return false;
-            }
+        if (write_intent && !(flags & PTE_WRITABLE)) {
+            return false;
         }
     }
     return true;
 }
 
 /*
- * Copia segura desde userland hacia buffer acotado en kernel:
- * Retorna 0 si fue exitosa, o -1 si el puntero, rango o páginas son inválidos.
+ * Copia segura con ventana de recuperación (fault-fixup) desde userland hacia kernel (Auditoría v18):
+ * - Bloquea el planificador (scheduler_lock) para estabilizar el espacio de direcciones durante la validación y copia.
+ * - Registra una ventana activa de copia (page_fault_begin_user_copy) para interceptar cualquier #PF inesperado
+ *   sin causar pánico del kernel y retornar -1 (-EFAULT).
  */
 int copy_from_user(void* kernel_dest, const void* user_src, size_t size) {
     if (!kernel_dest || !user_src) return -1;
-    if (!is_user_pages_accessible_failclosed(user_src, size, false)) return -1;
 
-    k_memcpy(kernel_dest, user_src, size);
-    return 0;
+    scheduler_lock();
+    if (!is_user_pages_accessible_failclosed(user_src, size, false)) {
+        scheduler_unlock();
+        return -1;
+    }
+
+    page_fault_begin_user_copy();
+    const uint8_t* src_bytes = (const uint8_t*)user_src;
+    uint8_t* dst_bytes = (uint8_t*)kernel_dest;
+    for (size_t i = 0; i < size; i++) {
+        if (page_fault_did_user_copy_fault()) {
+            page_fault_end_user_copy();
+            scheduler_unlock();
+            return -1;
+        }
+        dst_bytes[i] = src_bytes[i];
+    }
+    bool faulted = page_fault_did_user_copy_fault();
+    page_fault_end_user_copy();
+    scheduler_unlock();
+
+    return faulted ? -1 : 0;
 }
 
 /*
- * Copia segura desde kernel hacia buffer en userland:
- * Retorna 0 si fue exitosa, o -1 si el destino de usuario o páginas son inválidos/de solo lectura.
+ * Copia segura con ventana de recuperación (fault-fixup) desde kernel hacia userland (Auditoría v18):
+ * Retorna 0 si fue exitosa, o -1 si el destino de usuario o páginas son inválidos/de solo lectura o hubo #PF.
  */
 int copy_to_user(void* user_dest, const void* kernel_src, size_t size) {
     if (!user_dest || !kernel_src) return -1;
-    if (!is_user_pages_accessible_failclosed(user_dest, size, true)) return -1;
 
-    k_memcpy(user_dest, kernel_src, size);
-    return 0;
+    scheduler_lock();
+    if (!is_user_pages_accessible_failclosed(user_dest, size, true)) {
+        scheduler_unlock();
+        return -1;
+    }
+
+    page_fault_begin_user_copy();
+    uint8_t* dst_bytes = (uint8_t*)user_dest;
+    const uint8_t* src_bytes = (const uint8_t*)kernel_src;
+    for (size_t i = 0; i < size; i++) {
+        if (page_fault_did_user_copy_fault()) {
+            page_fault_end_user_copy();
+            scheduler_unlock();
+            return -1;
+        }
+        dst_bytes[i] = src_bytes[i];
+    }
+    bool faulted = page_fault_did_user_copy_fault();
+    page_fault_end_user_copy();
+    scheduler_unlock();
+
+    return faulted ? -1 : 0;
 }
 
 /*
- * Calcula la longitud de una cadena de usuario de forma segura hasta max_len.
+ * Calcula la longitud de una cadena de usuario de forma segura hasta max_len (Auditoría v14..v18).
  *
  * Contrato de seguridad y prevención de fallos (#PF en Ring 0):
- * Valida bloque por bloque de página en el directorio de páginas activo que cada dirección
- * pertenezca a userland (USER_MEMORY_LIMIT), esté presente (PTE_PRESENT) y cuente con
- * permisos de usuario (PTE_USER). Si la cadena se extiende hacia una página no mapeada
- * o sin PTE_USER antes de encontrar un terminador NUL, aborta de forma segura retornando -1.
+ * Mantiene estable el espacio de direcciones con scheduler_lock(), valida bloque por bloque de página
+ * en el directorio activo y protege la lectura bajo page_fault_begin_user_copy().
  */
 ssize_t strnlen_user(const char* user_str, size_t max_len) {
     if (!user_str || max_len == 0) return -1;
     if (!is_user_pointer(user_str, 1)) return -1;
 
+    scheduler_lock();
+    page_fault_begin_user_copy();
     size_t inspected = 0;
     while (inspected < max_len) {
         const char* cur = user_str + inspected;
         if (!is_user_pointer(cur, 1)) {
+            page_fault_end_user_copy();
+            scheduler_unlock();
             return -1;
         }
 
         // Validar que la página que contiene 'cur' sea accesible con permisos de usuario
         if (!is_user_pages_accessible_failclosed(cur, 1, false)) {
+            page_fault_end_user_copy();
+            scheduler_unlock();
             return -1; // Página inaccesible: abortar de forma segura sin desreferenciar
         }
 
@@ -125,7 +197,14 @@ ssize_t strnlen_user(const char* user_str, size_t max_len) {
 
         // Inspeccionar bytes dentro del rango validado de la página
         for (size_t j = 0; j < chunk_len; j++) {
+            if (page_fault_did_user_copy_fault()) {
+                page_fault_end_user_copy();
+                scheduler_unlock();
+                return -1;
+            }
             if (cur[j] == '\0') {
+                page_fault_end_user_copy();
+                scheduler_unlock();
                 return (ssize_t)(inspected + j);
             }
         }
@@ -133,11 +212,14 @@ ssize_t strnlen_user(const char* user_str, size_t max_len) {
         inspected += chunk_len;
     }
 
+    page_fault_end_user_copy();
+    scheduler_unlock();
     return -1; // Terminador NUL no encontrado dentro de max_len
 }
 
 /* Tamaño de chunk para transferencias acotadas en la pila de kernel */
 #define KERNEL_SYSCALL_BUF_SIZE 256
+#define MAX_SYSCALL_TRANSFER_SIZE 65536
 
 /* Handler de Syscalls invocado por la interrupción 0x80 (Ring 3 -> Ring 0) */
 void syscall_dispatcher(struct registers* regs) {
@@ -145,17 +227,17 @@ void syscall_dispatcher(struct registers* regs) {
 
     switch (syscall_num) {
         case SYS_WRITE: {
-            // ABI de Syscall Zenthra OS (Auditoría v14/v15/v16):
+            // ABI de Syscall Zenthra OS (Auditoría v14..v18):
             //   EBX: const void* user_buf (puntero a búfer de usuario)
-            //   ECX: size_t count (número exacto de bytes a transferir)
-            // Retorno en EAX:
-            //   count == 0  -> 0 (éxito nulo estándar POSIX)
-            //   éxito       -> número de bytes transferidos/escritos (> 0)
-            //   error       -> -EFAULT (-14 ante puntero nulo, páginas no mapeadas, sin PTE_USER o fuera de rango)
-            //
-            // Reentrancia y Concurrencia (Auditoría v16):
-            // Se utiliza un búfer local en la pila de kernel privada de la tarea actual ('kbuf_write'),
-            // eliminando colisiones y corrupción ante preempción o conmutación de contexto.
+            //   ECX: size_t count (número de bytes solicitados a escribir)
+            // Contrato de transferencia y escritura parcial (Auditoría v18):
+            //   - count == 0 retorna 0 (éxito nulo estándar POSIX).
+            //   - Cada llamada acota count a un máximo de MAX_SYSCALL_TRANSFER_SIZE (65536 bytes).
+            //   - No se realiza doble validación global previa: cada bloque de 256 bytes ('chunk')
+            //     es validado y copiado una única vez por copy_from_user().
+            //   - Si el primer chunk falla, retorna -EFAULT (-14).
+            //   - Si algún chunk posterior falla tras haber transferido N > 0 bytes válidos,
+            //     retorna exactamente N (escritura parcial estándar POSIX).
             const char* user_buf = (const char*)(uintptr_t)regs->ebx;
             size_t count = (size_t)regs->ecx;
 
@@ -164,22 +246,13 @@ void syscall_dispatcher(struct registers* regs) {
                 break;
             }
 
-            // Validar puntero base en espacio de usuario
-            if (!user_buf || !is_user_pointer(user_buf, 1)) {
+            if (!user_buf) {
                 regs->eax = (uint32_t)-EFAULT;
                 break;
             }
 
-            // Acotar tamaño máximo transferible por llamada para evitar consumo excesivo de CPU (Auditoría v17)
-            #define MAX_SYSCALL_TRANSFER_SIZE 65536
             if (count > MAX_SYSCALL_TRANSFER_SIZE) {
                 count = MAX_SYSCALL_TRANSFER_SIZE;
-            }
-
-            // Validar que el rango completo no desborde el límite de usuario
-            if (!is_user_pointer(user_buf, count)) {
-                regs->eax = (uint32_t)-EFAULT;
-                break;
             }
 
             char kbuf_write[KERNEL_SYSCALL_BUF_SIZE];
@@ -190,7 +263,7 @@ void syscall_dispatcher(struct registers* regs) {
                     chunk = sizeof(kbuf_write);
                 }
 
-                // copy_from_user valida cada chunk de forma exacta (fail-closed)
+                // Validación única por chunk dentro de copy_from_user (aritmética + páginas + fixup)
                 if (copy_from_user(kbuf_write, user_buf + total_written, chunk) != 0) {
                     regs->eax = (total_written > 0) ? (uint32_t)total_written : (uint32_t)-EFAULT;
                     break;
@@ -202,29 +275,23 @@ void syscall_dispatcher(struct registers* regs) {
                 total_written += chunk;
             }
 
-            if (total_written > 0 || count == 0) {
+            if (total_written > 0) {
                 regs->eax = (uint32_t)total_written;
             }
             break;
         }
 
         case SYS_READ: {
-            // ABI de Syscall Zenthra OS (Auditoría v15/v16/v17):
+            // ABI de Syscall Zenthra OS (Auditoría v15..v18):
             //   EBX: void* user_buf (puntero a búfer de destino en usuario)
             //   ECX: size_t count (número máximo de bytes solicitados)
             //   EDX: uint32_t flags (SYS_READ_NONBLOCK o SYS_READ_BLOCKING)
-            // Retorno en EAX:
-            //   count == 0  -> 0 (éxito nulo estándar POSIX)
-            //   error       -> -EINVAL (-22) ante flags no reconocidos
-            //               -> -ENOSYS (-38) si se solicita SYS_READ_BLOCKING (bloqueo cooperativo/evento planificado para Fase 4)
-            //               -> -EFAULT (-14) ante puntero nulo, fuera de rango o sin PTE_WRITABLE en el rango transferido
-            //               -> -EAGAIN (-11) si no hay datos en la cola de entrada (lectura interactiva no bloqueante)
-            //   éxito       -> número de bytes efectivamente leídos (> 0)
             //
-            // Lectura Transaccional (Auditoría v17):
-            // Los caracteres solo se extraen definitivamente de la cola (keyboard_discard_chars)
-            // DESPUÉS de que copy_to_user confirme que los datos fueron transferidos a userland con éxito,
-            // previniendo la pérdida irrecuperable de pulsaciones de teclado ante fallos de memoria.
+            // Lectura Transaccional y Atomicidad (Auditoría v17/v18):
+            // La secuencia keyboard_peek_queue -> copy_to_user -> keyboard_discard_chars se ejecuta
+            // dentro de una sección crítica protegida con scheduler_lock() bajo el modelo UP (Uniprocesador)
+            // con gate de interrupción INT 0x80 (IF=0), impidiendo que otra tarea o consumidor concurrente
+            // intercalado altere la cola entre el peek y el discard.
             void* user_buf = (void*)(uintptr_t)regs->ebx;
             size_t count = (size_t)regs->ecx;
             uint32_t flags = (uint32_t)regs->edx;
@@ -235,8 +302,6 @@ void syscall_dispatcher(struct registers* regs) {
             }
 
             if (flags & SYS_READ_BLOCKING) {
-                // Modo bloqueante planificado formalmente para la Fase 4 con IPC/despertar por eventos de terminal.
-                // Documentado con retorno explícito -ENOSYS.
                 regs->eax = (uint32_t)-ENOSYS;
                 break;
             }
@@ -246,21 +311,20 @@ void syscall_dispatcher(struct registers* regs) {
                 break;
             }
 
-            if (!user_buf || !is_user_pointer(user_buf, 1) || !is_user_pages_accessible_failclosed(user_buf, 1, true)) {
+            if (!user_buf || !is_user_pages_accessible_failclosed(user_buf, 1, true)) {
                 regs->eax = (uint32_t)-EFAULT;
                 break;
             }
 
-            // Consultar hardware físico si corresponde
+            scheduler_lock();
             keyboard_poll_hardware();
 
-            // Comprobar si hay datos disponibles en la cola de teclado/terminal
             if (keyboard_queue_is_empty()) {
+                scheduler_unlock();
                 regs->eax = (uint32_t)-EAGAIN;
                 break;
             }
 
-            // Alinear el rango a validar con los bytes que efectivamente se transferirán
             size_t q_len = keyboard_queue_length();
             size_t to_read = count;
             if (to_read > q_len) {
@@ -270,29 +334,25 @@ void syscall_dispatcher(struct registers* regs) {
                 to_read = KERNEL_SYSCALL_BUF_SIZE;
             }
 
-            // Validar espacio de usuario estrictamente para los 'to_read' bytes a escribir si to_read > 1
-            if (to_read > 1 && (!is_user_pointer(user_buf, to_read) || !is_user_pages_accessible_failclosed(user_buf, to_read, true))) {
-                regs->eax = (uint32_t)-EFAULT;
-                break;
-            }
-
-            // Inspección no destructiva de la cola de teclado (Lectura Transaccional)
             char kbuf_read[KERNEL_SYSCALL_BUF_SIZE];
             size_t peeked = keyboard_peek_queue(kbuf_read, to_read);
             if (peeked == 0) {
+                scheduler_unlock();
                 regs->eax = (uint32_t)-EAGAIN;
                 break;
             }
 
-            // Copiar los datos leídos hacia el espacio de usuario
+            // copy_to_user valida las páginas de los 'peeked' bytes y copia bajo protección fault-safe
             if (copy_to_user(user_buf, kbuf_read, peeked) != 0) {
-                // Si la copia falla, los caracteres permanecen intactos en la cola
+                // Si la copia falla, la cola permanece 100% intacta
+                scheduler_unlock();
                 regs->eax = (uint32_t)-EFAULT;
                 break;
             }
 
-            // Confirmación transaccional: consumir efectivamente los caracteres tras copia exitosa
+            // Confirmación transaccional dentro de la misma sección crítica sincronizada
             keyboard_discard_chars(peeked);
+            scheduler_unlock();
 
             regs->eax = (uint32_t)peeked;
             break;
@@ -357,26 +417,42 @@ void syscall_dispatcher(struct registers* regs) {
         }
 
         case SYS_SET_PROFILE: {
-            // Auditoría v16: Aislamiento estricto de perfiles.
-            // SYS_SET_PROFILE modifica EXCLUSIVAMENTE el perfil de la tarea llamadora ('cur->profile').
-            // NO modifica el perfil global de ACL ('acl_set_active_profile'), eliminando efectos
-            // colaterales entre tareas concurrentes y garantizando credenciales por proceso.
+            // Auditoría v16..v18: Aislamiento de perfiles y prevención de escalamiento de privilegios.
+            // 1. Validar que el perfil destino exista (< PROFILE_COUNT); de lo contrario retornar -EINVAL.
+            // 2. Comprobar que la tarea actual posea OP_SYSTEM_ADMIN y que la transición cumpla la política
+            //    de monotonicidad de capacidades (acl_can_transition_profile): ninguna tarea puede autoelevarse
+            //    a un perfil que otorgue capacidades adicionales (ej. OP_ARDUINO_WRITE o OP_ARDUINO_READ).
+            //    Así se impide que perfiles de software con OP_SYSTEM_ADMIN (Backend, Frontend, Fullstack,
+            //    Ciberseguridad) escalen a PROFILE_IOT_HARDWARE y tomen control de actuadores físicos.
             uint32_t new_prof = regs->ebx;
+            if (new_prof >= PROFILE_COUNT) {
+                regs->eax = (uint32_t)-EINVAL; // -22
+                break;
+            }
+
             struct task* cur = task_get_current();
             enum nova_profile curr_prof = cur ? cur->profile : acl_get_active_profile();
+
             if (!acl_check_permission(curr_prof, OP_SYSTEM_ADMIN)) {
                 acl_log_violation(curr_prof, OP_SYSTEM_ADMIN, "SYS_SET_PROFILE");
                 regs->eax = (uint32_t)-EACCES; // -13
                 break;
             }
-            if (new_prof < PROFILE_COUNT) {
-                if (cur) {
-                    cur->profile = (enum nova_profile)new_prof;
-                }
-                regs->eax = 0;
-            } else {
-                regs->eax = (uint32_t)-EINVAL; // -22
+
+            if (!acl_can_transition_profile(curr_prof, (enum nova_profile)new_prof)) {
+                // Registrar intento de escalamiento de privilegios hacia perfil con capacidades adicionales
+                uint8_t added_caps = (uint8_t)(acl_get_profile_mask((enum nova_profile)new_prof) & ~acl_get_profile_mask(curr_prof));
+                enum sec_operation violated_op = (added_caps & OP_ARDUINO_WRITE) ? OP_ARDUINO_WRITE :
+                                                 ((added_caps & OP_ARDUINO_READ) ? OP_ARDUINO_READ : OP_SYSTEM_ADMIN);
+                acl_log_violation(curr_prof, violated_op, "SYS_SET_PROFILE_ESCALATION_BLOCKED");
+                regs->eax = (uint32_t)-EACCES; // -13
+                break;
             }
+
+            if (cur) {
+                cur->profile = (enum nova_profile)new_prof;
+            }
+            regs->eax = 0;
             break;
         }
 

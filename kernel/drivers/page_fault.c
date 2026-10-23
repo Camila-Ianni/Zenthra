@@ -7,6 +7,34 @@
 static size_t pf_count = 0;
 static uint32_t last_fault_addr = 0;
 static uint32_t last_err_code = 0;
+static bool user_copy_active = false;
+static bool user_copy_faulted = false;
+
+void page_fault_begin_user_copy(void) {
+    user_copy_active = true;
+    user_copy_faulted = false;
+}
+
+void page_fault_end_user_copy(void) {
+    user_copy_active = false;
+}
+
+bool page_fault_is_user_copy_active(void) {
+    return user_copy_active;
+}
+
+bool page_fault_did_user_copy_fault(void) {
+    return user_copy_faulted;
+}
+
+void page_fault_simulate_user_copy_fault(uint32_t fault_addr) {
+    if (user_copy_active) {
+        pf_count++;
+        last_fault_addr = fault_addr;
+        last_err_code = PF_ERR_PRESENT;
+        user_copy_faulted = true;
+    }
+}
 
 void page_fault_init(void) {
     register_interrupt_handler(14, page_fault_handler);
@@ -19,6 +47,14 @@ void page_fault_handler(struct registers* regs) {
     pf_count++;
     last_fault_addr = vmm_get_fault_addr();
     last_err_code = regs->err_code;
+
+    // Si ocurrió un fallo mientras una primitiva copy_from_user/copy_to_user/strnlen_user
+    // estaba activa, marcar el fallo recuperable para que la syscall retorne -EFAULT
+    if (user_copy_active) {
+        user_copy_faulted = true;
+        serial_write_string("[VMM FIXUP] Page Fault interceptado durante copia de usuario; marcando -EFAULT.\r\n");
+        return;
+    }
 
     bool not_present = !(regs->err_code & PF_ERR_PRESENT);
     bool write_op    = (regs->err_code & PF_ERR_WRITE) != 0;
@@ -49,7 +85,7 @@ void page_fault_handler(struct registers* regs) {
     serial_write_string(buf);
     serial_write_string("\r\n======================================================\r\n");
 
-    // Si el fallo ocurrió dentro de código de kernel, detener la máquina por seguridad
+    // Si el fallo ocurrió dentro de código de kernel fuera de user_copy, detener la máquina por seguridad
     if (!user_mode) {
         vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_RED));
         kprintf("\n[KERNEL PANIC] Page Fault en Ring 0 (Addr: 0x%x, EIP: 0x%x)\n", last_fault_addr, regs->eip);

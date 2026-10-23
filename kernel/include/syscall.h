@@ -40,6 +40,8 @@
 /* Funciones de copia segura entre espacio de usuario (Ring 3) y kernel (Ring 0) */
 bool is_user_pointer(const void* ptr, size_t size);
 bool is_user_pages_accessible_failclosed(const void* ptr, size_t size, bool write_intent);
+void syscall_set_require_paging(bool require_paging);
+bool syscall_is_paging_required(void);
 int copy_from_user(void* kernel_dest, const void* user_src, size_t size);
 int copy_to_user(void* user_dest, const void* kernel_src, size_t size);
 ssize_t strnlen_user(const char* user_str, size_t max_len);

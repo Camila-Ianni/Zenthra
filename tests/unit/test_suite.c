@@ -515,8 +515,62 @@ void test_syscall_boundary_and_abi(void) {
     regs_acl.eax = SYS_SET_PROFILE;
     regs_acl.ebx = PROFILE_STUDENT;
     syscall_dispatcher(&regs_acl);
-    TEST_ASSERT(regs_acl.eax == 0, "SYS_SET_PROFILE cambia el perfil activo con permisos de administracion");
+    TEST_ASSERT(regs_acl.eax == 0, "SYS_SET_PROFILE permite reducir privilegios desde Hardware-IoT hacia Estudiante");
     TEST_ASSERT(task_get_current()->profile == PROFILE_STUDENT, "Perfil de proceso verificado tras SYS_SET_PROFILE");
+
+    // Auditoría v18: Prevención crítica de escalamiento de privilegios en SYS_SET_PROFILE.
+    // Perfiles con OP_SYSTEM_ADMIN (Backend, Frontend, Fullstack, Ciberseguridad) NO pueden
+    // autoelevarse a PROFILE_IOT_HARDWARE para adquirir OP_ARDUINO_WRITE / OP_ARDUINO_READ.
+    enum nova_profile admin_software_profiles[4] = {
+        PROFILE_BACKEND,
+        PROFILE_FRONTEND,
+        PROFILE_CYBERSECURITY,
+        PROFILE_FULLSTACK
+    };
+    for (int p = 0; p < 4; p++) {
+        enum nova_profile start_p = admin_software_profiles[p];
+        task_set_current_profile(start_p);
+        uint32_t v_before = acl_get_violations_count();
+
+        // Intentar escalar a PROFILE_IOT_HARDWARE
+        regs_acl.eax = SYS_SET_PROFILE;
+        regs_acl.ebx = PROFILE_IOT_HARDWARE;
+        syscall_dispatcher(&regs_acl);
+        TEST_ASSERT(regs_acl.eax == (uint32_t)-EACCES,
+                    "SYS_SET_PROFILE bloquea escalada hacia PROFILE_IOT_HARDWARE con -EACCES (-13)");
+        TEST_ASSERT(task_get_current()->profile == start_p,
+                    "Perfil de la tarea permanece intacto tras intento de escalada rechazado");
+        TEST_ASSERT(acl_get_violations_count() == v_before + 1,
+                    "Intento de escalada de perfil se registra como violacion de seguridad");
+
+        // Confirmar que SYS_ARDUINO_CMD LED_ON (2) y LED_OFF (3) siguen denegados (-EACCES)
+        regs_acl.eax = SYS_ARDUINO_CMD;
+        regs_acl.ebx = 2; // LED ON
+        syscall_dispatcher(&regs_acl);
+        TEST_ASSERT(regs_acl.eax == (uint32_t)-EACCES,
+                    "SYS_ARDUINO_CMD LED_ON sigue denegado (-EACCES) tras bloqueo de escalada");
+
+        regs_acl.eax = SYS_ARDUINO_CMD;
+        regs_acl.ebx = 3; // LED OFF
+        syscall_dispatcher(&regs_acl);
+        TEST_ASSERT(regs_acl.eax == (uint32_t)-EACCES,
+                    "SYS_ARDUINO_CMD LED_OFF sigue denegado (-EACCES) tras bloqueo de escalada");
+    }
+
+    // Comprobar que una transición no elevadora entre perfiles administrativos equivalentes
+    // (Backend <-> Frontend) o hacia un subconjunto (Backend -> Designer) sí está permitida
+    task_set_current_profile(PROFILE_BACKEND);
+    regs_acl.eax = SYS_SET_PROFILE;
+    regs_acl.ebx = PROFILE_FRONTEND;
+    syscall_dispatcher(&regs_acl);
+    TEST_ASSERT(regs_acl.eax == 0 && task_get_current()->profile == PROFILE_FRONTEND,
+                "SYS_SET_PROFILE permite transicion lateral sin elevacion de capacidades (Backend -> Frontend)");
+
+    regs_acl.eax = SYS_SET_PROFILE;
+    regs_acl.ebx = PROFILE_DESIGNER;
+    syscall_dispatcher(&regs_acl);
+    TEST_ASSERT(regs_acl.eax == 0 && task_get_current()->profile == PROFILE_DESIGNER,
+                "SYS_SET_PROFILE permite reduccion de capacidades hacia subconjunto (Frontend -> Designer)");
 
     // Auditoría v16/v17: Aislamiento estricto de perfiles.
     // Comprobar que ni task_set_current_profile ni SYS_SET_PROFILE alteran el perfil global de ACL
@@ -539,8 +593,24 @@ void test_syscall_boundary_and_abi(void) {
                 "Permisos de tarea concurrente estan estrictamente aislados de la tarea A");
     task_exit(); // Limpieza: finaliza task_iso_b y conmuta de regreso a la tarea principal
 
-    // Auditoría v14/v15: Semántica ABI de SYS_WRITE (buffer binario, count=0 POSIX y códigos errno estandarizados)
+    // Auditoría v18: Camino real de kernel exige paginación activa (fail-closed si paging está desactivado)
+    // En este punto de la suite aún no se invocó vmm_init(), por lo que vmm_is_paging_enabled() == false.
     char sample_user_buf[32] = "Userland Output Test";
+    syscall_set_require_paging(true);
+    TEST_ASSERT(syscall_is_paging_required() == true, "Modo estricto de kernel require_paging activado");
+    TEST_ASSERT(is_user_pages_accessible_failclosed(sample_user_buf, 8, false) == false,
+                "Camino kernel fail-closed rechaza acceso de usuario cuando la paginacion esta desactivada");
+    struct registers regs_nopg;
+    k_memset(&regs_nopg, 0, sizeof(struct registers));
+    regs_nopg.eax = SYS_WRITE;
+    regs_nopg.ebx = (uintptr_t)sample_user_buf;
+    regs_nopg.ecx = 8;
+    syscall_dispatcher(&regs_nopg);
+    TEST_ASSERT(regs_nopg.eax == (uint32_t)-EFAULT,
+                "SYS_WRITE falla cerrado con -EFAULT en modo kernel si la paginacion no esta activa");
+    syscall_set_require_paging(false);
+
+    // Auditoría v14/v15: Semántica ABI de SYS_WRITE (buffer binario, count=0 POSIX y códigos errno estandarizados)
     struct registers regs_w;
     k_memset(&regs_w, 0, sizeof(struct registers));
     regs_w.eax = SYS_WRITE;
@@ -556,6 +626,15 @@ void test_syscall_boundary_and_abi(void) {
     regs_w.ecx = 6;
     syscall_dispatcher(&regs_w);
     TEST_ASSERT(regs_w.eax == 6, "SYS_WRITE escribe buffer binario con NUL intermedio sin truncar");
+
+    // Auditoría v18: SYS_WRITE acota transferencias mayores a 65536 bytes (MAX_SYSCALL_TRANSFER_SIZE)
+    static char large_user_buf[70000];
+    k_memset(large_user_buf, 'A', sizeof(large_user_buf));
+    regs_w.eax = SYS_WRITE;
+    regs_w.ebx = (uintptr_t)large_user_buf;
+    regs_w.ecx = 70000;
+    syscall_dispatcher(&regs_w);
+    TEST_ASSERT(regs_w.eax == 65536, "SYS_WRITE con count > 65536 acota y retorna exactamente 65536 bytes");
 
     // SYS_WRITE con puntero NULL retorna -EFAULT (-14)
     regs_w.eax = SYS_WRITE;
@@ -921,10 +1000,27 @@ void test_virtual_memory_paging(void) {
     TEST_ASSERT(regs_sw.eax == (uint32_t)-EFAULT, "SYS_WRITE rechaza escritura desde pagina de usuario no mapeada con -EFAULT");
 
     regs_sw.eax = SYS_WRITE;
-    regs_sw.ebx = (uintptr_t)(proc_virt + 4000); // cruza frontera a página no mapeada (0x40001000 no mapeada)
+    regs_sw.ebx = (uintptr_t)(proc_virt + 4000); // cruza frontera a página no mapeada en el primer chunk (0x40001000 no mapeada)
     regs_sw.ecx = 200;
     syscall_dispatcher(&regs_sw);
-    TEST_ASSERT(regs_sw.eax == (uint32_t)-EFAULT, "SYS_WRITE rechaza buffer que cruza frontera hacia pagina no mapeada con -EFAULT");
+    TEST_ASSERT(regs_sw.eax == (uint32_t)-EFAULT, "SYS_WRITE rechaza buffer que cruza frontera hacia pagina no mapeada en el primer chunk con -EFAULT");
+
+    // Auditoría v18: Escritura parcial exacta en SYS_WRITE cuando el primer chunk (256 bytes) es válido
+    // y el segundo chunk cruza hacia una página no mapeada.
+    // Usar un buffer válido en memoria de host mapeado en pdir exactamente en su primera página alineada.
+    static uint8_t aligned_partial_buf[8192] __attribute__((aligned(4096)));
+    k_memset(aligned_partial_buf, 'P', sizeof(aligned_partial_buf));
+    uintptr_t partial_page_virt = (uintptr_t)aligned_partial_buf;
+    // Mapear únicamente la primera página [partial_page_virt .. partial_page_virt + 4095], dejando la segunda sin mapear
+    vmm_map_page(pdir, partial_page_virt, phys_target, PTE_PRESENT | PTE_USER);
+    vmm_unmap_page(pdir, partial_page_virt + PAGE_SIZE);
+    regs_sw.eax = SYS_WRITE;
+    regs_sw.ebx = partial_page_virt + PAGE_SIZE - 256; // Primeros 256 bytes dentro de la página mapeada; siguientes 256 en página no mapeada
+    regs_sw.ecx = 512;
+    syscall_dispatcher(&regs_sw);
+    TEST_ASSERT(regs_sw.eax == 256,
+                "SYS_WRITE retorna escritura parcial exacta (256 bytes) cuando el segundo chunk cruza a pagina no mapeada");
+    vmm_unmap_page(pdir, partial_page_virt);
 
     regs_sw.eax = SYS_READ;
     regs_sw.ebx = (uintptr_t)proc_virt; // proc_virt actualmente de solo lectura
@@ -1008,6 +1104,20 @@ void test_page_fault_handling(void) {
     TEST_ASSERT(page_fault_get_count() == count_before + 1, "page_fault_handler procesa e incrementa contador de fallos");
     TEST_ASSERT(page_fault_get_last_address() == 0xDEADB000, "Registro CR2 capturado como direccion causante");
     TEST_ASSERT(page_fault_get_last_error_code() == (PF_ERR_WRITE | PF_ERR_USER), "Codigo de error (#PF) decodificado con precision");
+
+    // Auditoría v18: Verificación del mecanismo de recuperación (fixup) ante un Page Fault durante copia de usuario
+    page_fault_begin_user_copy();
+    TEST_ASSERT(page_fault_is_user_copy_active() == true, "page_fault_begin_user_copy activa ventana de fixup");
+    TEST_ASSERT(page_fault_did_user_copy_fault() == false, "Sin fallo registrado al iniciar ventana de copia");
+
+    // Simular #PF en Ring 0 mientras user_copy_active == true (no debe entrar en pánico sino marcar user_copy_faulted)
+    mock_cr2_addr = 0x40009000;
+    regs.err_code = 0; // Ring 0 read fault durante copy_from_user
+    page_fault_handler(&regs);
+    TEST_ASSERT(page_fault_did_user_copy_fault() == true,
+                "page_fault_handler intercepta #PF dentro de ventana user_copy y activa bandera de fixup (-EFAULT)");
+    page_fault_end_user_copy();
+    TEST_ASSERT(page_fault_is_user_copy_active() == false, "page_fault_end_user_copy cierra ventana de fixup");
 }
 
 /* Test 19: Primitivas GFX 2D, Clipping y Doble Búfer */
@@ -1261,9 +1371,17 @@ void test_ps2_keyboard_driver(void) {
     keyboard_process_scancode(0xAA); // Left Shift Break
     TEST_ASSERT(keyboard_is_shift_active() == false, "Left Shift break desactiva estado shift");
 
-    // 3. Caps Lock (Make 0x3A)
-    keyboard_process_scancode(0x3A);
+    // 3. Caps Lock (Make 0x3A / Break 0xBA y protección contra autorepetición - Auditoría v18)
+    keyboard_process_scancode(0x3A); // Caps Lock Make
     TEST_ASSERT(keyboard_is_caps_active() == true, "Caps Lock make conmuta a activo");
+    // Simular autorepetición del controlador 8042 (múltiples Make 0x3A sin Break 0xBA intermedio)
+    keyboard_process_scancode(0x3A);
+    keyboard_process_scancode(0x3A);
+    TEST_ASSERT(keyboard_is_caps_active() == true,
+                "Autorepeticion de Caps Lock Make (0x3A sin Break 0xBA) NO alterna Caps Lock repetidamente");
+    keyboard_process_scancode(0xBA); // Caps Lock Break (liberar tecla)
+    TEST_ASSERT(keyboard_is_caps_active() == true, "Liberar Caps Lock (0xBA) conserva el estado activo");
+
     keyboard_process_scancode(0x1E); // 'a' -> 'A'
     c = keyboard_dequeue_char();
     TEST_ASSERT(c == 'A', "Con Caps Lock activo, 'a' produce 'A'");
@@ -1281,11 +1399,25 @@ void test_ps2_keyboard_driver(void) {
     TEST_ASSERT(c == 'a', "XOR: Caps Lock + Shift produce letra minuscula ('a')");
     keyboard_process_scancode(0xB6); // Right Shift Break
 
-    // Desactivar Caps Lock
+    // Desactivar Caps Lock con nueva pulsación completa (Make 0x3A -> Break 0xBA)
     keyboard_process_scancode(0x3A);
-    TEST_ASSERT(keyboard_is_caps_active() == false, "Segundo Caps Lock conmuta a inactivo");
+    keyboard_process_scancode(0xBA);
+    TEST_ASSERT(keyboard_is_caps_active() == false, "Segunda pulsacion de Caps Lock tras Break conmuta a inactivo");
 
-    // 4. Conmutación a Layout Español (KEYBOARD_LAYOUT_ES)
+    // 3b. Estado independiente de Left Shift y Right Shift (Auditoría v18)
+    keyboard_process_scancode(0x2A); // Left Shift Make
+    keyboard_process_scancode(0x36); // Right Shift Make
+    TEST_ASSERT(keyboard_is_shift_active() == true, "Ambos Shift presionados mantienen estado Shift activo");
+    keyboard_process_scancode(0xAA); // Soltar solo Left Shift
+    TEST_ASSERT(keyboard_is_shift_active() == true,
+                "Liberar Left Shift mientras Right Shift sigue presionado mantiene Shift activo");
+    keyboard_process_scancode(0x1E); // 'a' -> 'A'
+    c = keyboard_dequeue_char();
+    TEST_ASSERT(c == 'A', "Tecla presionada con Right Shift remanente produce mayuscula ('A')");
+    keyboard_process_scancode(0xB6); // Soltar Right Shift
+    TEST_ASSERT(keyboard_is_shift_active() == false, "Liberar ambos Shift desactiva finalmente el estado Shift");
+
+    // 4. Conmutación a Layout Español Básico ASCII (KEYBOARD_LAYOUT_ES)
     keyboard_set_layout(KEYBOARD_LAYOUT_ES);
     TEST_ASSERT(keyboard_get_layout() == KEYBOARD_LAYOUT_ES, "Conmutacion de layout a Espanol/LatAm exitosa");
 
