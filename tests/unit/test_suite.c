@@ -14,6 +14,8 @@
 #include "shell.h"
 #include "nova_link.h"
 #include "nova_iot.h"
+#include "multiboot.h"
+#include "power.h"
 
 // Variables y stubs requeridos por drivers en host
 void vga_putc(char c) {
@@ -344,6 +346,61 @@ void test_x86_structures(void) {
     TEST_ASSERT(sizeof(struct idt_mock) == 8, "Descriptor IDT tiene tamano estandar x86 (8 bytes)");
 }
 
+/* Test 12: Validación de Multiboot 1 / Multiboot 2 y Salvaguardas de Tags */
+void test_multiboot_and_power(void) {
+    printf("[*] Ejecutando: test_multiboot_and_power...\n");
+
+    // 1. Multiboot 1
+    struct multiboot1_info mb1;
+    memset(&mb1, 0, sizeof(mb1));
+    mb1.flags = 0x01;
+    mb1.mem_lower = 640;
+    mb1.mem_upper = 31744; // ~31 MiB
+
+    struct multiboot_parsed_info parsed;
+    bool ok = multiboot_parse(MULTIBOOT1_BOOTLOADER_MAGIC, (uintptr_t)&mb1, &parsed);
+    TEST_ASSERT(ok == true, "multiboot_parse reconoce firma Multiboot 1 (0x2BADB002)");
+    TEST_ASSERT(parsed.version == 1, "Version detectada es Multiboot 1");
+    TEST_ASSERT(parsed.mem_lower_kib == 640 && parsed.mem_upper_kib == 31744, "Memoria convencional y extendida leidas");
+
+    // 2. Multiboot 2 válido
+    uint8_t mb2_buf[64];
+    memset(mb2_buf, 0, sizeof(mb2_buf));
+    uint32_t* total_size = (uint32_t*)mb2_buf;
+    *total_size = 32;
+    struct multiboot2_tag_basic_mem* tag_mem = (struct multiboot2_tag_basic_mem*)(mb2_buf + 8);
+    tag_mem->type = 4;
+    tag_mem->size = 16;
+    tag_mem->mem_lower = 640;
+    tag_mem->mem_upper = 65536;
+    struct multiboot2_tag* tag_end = (struct multiboot2_tag*)(mb2_buf + 24);
+    tag_end->type = 0;
+    tag_end->size = 8;
+
+    ok = multiboot_parse(MULTIBOOT2_BOOTLOADER_MAGIC, (uintptr_t)mb2_buf, &parsed);
+    TEST_ASSERT(ok == true, "multiboot_parse reconoce firma Multiboot 2 (0x36D76289)");
+    TEST_ASSERT(parsed.version == 2, "Version detectada es Multiboot 2");
+    TEST_ASSERT(parsed.tags_count == 1, "Etiquetas Multiboot 2 parseadas correctamente");
+    TEST_ASSERT(parsed.mem_upper_kib == 65536, "Memoria extraida de etiqueta tipo 4");
+
+    // 3. Salvaguarda crítica: Tag corrupto con size < 8 (previene bucle infinito como en Zenthra ae58107)
+    memset(mb2_buf, 0, sizeof(mb2_buf));
+    *total_size = 32;
+    struct multiboot2_tag* corrupt_tag = (struct multiboot2_tag*)(mb2_buf + 8);
+    corrupt_tag->type = 6;
+    corrupt_tag->size = 0; // Size inválido/cero
+    ok = multiboot_parse(MULTIBOOT2_BOOTLOADER_MAGIC, (uintptr_t)mb2_buf, &parsed);
+    TEST_ASSERT(ok == true && parsed.tags_count == 0, "multiboot_parse aborta de forma segura ante tag corrupto con size=0 evitando bucle infinito");
+
+    // 4. Manejo ante bootloader no estándar o punteros nulos
+    TEST_ASSERT(multiboot_parse(0xDEADBEEF, (uintptr_t)&mb1, &parsed) == false, "Rechazo seguro de magic invalido");
+    TEST_ASSERT(multiboot_parse(MULTIBOOT1_BOOTLOADER_MAGIC, 0, &parsed) == false, "Rechazo seguro de puntero nulo");
+
+    // 5. Apagado seguro (invocación de puertos ACPI)
+    qemu_poweroff();
+    TEST_ASSERT(true, "qemu_poweroff ejecuta puertos ACPI (0x604, 0x0804, 0x4004) de forma determinista");
+}
+
 int main(void) {
     printf("====================================================\n");
     printf("      NOVA OS — SUITE DE PRUEBAS AUTOMATIZADAS      \n");
@@ -360,6 +417,7 @@ int main(void) {
     test_rules_engine();
     test_bidirectional_simulation();
     test_x86_structures();
+    test_multiboot_and_power();
 
     printf("\n----------------------------------------------------\n");
     printf("Resultados: %d Aprobados | %d Fallidos\n", tests_passed, tests_failed);

@@ -15,17 +15,8 @@
 #include "keyboard.h"
 #include "nova_iot.h"
 #include "shell.h"
-
-/* Estructura básica de información Multiboot pasada por el bootloader */
-struct multiboot_info {
-    uint32_t flags;
-    uint32_t mem_lower;
-    uint32_t mem_upper;
-    uint32_t boot_device;
-    uint32_t cmdline;
-    uint32_t mods_count;
-    uint32_t mods_addr;
-};
+#include "multiboot.h"
+#include "power.h"
 
 #define KHEAP_START 0x00400000
 #define KHEAP_SIZE  (2 * 1024 * 1024) // 2 MiB de Heap inicial
@@ -41,7 +32,7 @@ static void background_sensor_daemon(void) {
     }
 }
 
-void kernel_main(uint32_t magic, struct multiboot_info* mbi) {
+void kernel_main(uint32_t magic, uintptr_t mbi_addr) {
     // 1. Inicializar pantalla VGA en modo texto
     vga_init();
     
@@ -135,22 +126,26 @@ void kernel_main(uint32_t magic, struct multiboot_info* mbi) {
         kprintf("[FALLO O SIN HARDWARE]\n");
     }
 
-    // 14. Verificar firma mágica de arranque Multiboot (0x2BADB002)
+    // 14. Verificar y parsear protocolo Multiboot (Soporte seguro Multiboot 1 y 2)
     vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
-    kprintf("[*] Verificando arranque Multiboot... ");
-    if (magic == 0x2BADB002) {
+    kprintf("[*] Verificando protocolo Multiboot... ");
+    struct multiboot_parsed_info mb_info;
+    bool mb_ok = multiboot_parse(magic, mbi_addr, &mb_info);
+    if (mb_ok) {
         vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
-        kprintf("[OK] (Magic: 0x%x)\n", magic);
+        kprintf("[OK] (Multiboot %u, Magic: 0x%x)\n", mb_info.version, magic);
+        if (mb_info.version == 2) {
+            vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREY, VGA_COLOR_BLACK));
+            kprintf("    Etiquetas parseadas de forma segura: %u tags.\n", mb_info.tags_count);
+        }
+        if (mb_info.mem_upper_kib > 0) {
+            vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREY, VGA_COLOR_BLACK));
+            kprintf("[*] Memoria detectada: Baja %u KiB | Alta %u KiB (~%u MiB)\n", 
+                    mb_info.mem_lower_kib, mb_info.mem_upper_kib, mb_info.mem_upper_kib / 1024);
+        }
     } else {
         vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK));
-        kprintf("[ADVERTENCIA] Bootloader no estandar (0x%x)\n", magic);
-    }
-
-    // 15. Diagnóstico de memoria si está disponible en Multiboot
-    if (mbi && (mbi->flags & 1)) {
-        vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREY, VGA_COLOR_BLACK));
-        kprintf("[*] Memoria convencional baja: %u KiB | Alta: %u KiB (~%u MiB)\n", 
-                mbi->mem_lower, mbi->mem_upper, mbi->mem_upper / 1024);
+        kprintf("[ADVERTENCIA] Firma no reconocida (Magic: 0x%x)\n", magic);
     }
 
     // 16. Inicializar periféricos y subsistemas de usuario

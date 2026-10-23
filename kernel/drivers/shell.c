@@ -9,6 +9,7 @@
 #include "pkg_manager.h"
 #include "task.h"
 #include "acl_security.h"
+#include "power.h"
 
 #define LINE_MAX 80
 
@@ -98,6 +99,8 @@ void shell_execute(const char* cmd) {
         kprintf("  arduino auto         - Evalua reglas de automatizacion segun sensor\n");
         kprintf("  arduino log          - Registra la lectura actual en RAMFS (telemetria.log)\n");
         kprintf("  arduino status       - Muestra estadisticas de paquetes y errores\n");
+        kprintf("  poweroff             - Apaga la maquina virtual (QEMU/VirtualBox ACPI)\n");
+        kprintf("  reboot               - Reinicia la CPU (Controlador 8042)\n");
     } else if (k_strcmp(cmd, "clear") == 0) {
         vga_clear();
     } else if (k_strcmp(cmd, "info") == 0) {
@@ -335,6 +338,19 @@ void shell_execute(const char* cmd) {
             vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK));
             kprintf("Subcomando no reconocido. Usa 'help' para ver la lista.\n");
         }
+    } else if (k_strcmp(cmd, "poweroff") == 0 || k_strcmp(cmd, "shutdown") == 0) {
+        vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_MAGENTA, VGA_COLOR_BLACK));
+        kprintf("[ACPI] Apagando maquina virtual / hardware...\n");
+        qemu_poweroff();
+        vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREY, VGA_COLOR_BLACK));
+        kprintf("[HALT] Sistema detenido de forma segura.\n");
+#if defined(__i386__) || defined(__x86_64__)
+        __asm__ volatile ("cli; hlt");
+#endif
+    } else if (k_strcmp(cmd, "reboot") == 0) {
+        vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_MAGENTA, VGA_COLOR_BLACK));
+        kprintf("[RESET] Reiniciando procesador...\n");
+        cpu_reboot();
     } else if (line_len > 0) {
         vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK));
         kprintf("Comando desconocido: '%s'. Escribe 'help'.\n", cmd);

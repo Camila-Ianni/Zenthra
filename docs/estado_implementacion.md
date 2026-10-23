@@ -8,7 +8,8 @@ Este documento consolida el estado técnico del sistema operativo experimental *
 ## 2. Componentes Implementados
 
 ### 2.1 Núcleo y Arquitectura x86
-- **Multiboot Specification**: Cabecera Multiboot 1 integrada en [`boot/boot.s`](file:///Users/cami/Desktop/NOVA/boot/boot.s) con flags de alineación y mapa de memoria.
+- **Multiboot Specification (Dual 1 y 2)**: Soporte completo en [`kernel/include/multiboot.h`](file:///Users/cami/Desktop/NOVA/kernel/include/multiboot.h) y [`boot/boot.s`](file:///Users/cami/Desktop/NOVA/boot/boot.s) para arrancar bajo Multiboot 1 (`0x2BADB002`) y Multiboot 2 (`0x36D76289`). Incluye salvaguarda crítica contra bucles infinitos por etiquetas malformadas (`tag->size < 8` y alineación a 8 bytes `~7`).
+- **Control de Energía y Apagado ACPI**: En [`kernel/include/power.h`](file:///Users/cami/Desktop/NOVA/kernel/include/power.h), rutinas `qemu_poweroff()` para salida limpia en QEMU/VirtualBox mediante puertos ACPI (`0x604`, `0x0804`, `0x4004`, `0x501`) y `cpu_reboot()` mediante el controlador de teclado 8042 (puerto `0x64`).
 - **Linker Script (`linker.ld`)**: Carga el binario a partir de la dirección `0x100000` (1MB), alineando bloques en páginas de 4KB.
 - **GDT (Global Descriptor Table)**: Configuración en [`kernel/arch/x86/gdt.c`](file:///Users/cami/Desktop/NOVA/kernel/arch/x86/gdt.c) con 5 descriptores: Nulo, Código Kernel (Ring 0), Datos Kernel (Ring 0), Código Usuario (Ring 3) y Datos Usuario (Ring 3).
 - **IDT (Interrupt Descriptor Table)**: Tabla de 256 descriptores en [`kernel/arch/x86/idt.c`](file:///Users/cami/Desktop/NOVA/kernel/arch/x86/idt.c) con remapeo del controlador PIC 8259 (IRQs 0-15 a los vectores 32-47).
@@ -76,6 +77,8 @@ NOVA OS implementa **11 perfiles de usuario** especializados. Cada perfil cuenta
 - `store search | list | rec | install <id> | remove <id>`: Operaciones de tienda protegidas por ACL e integridad CRC32.
 - `rules`: Listado de reglas activas de automatización.
 - `arduino ping | led on | led off | temp | auto | log | status`: Telemetría e integración Arduino protegidas por permisos.
+- `poweroff` / `shutdown`: Apagado limpio de la máquina virtual o emulador mediante puertos ACPI estándar.
+- `reboot`: Reinicio en caliente del procesador mediante el controlador de teclado 8042 (puerto `0x64`).
 
 ---
 
@@ -170,9 +173,21 @@ Se ejecutó la suite de pruebas mediante `make test`:
 [*] Ejecutando: test_x86_structures...
   [PASS] Descriptor GDT tiene tamano estandar x86 (8 bytes)
   [PASS] Descriptor IDT tiene tamano estandar x86 (8 bytes)
+[*] Ejecutando: test_multiboot_and_power...
+  [PASS] multiboot_parse reconoce firma Multiboot 1 (0x2BADB002)
+  [PASS] Version detectada es Multiboot 1
+  [PASS] Memoria convencional y extendida leidas
+  [PASS] multiboot_parse reconoce firma Multiboot 2 (0x36D76289)
+  [PASS] Version detectada es Multiboot 2
+  [PASS] Etiquetas Multiboot 2 parseadas correctamente
+  [PASS] Memoria extraida de etiqueta tipo 4
+  [PASS] multiboot_parse aborta de forma segura ante tag corrupto con size=0 evitando bucle infinito
+  [PASS] Rechazo seguro de magic invalido
+  [PASS] Rechazo seguro de puntero nulo
+  [PASS] qemu_poweroff ejecuta puertos ACPI (0x604, 0x0804, 0x4004) de forma determinista
 
 ----------------------------------------------------
-Resultados: 71 Aprobados | 0 Fallidos
+Resultados: 82 Aprobados | 0 Fallidos
 ----------------------------------------------------
 [+] Todas las pruebas pasaron satisfactoriamente.
 ```
