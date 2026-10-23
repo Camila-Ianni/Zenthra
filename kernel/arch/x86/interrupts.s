@@ -224,6 +224,9 @@ switch_context:
 .global __user_copy_fault_start
 .global __user_copy_fault_end
 .global __user_copy_fault_fixup
+.global arch_get_user_copy_fault_start
+.global arch_get_user_copy_fault_end
+.global arch_get_user_copy_fault_fixup
 .type arch_user_copy_bytes, @function
 arch_user_copy_bytes:
     pushl %esi
@@ -245,6 +248,21 @@ __user_copy_fault_fixup:
     popl %esi
     ret
 .size arch_user_copy_bytes, . - arch_user_copy_bytes
+
+.type arch_get_user_copy_fault_start, @function
+arch_get_user_copy_fault_start:
+    movl $__user_copy_fault_start, %eax
+    ret
+
+.type arch_get_user_copy_fault_end, @function
+arch_get_user_copy_fault_end:
+    movl $__user_copy_fault_end, %eax
+    ret
+
+.type arch_get_user_copy_fault_fixup, @function
+arch_get_user_copy_fault_fixup:
+    movl $__user_copy_fault_fixup, %eax
+    ret
 
 /* Marca de pila no ejecutable para compatibilidad con linkers modernos */
 .section .note.GNU-stack,"",@progbits

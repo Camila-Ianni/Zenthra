@@ -15,20 +15,20 @@ static size_t copy_ctx_depth = 0;
 static bool last_popped_faulted = false;
 
 #if defined(__KERNEL__)
-extern char __user_copy_fault_start[];
-extern char __user_copy_fault_end[];
-extern char __user_copy_fault_fixup[];
+extern uintptr_t arch_get_user_copy_fault_start(void);
+extern uintptr_t arch_get_user_copy_fault_end(void);
+extern uintptr_t arch_get_user_copy_fault_fixup(void);
 
 uintptr_t page_fault_get_copy_eip_start(void) {
-    return (uintptr_t)__user_copy_fault_start;
+    return arch_get_user_copy_fault_start();
 }
 
 uintptr_t page_fault_get_copy_eip_end(void) {
-    return (uintptr_t)__user_copy_fault_end;
+    return arch_get_user_copy_fault_end();
 }
 
 uintptr_t page_fault_get_copy_fixup_eip(void) {
-    return (uintptr_t)__user_copy_fault_fixup;
+    return arch_get_user_copy_fault_fixup();
 }
 #else
 /* Marcadores deterministas para pruebas de redirección de EIP en host */

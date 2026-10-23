@@ -37,7 +37,7 @@ else
 endif
 
 CFLAGS = -std=gnu99 -ffreestanding -O2 -Wall -Wextra \
-         -fno-builtin -fno-stack-protector -nostdlib -D__KERNEL__ \
+         -fno-builtin -fno-stack-protector -fno-pie -fno-pic -nostdlib -D__KERNEL__ \
          -Ikernel/include
 
 LDFLAGS = -T boot/linker.ld -nostdlib
@@ -205,6 +205,11 @@ verify-qemu-complete: $(BIN_NAME)
 	fi
 	@rm -f $(BUILD_DIR)/serial.log
 	@qemu_status=0; timeout 15s qemu-system-i386 -no-reboot -kernel $(BIN_NAME) -append "test-mode" -serial file:$(BUILD_DIR)/serial.log -display none || qemu_status=$$?; \
+	if [ -s $(BUILD_DIR)/serial.log ]; then \
+		echo "--- Log Serial de Finalizacion Estricta (test-complete) ---"; \
+		cat $(BUILD_DIR)/serial.log; \
+		echo "------------------------------------------------------------"; \
+	fi; \
 	if [ $$qemu_status -eq 124 ]; then \
 		echo "[-] Error fatal: QEMU expiro por timeout (15s) sin completar la prueba ni apagarse limpiamente."; \
 		exit 1; \
@@ -216,9 +221,6 @@ verify-qemu-complete: $(BIN_NAME)
 		echo "[-] Error: QEMU no genero salida serial o el archivo serial.log esta vacio"; \
 		exit 1; \
 	fi
-	@echo "--- Log Serial de Finalizacion Estricta (test-complete) ---"
-	@cat $(BUILD_DIR)/serial.log
-	@echo "------------------------------------------------------------"
 	@if grep -q "CPU PANIC" $(BUILD_DIR)/serial.log; then \
 		echo "[-] Error: Se detecto un Panic de CPU no controlado en serial.log"; \
 		exit 1; \
