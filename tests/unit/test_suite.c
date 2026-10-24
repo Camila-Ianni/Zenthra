@@ -1520,6 +1520,108 @@ void test_ps2_keyboard_driver(void) {
     keyboard_reset_overflow_count();
 }
 
+/* Test 23: Escritorio Nativo Glassmorphism, Jarvis AI, 6 Agentes, Modo Eco y Temas (Auditoría v20) */
+void test_native_glassmorphism_jarvis_and_agents(void) {
+    printf("[*] Ejecutando: test_native_glassmorphism_jarvis_and_agents...\n");
+
+    uint32_t* front = (uint32_t*)malloc(1024 * 768 * sizeof(uint32_t));
+    uint32_t* back  = (uint32_t*)malloc(1024 * 768 * sizeof(uint32_t));
+    memset(front, 0, 1024 * 768 * sizeof(uint32_t));
+    memset(back,  0, 1024 * 768 * sizeof(uint32_t));
+    gfx_init_custom(front, back, 1024, 768, 1024 * 4, 32);
+
+    // 1. Verificar primitivas de Alpha Blending ARGB (Glassmorphism real)
+    TEST_ASSERT(gfx_blend_argb(0xFF102030, 0x00FFFFFF) == 0xFF102030,
+                "gfx_blend_argb con alpha=0 preserva el pixel de fondo intacto");
+    TEST_ASSERT(gfx_blend_argb(0xFF102030, 0xFFABCDEF) == 0xFFABCDEF,
+                "gfx_blend_argb con alpha=255 reemplaza completamente con el color fuente");
+    uint32_t blended = gfx_blend_argb(0xFF000000, 0x80FF0000);
+    uint8_t br = (blended >> 16) & 0xFF;
+    TEST_ASSERT(br >= 127 && br <= 129,
+                "gfx_blend_argb con alpha=128 mezcla al 50% el canal rojo sobre negro");
+
+    gfx_clear(0xFF000000);
+    gfx_fill_rect_alpha(10, 10, 20, 20, 0x8000FF00);
+    uint8_t bg_g = (back[15 * 1024 + 15] >> 8) & 0xFF;
+    TEST_ASSERT(bg_g >= 127 && bg_g <= 129,
+                "gfx_fill_rect_alpha aplica transparencia ARGB en el backbuffer");
+
+    // 2. Verificar que wm_init crea las 4 ventanas del diseño acordado
+    wm_init();
+    TEST_ASSERT(wm_get_window_count() == 4,
+                "wm_init inicializa las 4 ventanas nativas del diseño definitivo");
+
+    struct window* w0 = wm_get_window(0);
+    struct window* w1 = wm_get_window(1);
+    struct window* w2 = wm_get_window(2);
+    struct window* w3 = wm_get_window(3);
+    TEST_ASSERT(w0 && strcmp(w0->title, "Terminal Zenthra OS") == 0,
+                "Ventana nativa 1: Terminal Zenthra OS [REAL]");
+    TEST_ASSERT(w1 && strcmp(w1->title, "Monitor de Sistema & IoT") == 0,
+                "Ventana nativa 2: Monitor de Sistema & IoT [REAL/SIM]");
+    TEST_ASSERT(w2 && strcmp(w2->title, "Jarvis AI [DEMO LOCAL]") == 0,
+                "Ventana nativa 3: Jarvis AI [DEMO LOCAL]");
+    TEST_ASSERT(w3 && strcmp(w3->title, "Centro de 6 Agentes [SIM]") == 0,
+                "Ventana nativa 4: Centro de 6 Agentes [SIM]");
+
+    // 3. Verificar máquina de estados nativa de Jarvis AI [DEMO LOCAL] y clics de ratón
+    TEST_ASSERT(wm_get_jarvis_state() == JARVIS_IDLE, "Jarvis inicia en estado JARVIS_IDLE");
+    int32_t j_btn_y = w2->y + (int32_t)w2->height - 20;
+    // Clic en [Ejecutar] (x = w2->x + 30)
+    wm_handle_mouse(w2->x + 30, j_btn_y, true);
+    wm_handle_mouse(w2->x + 30, j_btn_y, false);
+    TEST_ASSERT(wm_get_jarvis_state() == JARVIS_AWAITING_APPROVAL,
+                "Clic en boton [Ejecutar] de Jarvis transiciona a JARVIS_AWAITING_APPROVAL");
+
+    // Clic en [Aprobar] (x = w2->x + 150)
+    wm_handle_mouse(w2->x + 150, j_btn_y, true);
+    wm_handle_mouse(w2->x + 150, j_btn_y, false);
+    TEST_ASSERT(wm_get_jarvis_state() == JARVIS_COMPLETED_SIM,
+                "Clic en boton [Aprobar] de Jarvis transiciona a JARVIS_COMPLETED_SIM");
+
+    // Reiniciar plan y probar [Abortar] (x = w2->x + 270)
+    wm_jarvis_start_plan();
+    wm_handle_mouse(w2->x + 270, j_btn_y, true);
+    wm_handle_mouse(w2->x + 270, j_btn_y, false);
+    TEST_ASSERT(wm_get_jarvis_state() == JARVIS_ABORTED,
+                "Clic en boton [Abortar] de Jarvis cancela el plan a JARVIS_ABORTED");
+
+    // 4. Verificar selección de los 6 Agentes Especializados con API y ratón
+    TEST_ASSERT(wm_get_selected_agent() == 0, "Agente inicial seleccionado es 0 (Backend & APIs)");
+    for (uint8_t a = 0; a < WM_AGENT_COUNT; a++) {
+        wm_select_agent(a);
+        TEST_ASSERT(wm_get_selected_agent() == a, "wm_select_agent selecciona agente valido");
+    }
+    wm_select_agent(99);
+    TEST_ASSERT(wm_get_selected_agent() == 5, "wm_select_agent ignora indice fuera de rango (>= 6)");
+
+    // Clic de ratón sobre la fila del Agente 3 (Datos & IA, índice 3) en Ventana 4
+    int32_t agent3_y = w3->y + TITLEBAR_HEIGHT + 28 + 3 * 22 + 5;
+    wm_handle_mouse(w3->x + 40, agent3_y, true);
+    wm_handle_mouse(w3->x + 40, agent3_y, false);
+    TEST_ASSERT(wm_get_selected_agent() == 3,
+                "Clic en fila de Centro de 6 Agentes selecciona el Agente 4 (indice 3)");
+
+    // 5. Verificar Modo Eco y Tema Claro/Oscuro (API y barra inferior)
+    TEST_ASSERT(wm_is_eco_mode() == false, "Modo Eco inicia desactivado (Glassmorphism activo)");
+    wm_toggle_eco_mode();
+    TEST_ASSERT(wm_is_eco_mode() == true, "wm_toggle_eco_mode activa Modo Eco");
+    wm_render_desktop();
+
+    TEST_ASSERT(wm_get_theme() == WM_THEME_DARK, "Tema inicial es WM_THEME_DARK");
+    wm_toggle_theme();
+    TEST_ASSERT(wm_get_theme() == WM_THEME_LIGHT, "wm_toggle_theme cambia a WM_THEME_LIGHT");
+    wm_render_desktop();
+    TEST_ASSERT(front[0] != 0, "wm_render_desktop vuelca el escritorio completo al frontbuffer 1024x768x32");
+
+    // Restaurar modo por defecto
+    wm_set_eco_mode(false);
+    wm_set_theme(WM_THEME_DARK);
+
+    free(back);
+    free(front);
+}
+
 int main(void) {
     printf("====================================================\n");
     printf("    ZENTHRA OS — SUITE DE PRUEBAS AUTOMATIZADAS     \n");
@@ -1547,6 +1649,7 @@ int main(void) {
     test_ps2_mouse_driver();
     test_window_manager_and_desktop();
     test_ps2_keyboard_driver();
+    test_native_glassmorphism_jarvis_and_agents();
 
     printf("\n----------------------------------------------------\n");
     printf("Resultados: %d Aprobados | %d Fallidos\n", tests_passed, tests_failed);

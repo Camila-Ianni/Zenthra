@@ -39,10 +39,12 @@ void gfx_init_custom(uint32_t* frontbuffer, uint32_t* backbuffer, uint32_t width
 bool gfx_is_active(void);
 struct framebuffer_info* gfx_get_fb_info(void);
 
-/* Primitivas de renderizado 2D */
+/* Primitivas de renderizado 2D y Glassmorphism (Mezcla Alfa ARGB) */
 void gfx_putpixel(uint32_t x, uint32_t y, uint32_t color);
 uint32_t gfx_getpixel(uint32_t x, uint32_t y);
+uint32_t gfx_blend_argb(uint32_t dst, uint32_t src);
 void gfx_fill_rect(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint32_t color);
+void gfx_fill_rect_alpha(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint32_t argb_color);
 void gfx_draw_rect(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint32_t color);
 void gfx_draw_line(int x0, int y0, int x1, int y1, uint32_t color);
 void gfx_draw_char(uint32_t x, uint32_t y, char c, uint32_t fg, uint32_t bg);

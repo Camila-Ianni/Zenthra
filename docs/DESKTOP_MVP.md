@@ -109,15 +109,19 @@ struct window {
 };
 ```
 
-### 5.2 Elementos Visuales del Escritorio
-1. **Fondo de Pantalla**: Gradiente de color azul profundo / gris grafito corporativo (`#1A1E24`).
-2. **Barra de Tareas Inferior (Taskbar)**:
+### 5.2 Elementos Visuales del Escritorio Nativo (Versión 20.0)
+1. **Fondo de Pantalla con Temas Claro / Oscuro**: Gradiente corporativo (`WM_THEME_DARK` Slate/Navy o `WM_THEME_LIGHT` Ice/Azure) conmutables en vivo con `wm_toggle_theme()`.
+2. **Glassmorphism Real en Framebuffer de 32 bpp y Modo Eco**:
+   - Primitivas `gfx_blend_argb` y `gfx_fill_rect_alpha` en [`kernel/drivers/gfx.c`](file:///Users/cami/Desktop/NOVA/kernel/drivers/gfx.c) que calculan mezcla alfa por canal `(R, G, B)` sobre el `backbuffer` de `1024x768x32bpp` (`3 MiB` en RAM).
+   - **Modo Eco** (`wm_toggle_eco_mode()`): Sustituye las superficies translúcidas por relleno opaco directo (`gfx_fill_rect`) para minimizar el uso de CPU en hardware modesto.
+3. **Barra Inferior y Dock Flotante**:
    - Altura: 36 píxeles en la parte inferior (`y = 732..768`).
-   - Botón *"Zenthra"* a la izquierda (Menú de Inicio / Perfiles).
-   - Reloj del sistema a la derecha (actualizado por interrupciones PIT).
-   - Indicador de perfil activo (ej. *"Estudiante"*, *"Backend"*).
-3. **Ventanas Movibles**:
-   - Barra de título de 22 píxeles con botón de cierre [X].
-   - Al hacer clic en la barra de título, la ventana adquiere el foco y permite arrastre (*drag-and-drop*).
-4. **Ventana de Terminal Gráfica**:
-   - Ventana con emulador de consola interactiva que ejecuta la shell de Zenthra con soporte de comandos internos.
+   - Botón `"Zenthra"` a la izquierda (Menú Launcher con acceso a las 4 aplicaciones nativas).
+   - Indicador del perfil de seguridad activo de la tarea actual.
+   - **Dock Flotante** con botones de acceso directo a las 4 ventanas (`1:Shell`, `2:Mon`, `3:Jarvis`, `4:Agents`).
+   - Botones interactivos `Eco:ON/OFF` y `Tema:D/L`, más reloj del sistema `MM:SS` sincronizado con el PIT a 100 Hz.
+4. **Las 4 Ventanas Nativas del Diseño Definitivo (con distinción explícita `[REAL]` vs. `[SIMULADO]`)**:
+   - **Ventana 1 — `Terminal Zenthra OS` (`[REAL]`)**: Consola interactiva conectada al teclado PS/2, PMM y Scheduler real (`help`, `sysinfo`, `mem`, `tasks`, `jarvis`, `agents`, `eco`, `theme`, `clear`).
+   - **Ventana 2 — `Monitor de Sistema & IoT` (`[REAL + SIMULADO IoT]`)**: Muestra memoria libre y marcos reales del PMM (`[REAL]`), estado del planificador PIT 100 Hz (`[REAL]`) y telemetría de sensor etiquetada explícitamente como `[SIMULADO IoT]`.
+   - **Ventana 3 — `Jarvis AI [DEMO LOCAL]` (`[SIMULADO - SIN RED]`)**: Copiloto local demostrativo con visualización de pasos del plan, estados (`JARVIS_IDLE`, `JARVIS_AWAITING_APPROVAL`, `JARVIS_COMPLETED_SIM`, `JARVIS_ABORTED`) y botones clicables con el ratón (`[Ejecutar]`, `[Aprobar]`, `[Abortar]`).
+   - **Ventana 4 — `Centro de 6 Agentes [SIM]` (`[SIMULADO]`)**: Panel interactivo con los 6 agentes especializados (`Backend & APIs`, `Ciberseguridad`, `Kernel & OS`, `Datos & IA`, `Creativo & UI`, `Automatizacion`) seleccionables mediante clic de ratón o API (`wm_select_agent`).

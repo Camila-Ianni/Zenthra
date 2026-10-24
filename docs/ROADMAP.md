@@ -1,7 +1,7 @@
-# Zenthra OS — Hoja de Ruta de Desarrollo (Roadmap v19)
+# Zenthra OS — Hoja de Ruta de Desarrollo (Roadmap v20)
 
 > **Plan Maestro de Evolución hacia un Sistema Operativo de PC**  
-> Formulado para el proyecto académico de grado de Camila Ianni (2026), estructurado con base en la **Auditoría Técnica v19**.
+> Formulado para el proyecto académico de grado de Camila Ianni (2026), estructurado con base en la **Auditoría Técnica v20**.
 
 ---
 
@@ -15,7 +15,8 @@ flowchart TD
     F2B --> F2C["Fase 2.6 (v17): SYS_READ Transaccional, Prevención XSS y Cancelación Modal en Jarvis"]
     F2C --> F2D["Fase 2.7 (v18): No-Elevación en SYS_SET_PROFILE, Fixup #PF UserCopy y Shift/Caps PS/2"]
     F2D --> F2E["Fase 2.8 (v19): Redirección Real de EIP en Fixup #PF, Pila Reentrante y Prueba QEMU"]
-    F2E --> F3["Fase 3: Proceso Ring 3 Aislado y Cargador ELF"]
+    F2E --> F2F["Fase 2.9 (v20): VESA LFB 1024x768x32 desde ISO + Escritorio Nativo Glassmorphism, Jarvis y 6 Agentes"]
+    F2F --> F3["Fase 3: Proceso Ring 3 Aislado y Cargador ELF"]
     F3 --> F4["Fase 4: Userland Nativo (Terminal, Monitor, Editor)"]
     F4 --> F5["Fase 5: Persistencia en Disco Virtual (ATA/IDE y FS)"]
     F5 --> F6["Fase 6: GUI Usable y Validación Visual en Emulador"]
@@ -35,12 +36,12 @@ flowchart TD
 - [x] Criterio de salida: Manifiesto reproducible con SHA-256 de binarios ELF e ISO.
 
 ### Fase 1 — Arranque Confiable e Integración Continua (COMPLETADA EN CI)
-- [x] Flujo de compilación determinista y reproducible con `make clean`, `make check-env` y `make test` (478 tests).
+- [x] Flujo de compilación determinista y reproducible con `make clean`, `make check-env` y `make test` (505 tests).
 - [x] Validación estricta de cabecera con `grub-file --is-x86-multiboot` en CI (Ubuntu runner).
 - [x] Generación de ISO con `grub-mkrescue` y hash SHA-256 verificado en CI.
 - [x] Separación estricta de pruebas en QEMU:
   - `verify-qemu-complete`: Ejecución directa del kernel con bandera `test-mode`, verificación de `#PF` real con redirección de `EIP` (`[VMM_FIXUP_QEMU_PASS]`), emisión del marcador `ZENTHRA_QEMU_TEST_COMPLETE`, apagado limpio ACPI y finalización con **exit code 0**. **No se acepta timeout 124 como PASS**.
-  - `verify-qemu-smoke`: Arranque de la imagen ISO con GRUB, inicialización gráfica VESA LFB, ratón PS/2, gestor de ventanas y estabilidad del escritorio sin pánicos de CPU.
+  - `verify-qemu-smoke`: Arranque de la imagen ISO con GRUB, inicialización confirmada de `Framebuffer VESA LFB inicializado: 1024x768 a 32 bpp`, ratón PS/2, gestor de ventanas con 4 ventanas nativas y confirmación `[GUI_DESKTOP_QEMU_PASS]`.
 - [x] Pipeline de GitHub Actions CI archivando ISO, ELF, `serial.log` y `BUILD_INFO.txt`.
 - [ ] Reproducción local en hosts macOS/Windows (reportado de forma limpia como `[BLOCKED]` por herramientas de virtualización de host).
 
@@ -73,12 +74,20 @@ flowchart TD
 - [x] **Shift Izquierdo/Derecho Independientes y Protección Anti-Autorepetición en Caps Lock**: Seguimiento separado de `left_shift_pressed` y `right_shift_pressed`, y detección de flanco en Caps Lock (`0x3A` Make / `0xBA` Break) para evitar alternancias múltiples por autorepetición del controlador 8042.
 
 ### Fase 2.8 — Auditoría Técnica v19: Redirección Real de `EIP` en Recuperación de Page Fault (`fixup`), Pila Reentrante de Contexto y Prueba de Hardware en QEMU (COMPLETADA)
-- [x] **Recuperación Real de Page Fault (`fixup`) con Redirección de `EIP`**: Implementada `arch_user_copy_bytes` en `kernel/arch/x86/interrupts.s` exportando `__user_copy_fault_start`, `__user_copy_fault_end` y `__user_copy_fault_fixup`. Cuando ocurre un `#PF` en `rep movsb`, `page_fault_handler` modifica `regs->eip = ctx->fixup_eip` para que `iret` salte a `__user_copy_fault_fixup` y retorne `-1` (`-EFAULT`) sin reejecutar la instrucción fallida en un bucle infinito.
+- [x] **Recuperación Real de Page Fault (`fixup`) con Redirección de `EIP`**: Implementada `arch_user_copy_bytes` en `kernel/arch/x86/syscall_entry.s` exportando `__user_copy_fault_start`, `__user_copy_fault_end` y `__user_copy_fault_fixup`. Cuando ocurre un `#PF` en `rep movsb`, `page_fault_handler` modifica `regs->eip = ctx->fixup_eip` para que `iret` salte a `__user_copy_fault_fixup` y retorne `-1` (`-EFAULT`) sin reejecutar la instrucción fallida en un bucle infinito.
 - [x] **Vinculación Estricta por Rango de `EIP` y Dirección `CR2`**: `page_fault_handler` verifica simultáneamente que `regs->eip` esté dentro de `[eip_start, eip_end)` y que `CR2` esté dentro de `[user_start, user_end)`. Cualquier `#PF` en Ring 0 fuera de la instrucción de copia o fuera del rango de usuario registrado conserva su diagnóstico normal y `KERNEL PANIC`.
 - [x] **Pila Reentrante de Contextos de Copia (`copy_ctx_stack[4]`)**: Reemplazo de banderas globales planas por `page_fault_push_user_copy_ctx()` y `page_fault_pop_user_copy_ctx()`, soportando anidamiento sin pérdida de contexto exterior y rechazando desbordamientos de profundidad.
 - [x] **Prueba Real de `#PF` de Hardware en QEMU (`verify_real_hardware_pf_fixup_in_qemu`)**: Verifica en ejecución real bare-metal en QEMU que tanto el cruce hacia una página no mapeada (`0x40001000`) como la escritura en una página de solo lectura (`0x40000000` sin `PTE_WRITABLE`, con `CR0.WP=1`) disparan `isr14`, redirigen `EIP` a `__user_copy_fault_fixup`, retornan `-1` (`-EFAULT`) y emiten `[VMM_FIXUP_QEMU_PASS]` exigido en `make verify-qemu-complete`.
 - [x] **Validación Autoritativa Única en `SYS_READ`**: Eliminada la validación previa redundante de 1 byte cuando existen datos en la cola; `copy_to_user(user_buf, kbuf_read, peeked)` realiza la única validación del rango exacto de `peeked` bytes.
-- [x] **Suite de Pruebas Unitarias**: Ampliada a **478 pruebas automatizadas aprobadas (0 fallos, 0 warnings)**.
+
+### Fase 2.9 — Auditoría Técnica v20: Arranque Gráfico VESA LFB Real desde ISO y Escritorio Nativo con Glassmorphism, Jarvis y 6 Agentes (COMPLETADA)
+- [x] **Habilitación del Bit `VIDEO_MODE` (`1<<2`) en el Encabezado Multiboot 1 (`boot/boot.s`)**: `FLAGS = 0x7` y tabla gráfica solicitando `1024x768x32bpp` (`mode_type = 0`), logrando que GRUB 2 inicialice y entregue el VESA Linear Framebuffer real al arrancar desde la ISO tanto en QEMU como en VirtualBox (`[GFX] Framebuffer VESA LFB inicializado: 1024x768 a 32 bpp`).
+- [x] **Ampliación del Kernel Heap a 6 MiB (`0x00400000 - 0x00A00000`)**: Reserva en `pmm_init` y `KHEAP_SIZE = 6 MiB` para alojar el `backbuffer` de doble búfer de `1024x768x32bpp` (`3 MiB`) en RAM sin caer en dibujo directo sobre MMIO.
+- [x] **Integración del Diseño Definitivo en el Escritorio Nativo del Kernel (`gfx.c`, `window_manager.c`)**:
+  - Primitivas reales de Alpha Blending ARGB (`gfx_blend_argb`, `gfx_fill_rect_alpha`) para Glassmorphism translúcido sobre el framebuffer de 32 bpp.
+  - **4 Ventanas Nativas** con distinción explícita entre funciones reales y simuladas: `Terminal Zenthra OS [REAL]`, `Monitor de Sistema & IoT [REAL/SIM]`, `Jarvis AI [DEMO LOCAL]` (con botones clicables `[Ejecutar]`, `[Aprobar]`, `[Abortar]`) y `Centro de 6 Agentes [SIM]` (con selección interactiva de los 6 agentes especializados).
+  - **Dock Flotante Inferior**, conmutador de **Modo Eco** (desactiva alpha blending) y conmutador de **Tema Oscuro / Claro**.
+- [x] **Verificación del Escritorio Gráfico en QEMU (`[GUI_DESKTOP_QEMU_PASS]`) y Suite de 505 Pruebas Unitarias**: `verify-qemu-smoke` comprueba la inicialización de VESA LFB y la autoverificación del escritorio nativo; `make test` alcanza **505 pruebas aprobadas y 0 fallidas**.
 
 ### Fase 3 — Proceso Ring 3 y Cargador ELF i386 (PRÓXIMO OBJETIVO)
 - [ ] Definición formal de la ABI de llamadas al sistema (Syscalls) para Ring 3 (convenciones, estructuras y códigos de error).

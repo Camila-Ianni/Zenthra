@@ -191,8 +191,8 @@ void pmm_init(uint32_t magic, uintptr_t mbi_addr) {
     }
     pmm_mark_region_used(0x00100000, kernel_end_addr - 0x00100000);
 
-    // 3. Reservar la región asignada para el Kernel Heap (0x00400000 - 0x00600000: 2 MiB)
-    pmm_mark_region_used(0x00400000, 2 * 1024 * 1024);
+    // 3. Reservar la región asignada para el Kernel Heap (0x00400000 - 0x00A00000: 6 MiB)
+    pmm_mark_region_used(0x00400000, 6 * 1024 * 1024);
 
     // 4. Reservar las estructuras de Multiboot, cmdline y módulos
     if (mbi_addr != 0) {

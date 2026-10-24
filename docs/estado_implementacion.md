@@ -85,9 +85,9 @@ Zenthra OS implementa **11 perfiles de usuario** especializados. Cada perfil cue
 
 ---
 
-### 3. Pruebas Automatizadas y Validación (Auditoría v19)
+### 3. Pruebas Automatizadas y Validación (Auditoría v20)
 
-Se ejecutó la suite de pruebas mediante `make test` (**478 pruebas automatizadas, 0 fallos, 0 warnings**):
+Se ejecutó la suite de pruebas mediante `make test` (**505 pruebas automatizadas, 0 fallos, 0 warnings**):
 
 ```
 ====================================================
@@ -106,7 +106,7 @@ Se ejecutó la suite de pruebas mediante `make test` (**478 pruebas automatizada
 [*] Ejecutando: test_bidirectional_simulation... (4 pruebas: protocolo ZIoT serie)
 [*] Ejecutando: test_x86_structures... (3 pruebas: GDT, IDT, TSS 104 bytes)
 [*] Ejecutando: test_multiboot_and_power... (11 pruebas: firmas, tags, salvaguardas ACPI)
-[*] Ejecutando: test_pmm_physical_allocator... (23 pruebas: 64-bit, alineación, límites, salvaguarda de desbordamiento)
+[*] Ejecutando: test_pmm_physical_allocator... (23 pruebas: 64-bit, alineación, límites, salvaguarda de desbordamiento, Heap 6 MiB reservado)
 [*] Ejecutando: test_vmm_hardware_paging... (41 pruebas: Identity Mapping exacto a 64 MiB, CR0, CR3, accesibilidad, direct map, aislamiento de proceso, validación fail-closed de memoria de usuario, escritura parcial exacta en frontera de página y TLB invalidation)
 [*] Ejecutando: test_page_fault_handler... (29 pruebas: decodificación #PF CR2, redirección real de regs->eip a fixup_eip, no-ocultamiento de #PF de Ring 0 fuera de la instrucción de copia o fuera del rango de usuario CR2, y pila reentrante copy_ctx_stack de profundidad 4 con rechazo de desbordamiento)
 [*] Ejecutando: test_pit_and_irq_masks... (10 pruebas: 100 Hz, máscaras PIC)
@@ -114,9 +114,10 @@ Se ejecutó la suite de pruebas mediante `make test` (**478 pruebas automatizada
 [*] Ejecutando: test_mouse_ps2... (17 pruebas: paquetes, botones, límites de pantalla)
 [*] Ejecutando: test_window_manager_and_desktop... (18 pruebas: drag, focus, launcher, terminal)
 [*] Ejecutando: test_ps2_keyboard_driver... (171 pruebas: Left/Right Shift independientes, protección anti-autorepetición de Caps Lock Make/Break, Layout Español Básico ASCII, telemetría y saturación de cola)
+[*] Ejecutando: test_native_glassmorphism_jarvis_and_agents... (27 pruebas: gfx_blend_argb, gfx_fill_rect_alpha, 4 ventanas nativas del diseño acordado, máquina de estados y botones de Jarvis AI [DEMO LOCAL], selección de los 6 Agentes Especializados [SIM], Modo Eco y Tema Claro/Oscuro)
 
 ----------------------------------------------------
-Resultados: 478 Aprobados | 0 Fallidos
+Resultados: 505 Aprobados | 0 Fallidos
 ----------------------------------------------------
 [+] Todas las pruebas pasaron satisfactoriamente.
 ```
@@ -125,27 +126,29 @@ Resultados: 478 Aprobados | 0 Fallidos
 
 ## 4. Pipeline de CI/CD y Validación de Arranque
 
-- **Flujo GitHub Actions (`.github/workflows/ci.yml`)**:
+- **Flujo GitHub Actions ([`.github/workflows/ci.yml`](file:///Users/cami/Desktop/NOVA/.github/workflows/ci.yml))**:
   - `make check-env`: Diagnóstico y reporte de herramientas del entorno.
-  - `make test`: Ejecución de las 478 pruebas unitarias sin dependencias externas (0 fallos, 0 warnings).
+  - `make test`: Ejecución de las **505 pruebas unitarias** sin dependencias externas (0 fallos, 0 warnings).
   - `make kernel`: Compilación y enlace del ELF x86 de 32 bits (`i686`).
-  - `grub-file`: Verificación estricta del encabezado Multiboot 1.
+  - `grub-file`: Verificación estricta del encabezado Multiboot 1 (`FLAGS = 0x7` con `VIDEO_MODE = 1<<2`).
   - `make iso`: Creación de la imagen arrancable `build/zenthra_os.iso` con GRUB y generación de `build/BUILD_INFO.txt` con SHA-256.
   - `make verify-qemu`: Ejecución de doble verificación automatizada:
     1. `verify-qemu-complete`: Ejecución directa del kernel con bandera `test-mode`, exigiendo la verificación de `#PF` real con redirección de `EIP` (`[VMM_FIXUP_QEMU_PASS]`), la emisión de `[TEST_COMPLETE] ZENTHRA_QEMU_TEST_COMPLETE`, apagado limpio ACPI y finalización con **exit code 0** (no acepta timeouts).
-    2. `verify-qemu-smoke`: Arranque de la imagen ISO con GRUB, inicialización gráfica VESA LFB, ratón PS/2, gestor de ventanas y estabilidad del escritorio sin pánicos de CPU.
+    2. `verify-qemu-smoke`: Arranque de la imagen ISO con GRUB (`-vga std`), exigiendo `Framebuffer VESA LFB inicializado: 1024x768 a 32 bpp`, ratón PS/2, gestor de ventanas con las 4 ventanas nativas y confirmación `[GUI_DESKTOP_QEMU_PASS]`.
 - **Portabilidad Host macOS / Darwin**:
   - Detección explícita de SO en `Makefile`.
   - En macOS emite mensajes informativos `[BLOCKED]` si faltan herramientas de cross-compilación (`i686-linux-gnu-gcc` o `grub-file`), permitiendo que el host compile y ejecute la suite de pruebas local (`make test`) limpiamente sin fallar por rutas inexistentes.
 
 ---
 
-## 5. Prototipo de Escritorio & Jarvis Multi-Agente (`desktop_prototype/`)
+## 5. Integración del Diseño Visual en el Escritorio Nativo del Kernel (`window_manager.c`) y Prototipo Web (`desktop_prototype/`)
 
-Como parte de los compromisos de las **Auditorías Técnicas v16, v17, v18 y v19**:
-- **Aislamiento Arquitectónico**: El kernel bare-metal en `kernel/` permanece libre de código de IA, librerías de alto nivel o credenciales.
-- **Prototipo Independiente en Userland**: Se construyó en `desktop_prototype/` una interfaz gráfica con Glassmorphism auténtico (`backdrop-filter`), barra superior con selector de modo Eco (bajo consumo para hardware limitado) y temas claro/oscuro, dock flotante animado con sincronización completa de foco/minimizado, terminal interactiva con simulación de comandos del sistema, monitor de telemetría IoT y el **Centro de 6 Agentes Especializados** (Backend, Ciberseguridad, Kernel/OS, Datos, Creativo/UI, Automatización) coordinados por **Jarvis AI Assistant**.
-- **Seguridad y Transparencia Operativa (v17..v19)**:
-  - **Prevención XSS (0 `innerHTML`)**: Construcción segura de elementos DOM mediante `document.createElement` y `textContent` tanto en la terminal como en el asistente Jarvis.
-  - **Cancelación Modal Determinista**: El botón `⏹ Abortar Plan` cierra cualquier modal de aprobación abierto y resuelve de inmediato la promesa pendiente como cancelada, evitando bloqueos de estado.
-  - **Etiquetado Honesto `[DEMO]` / `[SIMULADA]`**: Banner persistente de entorno demostrativo, métricas de hardware rotuladas como `[SIMULADA]`, estado `"Gateway Demo (No Conectado)"` y mensaje explícito de que no se ejecutan agentes reales ni se modifican archivos del sistema.
+Como parte de la **Auditoría Técnica v20**:
+- **Escritorio Nativo del Kernel en la ISO (`kernel/drivers/gfx.c` y `kernel/drivers/window_manager.c`)**:
+  - Al arrancar desde `zenthra_os.iso` en QEMU o VirtualBox, GRUB 2 lee el bit `VIDEO_MODE` (`1<<2`) en `boot/boot.s` y entrega el **Linear Framebuffer VESA de `1024x768x32bpp`** con doble búfer de 3 MiB en RAM (`KHEAP_SIZE = 6 MiB`).
+  - El escritorio nativo implementa **Glassmorphism real** mediante mezcla alfa por píxel (`gfx_blend_argb` y `gfx_fill_rect_alpha`), **Dock Flotante Inferior**, conmutador de **Modo Eco** (`wm_toggle_eco_mode`), conmutador de **Tema Oscuro/Claro** (`wm_toggle_theme`), y las **4 ventanas nativas del diseño definitivo**, diferenciando con total honestidad lo real de lo simulado:
+    1. `Terminal Zenthra OS` (`[REAL]`): Shell interactiva conectada a memoria física PMM y scheduler de tareas real.
+    2. `Monitor de Sistema & IoT` (`[REAL + SIMULADO IoT]`): Telemetría real de RAM/frames/PIT junto a sensor etiquetado `[SIMULADO IoT]`.
+    3. `Jarvis AI [DEMO LOCAL]` (`[SIMULADO - SIN RED]`): Copiloto demostrativo con pasos supervisados y botones clicables `[Ejecutar]`, `[Aprobar]` y `[Abortar]`.
+    4. `Centro de 6 Agentes [SIM]` (`[SIMULADO]`): Panel interactivo de los 6 agentes especializados seleccionables con el ratón.
+- **Prototipo Web de Referencia (`desktop_prototype/`)**: Se mantiene sincronizado, libre de XSS (0 `innerHTML`) y etiquetado explícitamente como `[DEMO]`.

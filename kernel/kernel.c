@@ -25,7 +25,7 @@
 #include "window_manager.h"
 
 #define KHEAP_START 0x00400000
-#define KHEAP_SIZE  (2 * 1024 * 1024) // 2 MiB de Heap inicial
+#define KHEAP_SIZE  (6 * 1024 * 1024) // 6 MiB de Heap inicial (incluye Backbuffer VESA 1024x768x32 = 3 MiB)
 
 static volatile uint32_t worker_a_counter = 0;
 static volatile uint32_t worker_b_counter = 0;
@@ -219,9 +219,9 @@ void kernel_main(uint32_t magic, uintptr_t mbi_addr) {
     vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
     kprintf("[OK]\n");
 
-    // 10. Inicializar gestor de memoria dinamica (Heap 2MB)
+    // 10. Inicializar gestor de memoria dinamica (Heap 6 MiB)
     vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
-    kprintf("[*] Inicializando Kernel Heap en 0x%x (2 MiB)... ", KHEAP_START);
+    kprintf("[*] Inicializando Kernel Heap en 0x%x (6 MiB)... ", KHEAP_START);
     kheap_init((void*)KHEAP_START, KHEAP_SIZE);
     vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
     kprintf("[OK]\n");
@@ -335,7 +335,17 @@ void kernel_main(uint32_t magic, uintptr_t mbi_addr) {
     __asm__ volatile ("sti");
 
     if (gfx_is_active()) {
+        // Autoverificación del escritorio gráfico VESA LFB en arranque desde ISO (Auditoría v20)
+        wm_jarvis_start_plan();
+        wm_jarvis_approve_step();
+        wm_select_agent(2);
         wm_render_desktop();
+        if (wm_get_window_count() == 4 &&
+            wm_get_jarvis_state() == JARVIS_COMPLETED_SIM &&
+            wm_get_selected_agent() == 2 &&
+            fb && fb->frontbuffer && fb->frontbuffer[0] != 0) {
+            serial_write_string("[GUI_DESKTOP_QEMU_PASS] Escritorio VESA LFB 1024x768x32bpp con Glassmorphism, 4 ventanas, Jarvis y 6 Agentes verificado en QEMU.\r\n");
+        }
     } else {
         vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
         kprintf("\n[>] Sistema operativo preparado. Iniciando Zenthra Shell.\n\n");

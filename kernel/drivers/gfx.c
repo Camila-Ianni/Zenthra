@@ -154,6 +154,27 @@ uint32_t gfx_getpixel(uint32_t x, uint32_t y) {
     return target[y * stride_pixels + x];
 }
 
+uint32_t gfx_blend_argb(uint32_t dst, uint32_t src) {
+    uint32_t alpha = (src >> 24) & 0xFF;
+    if (alpha == 0) return dst;
+    if (alpha == 255) return 0xFF000000 | (src & 0x00FFFFFF);
+
+    uint32_t inv_alpha = 255 - alpha;
+    uint32_t sr = (src >> 16) & 0xFF;
+    uint32_t sg = (src >> 8) & 0xFF;
+    uint32_t sb = src & 0xFF;
+
+    uint32_t dr = (dst >> 16) & 0xFF;
+    uint32_t dg = (dst >> 8) & 0xFF;
+    uint32_t db = dst & 0xFF;
+
+    uint32_t r = (sr * alpha + dr * inv_alpha) / 255;
+    uint32_t g = (sg * alpha + dg * inv_alpha) / 255;
+    uint32_t b = (sb * alpha + db * inv_alpha) / 255;
+
+    return 0xFF000000 | (r << 16) | (g << 8) | b;
+}
+
 void gfx_fill_rect(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint32_t color) {
     if (!current_fb.is_active || w == 0 || h == 0) return;
 
@@ -171,6 +192,34 @@ void gfx_fill_rect(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint32_t colo
         uint32_t* line = &target[(y + row) * stride_pixels + x];
         for (uint32_t col = 0; col < w; col++) {
             line[col] = color;
+        }
+    }
+}
+
+void gfx_fill_rect_alpha(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint32_t argb_color) {
+    if (!current_fb.is_active || w == 0 || h == 0) return;
+
+    uint32_t alpha = (argb_color >> 24) & 0xFF;
+    if (alpha == 0) return;
+    if (alpha == 255) {
+        gfx_fill_rect(x, y, w, h, 0xFF000000 | (argb_color & 0x00FFFFFF));
+        return;
+    }
+
+    // Recorte (Clipping) contra los bordes de la pantalla
+    if (x >= current_fb.width || y >= current_fb.height) return;
+    if (x + w > current_fb.width) w = current_fb.width - x;
+    if (y + h > current_fb.height) h = current_fb.height - y;
+
+    uint32_t* target = current_fb.backbuffer ? current_fb.backbuffer : current_fb.address;
+    if (!target) return;
+
+    size_t stride_pixels = current_fb.pitch / 4;
+
+    for (uint32_t row = 0; row < h; row++) {
+        uint32_t* line = &target[(y + row) * stride_pixels + x];
+        for (uint32_t col = 0; col < w; col++) {
+            line[col] = gfx_blend_argb(line[col], argb_color);
         }
     }
 }

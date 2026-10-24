@@ -247,7 +247,7 @@ verify-qemu-smoke: $(ISO_NAME)
 		exit 1; \
 	fi
 	@rm -f $(BUILD_DIR)/serial.log
-	@qemu_status=0; timeout 8s qemu-system-i386 -cdrom $(ISO_NAME) -serial file:$(BUILD_DIR)/serial.log -display none || qemu_status=$$?; \
+	@qemu_status=0; timeout 8s qemu-system-i386 -vga std -cdrom $(ISO_NAME) -serial file:$(BUILD_DIR)/serial.log -display none || qemu_status=$$?; \
 	if [ $$qemu_status -ne 0 ] && [ $$qemu_status -ne 124 ]; then \
 		echo "[-] Error fatal: QEMU aborto con fallo anomalo (exit code $$qemu_status)"; \
 		exit 1; \
@@ -264,10 +264,11 @@ verify-qemu-smoke: $(ISO_NAME)
 		exit 1; \
 	fi
 	@grep -q "ZENTHRA OS SERIAL LOG" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se encontro el banner serial del kernel" && exit 1)
-	@grep -q "GFX" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se encontro inicializacion de GFX en serial.log" && exit 1)
+	@grep -q "Framebuffer VESA LFB inicializado" $(BUILD_DIR)/serial.log || (echo "[-] Error: GRUB no inicializo el Framebuffer VESA LFB en serial.log" && exit 1)
 	@grep -q "MOUSE" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se encontro inicializacion de MOUSE en serial.log" && exit 1)
 	@grep -q "WM" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se encontro inicializacion de Window Manager en serial.log" && exit 1)
-	@echo "[+] [PASS] Prueba boot-smoke superada: ISO arrancable con GRUB, subsistema grafico, raton y escritorio activos."
+	@grep -q "GUI_DESKTOP_QEMU_PASS" $(BUILD_DIR)/serial.log || (echo "[-] Error: No se verifico el escritorio grafico VESA LFB (GUI_DESKTOP_QEMU_PASS) en serial.log" && exit 1)
+	@echo "[+] [PASS] Prueba boot-smoke superada: ISO arrancable con GRUB, Framebuffer VESA LFB 1024x768x32bpp, raton y escritorio nativo activos."
 
 # Verificación integral: combina test-complete estricto y boot-smoke
 verify-qemu: verify-qemu-complete verify-qemu-smoke
