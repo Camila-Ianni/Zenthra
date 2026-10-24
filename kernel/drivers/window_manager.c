@@ -261,139 +261,195 @@ void wm_handle_keyboard(char c) {
 
 /* Ventana 1: Terminal Interactiva Zenthra [REAL] */
 static void paint_terminal_window(struct window* win) {
-    uint32_t cx = win->x + 4;
-    uint32_t cy = win->y + TITLEBAR_HEIGHT + 4;
-    uint32_t cw = win->width - 8;
-    uint32_t ch = win->height - TITLEBAR_HEIGHT - 8;
+    uint32_t cx = win->x + 6;
+    uint32_t cy = win->y + TITLEBAR_HEIGHT + 6;
+    uint32_t cw = win->width - 12;
+    uint32_t ch = win->height - TITLEBAR_HEIGHT - 12;
 
-    wm_draw_surface(cx, cy, cw, ch, 0xD80A0E17, 0xFF0A0E17);
-    gfx_draw_rect(cx, cy, cw, ch, 0xFF1E293B);
+    // Interior de consola obsidiana con esquinas redondeadas
+    if (eco_mode) {
+        gfx_fill_rounded_rect(cx, cy, cw, ch, 6, 0xFF080C14);
+    } else {
+        gfx_fill_rounded_rect_alpha(cx, cy, cw, ch, 6, 0xEE080C14);
+    }
+    gfx_draw_rounded_rect(cx, cy, cw, ch, 6, 0xFF1E293B);
 
-    gfx_draw_string(cx + 8, cy + 6, "Zenthra Shell x86 [REAL - Ring 0/3]", COLOR_ACCENT_CYAN, 0);
+    // Barra de estado interna de la shell
+    gfx_fill_rounded_rect(cx + 4, cy + 4, cw - 8, 20, 4, 0xFF0F172A);
+    gfx_fill_circle(cx + 14, cy + 14, 3, 0xFF10B981);
+    gfx_draw_string(cx + 24, cy + 6, "zenthra-shell x86 -- Ring 0/3 [REAL]", 0xFF38BDF8, 0);
 
-    uint32_t line_y = cy + 26;
+    // Historial de comandos
+    uint32_t line_y = cy + 30;
     for (size_t i = 0; i < term_hist_count; i++) {
-        gfx_draw_string(cx + 8, line_y, term_history[i], COLOR_TEXT_WHITE, 0);
+        uint32_t col = (term_history[i][0] == '>') ? 0xFF38BDF8 : 0xFFE2E8F0;
+        gfx_draw_string(cx + 10, line_y, term_history[i], col, 0);
         line_y += 18;
     }
 
-    char prompt_buf[TERM_LINE_LEN + 16];
-    const char* prefix = "zenthra:~$ ";
-    k_memcpy(prompt_buf, prefix, 11);
-    k_memcpy(&prompt_buf[11], term_input, term_input_len);
-    prompt_buf[11 + term_input_len] = '_';
-    prompt_buf[11 + term_input_len + 1] = '\0';
+    // Prompt interactivo estilo Linux/macOS
+    char prompt_buf[TERM_LINE_LEN + 18];
+    const char* prefix = "zenthra@os:~$ ";
+    k_memcpy(prompt_buf, prefix, 14);
+    k_memcpy(&prompt_buf[14], term_input, term_input_len);
+    prompt_buf[14 + term_input_len] = '_';
+    prompt_buf[14 + term_input_len + 1] = '\0';
 
-    gfx_draw_string(cx + 8, cy + ch - 22, prompt_buf, COLOR_ACCENT_GREEN, 0);
+    gfx_draw_string(cx + 10, cy + ch - 22, prompt_buf, 0xFF34D399, 0);
 }
 
 /* Ventana 2: Monitor del Sistema [REAL] y Sensores IoT [SIMULADO] */
 static void paint_monitor_window(struct window* win) {
-    uint32_t cx = win->x + 4;
-    uint32_t cy = win->y + TITLEBAR_HEIGHT + 4;
-    uint32_t cw = win->width - 8;
-    uint32_t ch = win->height - TITLEBAR_HEIGHT - 8;
+    uint32_t cx = win->x + 6;
+    uint32_t cy = win->y + TITLEBAR_HEIGHT + 6;
+    uint32_t cw = win->width - 12;
+    uint32_t ch = win->height - TITLEBAR_HEIGHT - 12;
 
-    uint32_t glass_bg = (active_theme == WM_THEME_LIGHT) ? 0xCCEFF6FF : 0xCC1E293B;
-    uint32_t solid_bg = (active_theme == WM_THEME_LIGHT) ? 0xFFEFF6FF : 0xFF1E293B;
-    uint32_t txt_main = (active_theme == WM_THEME_LIGHT) ? 0xFF0F172A : COLOR_TEXT_WHITE;
-    uint32_t txt_muted = (active_theme == WM_THEME_LIGHT) ? 0xFF334155 : COLOR_TEXT_MUTED;
+    uint32_t card_bg = (active_theme == WM_THEME_LIGHT) ? 0xCCF8FAFC : 0xD80F172A;
+    uint32_t card_solid = (active_theme == WM_THEME_LIGHT) ? 0xFFF8FAFC : 0xFF0F172A;
+    uint32_t txt_main = (active_theme == WM_THEME_LIGHT) ? 0xFF0F172A : 0xFFF8FAFC;
+    uint32_t txt_muted = (active_theme == WM_THEME_LIGHT) ? 0xFF475569 : 0xFF94A3B8;
 
-    wm_draw_surface(cx, cy, cw, ch, glass_bg, solid_bg);
-    gfx_draw_rect(cx, cy, cw, ch, 0xFF334155);
+    // Card 1: Memoria Física PMM [REAL]
+    uint32_t c1_h = 76;
+    if (eco_mode) {
+        gfx_fill_rounded_rect(cx, cy, cw, c1_h, 6, card_solid);
+    } else {
+        gfx_fill_rounded_rect_alpha(cx, cy, cw, c1_h, 6, card_bg);
+    }
+    gfx_draw_rounded_rect(cx, cy, cw, c1_h, 6, 0xFF334155);
 
-    gfx_draw_string(cx + 8, cy + 8, "Telemetria PMM [REAL] + IoT [SIM]", txt_main, 0);
+    gfx_fill_circle(cx + 14, cy + 14, 3, 0xFF38BDF8);
+    gfx_draw_string(cx + 24, cy + 6, "Memoria Fisica PMM [REAL]", txt_main, 0);
 
     char buf[32];
-    gfx_draw_string(cx + 8, cy + 30, "RAM Libre [REAL]:", txt_muted, 0);
+    gfx_draw_string(cx + 10, cy + 28, "RAM Libre :", txt_muted, 0);
     uitoa((uint32_t)pmm_get_free_memory_kib(), buf, 10);
-    gfx_draw_string(cx + 150, cy + 30, buf, COLOR_ACCENT_CYAN, 0);
-    gfx_draw_string(cx + 215, cy + 30, "KiB", txt_muted, 0);
+    gfx_draw_string(cx + 105, cy + 28, buf, 0xFF38BDF8, 0);
+    gfx_draw_string(cx + 170, cy + 28, "KiB", txt_muted, 0);
 
-    gfx_draw_string(cx + 8, cy + 50, "Frames    [REAL]:", txt_muted, 0);
+    // Barra de progreso visual de RAM
+    uint32_t bar_w = cw - 20;
+    gfx_fill_rounded_rect(cx + 10, cy + 48, bar_w, 8, 4, 0xFF1E293B);
+    gfx_fill_rounded_rect(cx + 10, cy + 48, bar_w * 96 / 100, 8, 4, 0xFF38BDF8);
+
+    gfx_draw_string(cx + 10, cy + 60, "Marcos    :", txt_muted, 0);
     uitoa((uint32_t)pmm_get_free_frames(), buf, 10);
-    gfx_draw_string(cx + 150, cy + 50, buf, COLOR_ACCENT_CYAN, 0);
+    gfx_draw_string(cx + 105, cy + 60, buf, 0xFF38BDF8, 0);
+    gfx_draw_string(cx + 170, cy + 60, "libres (4 KiB)", txt_muted, 0);
 
-    gfx_draw_string(cx + 8, cy + 70, "Scheduler [REAL]: PIT 100 Hz", txt_muted, 0);
-    gfx_draw_string(cx + 8, cy + 92, "Sensor Temp: 25.0 C [SIMULADO IoT]", COLOR_ACCENT_GREEN, 0);
-    gfx_draw_string(cx + 8, cy + 112, "Modo Visual:", txt_muted, 0);
-    gfx_draw_string(cx + 110, cy + 112, eco_mode ? "ECO (Opaco)" : "GLASS (Alpha)", COLOR_ACCENT_BLUE, 0);
+    // Card 2: Scheduler y Telemetría IoT [SIMULADO]
+    uint32_t c2_y = cy + c1_h + 8;
+    uint32_t c2_h = ch - c1_h - 8;
+    if (eco_mode) {
+        gfx_fill_rounded_rect(cx, c2_y, cw, c2_h, 6, card_solid);
+    } else {
+        gfx_fill_rounded_rect_alpha(cx, c2_y, cw, c2_h, 6, card_bg);
+    }
+    gfx_draw_rounded_rect(cx, c2_y, cw, c2_h, 6, 0xFF334155);
+
+    gfx_fill_circle(cx + 14, c2_y + 14, 3, 0xFF10B981);
+    gfx_draw_string(cx + 24, c2_y + 6, "Scheduler [REAL] & Telemetria [SIM]", txt_main, 0);
+
+    gfx_draw_string(cx + 10, c2_y + 26, "Planificador : PIT 100 Hz (IRQ 0) [REAL]", txt_muted, 0);
+    gfx_draw_string(cx + 10, c2_y + 44, "Sensor Temp  : 25.0 C [SIMULADO IoT]", 0xFF34D399, 0);
+    gfx_draw_string(cx + 10, c2_y + 62, "Actuador Pin : Pin 13 ACTIVO", 0xFF60A5FA, 0);
 }
 
 /* Ventana 3: Jarvis AI Copiloto [DEMO LOCAL / SIMULADO] */
 static void paint_jarvis_window(struct window* win) {
-    uint32_t cx = win->x + 4;
-    uint32_t cy = win->y + TITLEBAR_HEIGHT + 4;
-    uint32_t cw = win->width - 8;
-    uint32_t ch = win->height - TITLEBAR_HEIGHT - 8;
+    uint32_t cx = win->x + 6;
+    uint32_t cy = win->y + TITLEBAR_HEIGHT + 6;
+    uint32_t cw = win->width - 12;
 
-    uint32_t glass_bg = (active_theme == WM_THEME_LIGHT) ? 0xCCDBEAFE : 0xCC0F172A;
-    uint32_t solid_bg = (active_theme == WM_THEME_LIGHT) ? 0xFFDBEAFE : 0xFF0F172A;
-    uint32_t txt_main = (active_theme == WM_THEME_LIGHT) ? 0xFF0F172A : COLOR_TEXT_WHITE;
-    uint32_t txt_muted = (active_theme == WM_THEME_LIGHT) ? 0xFF334155 : COLOR_TEXT_MUTED;
+    uint32_t card_bg = (active_theme == WM_THEME_LIGHT) ? 0xCCF8FAFC : 0xD80F172A;
+    uint32_t txt_main = (active_theme == WM_THEME_LIGHT) ? 0xFF0F172A : 0xFFF8FAFC;
+    uint32_t txt_muted = (active_theme == WM_THEME_LIGHT) ? 0xFF475569 : 0xFF94A3B8;
 
-    wm_draw_surface(cx, cy, cw, ch, glass_bg, solid_bg);
-    gfx_draw_rect(cx, cy, cw, ch, 0xFF3B82F6);
+    // 1. Burbuja de mensaje de Jarvis
+    if (eco_mode) {
+        gfx_fill_rounded_rect(cx, cy, cw, 42, 6, 0xFF1E293B);
+    } else {
+        gfx_fill_rounded_rect_alpha(cx, cy, cw, 42, 6, card_bg);
+    }
+    gfx_draw_rounded_rect(cx, cy, cw, 42, 6, 0xFF4338CA);
 
-    gfx_draw_string(cx + 8, cy + 6, "Jarvis Copiloto [SIMULADO - SIN RED]", COLOR_ACCENT_CYAN, 0);
+    gfx_fill_circle(cx + 14, cy + 14, 4, 0xFF818CF8);
+    gfx_draw_string(cx + 24, cy + 6, "Jarvis AI Core [DEMO LOCAL - SIN RED]", 0xFF818CF8, 0);
+    gfx_draw_string(cx + 10, cy + 24, "Asistente multi-agente supervisado para control de OS.", txt_muted, 0);
 
-    const char* state_str = "Estado: INACTIVO [Listo para Demo]";
-    uint32_t state_col = txt_muted;
+    // 2. Estado del Plan Activo
+    uint32_t st_y = cy + 48;
+    const char* state_str = "Estado: LISTO PARA INICIAR PLAN";
+    uint32_t state_col = 0xFF38BDF8;
     if (jarvis_state == JARVIS_AWAITING_APPROVAL) {
         state_str = "Estado: ESPERANDO APROBACION HUMANA";
         state_col = 0xFFF59E0B;
     } else if (jarvis_state == JARVIS_COMPLETED_SIM) {
-        state_str = "Estado: PLAN DEMO COMPLETADO [SIMULADO]";
-        state_col = COLOR_ACCENT_GREEN;
+        state_str = "Estado: PLAN DEMO COMPLETADO [SIM]";
+        state_col = 0xFF34D399;
     } else if (jarvis_state == JARVIS_ABORTED) {
         state_str = "Estado: PLAN ABORTADO POR USUARIO";
-        state_col = COLOR_BTN_CLOSE;
+        state_col = 0xFFF43F5E;
     }
-    gfx_draw_string(cx + 8, cy + 26, state_str, state_col, 0);
 
-    gfx_draw_string(cx + 8, cy + 48, "1. Auditar PMM/VMM y Ring 3 [OK]", txt_main, 0);
-    gfx_draw_string(cx + 8, cy + 68, "2. Aprobar accion supervisada [GATE]", txt_main, 0);
-    gfx_draw_string(cx + 8, cy + 88, "3. Emitir reporte local [SIMULADO]", txt_main, 0);
+    gfx_fill_rounded_rect(cx, st_y, cw, 22, 4, 0xFF111827);
+    gfx_draw_rounded_rect(cx, st_y, cw, 22, 4, 0xFF334155);
+    gfx_draw_string(cx + 10, st_y + 4, state_str, state_col, 0);
 
-    uint32_t btn_y = win->y + win->height - 32;
-    gfx_fill_rect(win->x + 12, btn_y, 108, 22, COLOR_ACCENT_BLUE);
-    gfx_draw_string(win->x + 20, btn_y + 3, "[Ejecutar]", COLOR_TEXT_WHITE, 0);
+    // 3. Pasos del Plan de Acción
+    uint32_t step_y = st_y + 28;
+    gfx_draw_string(cx + 8, step_y,      "1. Auditar PMM/VMM y Ring 3      [OK]", txt_main, 0);
+    gfx_draw_string(cx + 8, step_y + 20, "2. Supervisar accion de agente   [GATE]", txt_main, 0);
+    gfx_draw_string(cx + 8, step_y + 40, "3. Desplegar reporte local       [SIM]", txt_muted, 0);
 
-    gfx_fill_rect(win->x + 130, btn_y, 108, 22, 0xFF059669);
-    gfx_draw_string(win->x + 138, btn_y + 3, "[Aprobar]", COLOR_TEXT_WHITE, 0);
+    // 4. Botones de Acción Redondeados
+    uint32_t btn_y = win->y + win->height - 30;
+    gfx_fill_rounded_rect(win->x + 12, btn_y, 108, 22, 6, 0xFF4F46E5);
+    gfx_draw_string(win->x + 22, btn_y + 3, "> Ejecutar", 0xFFFFFFFF, 0);
 
-    gfx_fill_rect(win->x + 248, btn_y, 104, 22, COLOR_BTN_CLOSE);
-    gfx_draw_string(win->x + 260, btn_y + 3, "[Abortar]", COLOR_TEXT_WHITE, 0);
+    gfx_fill_rounded_rect(win->x + 130, btn_y, 108, 22, 6, 0xFF059669);
+    gfx_draw_string(win->x + 140, btn_y + 3, "# Aprobar", 0xFFFFFFFF, 0);
+
+    gfx_fill_rounded_rect(win->x + 248, btn_y, 104, 22, 6, 0xFFE11D48);
+    gfx_draw_string(win->x + 258, btn_y + 3, "x Abortar", 0xFFFFFFFF, 0);
 }
 
 /* Ventana 4: Centro de 6 Agentes Especializados [SIMULADO] */
 static void paint_agents_window(struct window* win) {
-    uint32_t cx = win->x + 4;
-    uint32_t cy = win->y + TITLEBAR_HEIGHT + 4;
-    uint32_t cw = win->width - 8;
-    uint32_t ch = win->height - TITLEBAR_HEIGHT - 8;
+    uint32_t cx = win->x + 6;
+    uint32_t cy = win->y + TITLEBAR_HEIGHT + 6;
+    uint32_t cw = win->width - 12;
+    uint32_t ch = win->height - TITLEBAR_HEIGHT - 12;
 
-    uint32_t glass_bg = (active_theme == WM_THEME_LIGHT) ? 0xCCEFF6FF : 0xCC111827;
-    uint32_t solid_bg = (active_theme == WM_THEME_LIGHT) ? 0xFFEFF6FF : 0xFF111827;
-    uint32_t txt_main = (active_theme == WM_THEME_LIGHT) ? 0xFF0F172A : COLOR_TEXT_WHITE;
+    uint32_t txt_main = (active_theme == WM_THEME_LIGHT) ? 0xFF0F172A : 0xFFF8FAFC;
 
-    wm_draw_surface(cx, cy, cw, ch, glass_bg, solid_bg);
-    gfx_draw_rect(cx, cy, cw, ch, 0xFF334155);
+    // Título de sección
+    gfx_draw_string(cx + 8, cy + 2, "6 Agentes Especializados [SIMULADO]", 0xFF38BDF8, 0);
 
-    gfx_draw_string(cx + 8, cy + 6, "6 Agentes Especializados [SIMULADO]", COLOR_ACCENT_CYAN, 0);
-
-    uint32_t row_y = cy + 26;
+    // Lista de agentes con tarjetas redondeadas
+    uint32_t row_y = cy + 22;
     for (uint8_t i = 0; i < WM_AGENT_COUNT; i++) {
         if (i == selected_agent) {
-            gfx_fill_rect(cx + 6, row_y - 2, cw - 12, 20, COLOR_ACCENT_BLUE);
-            gfx_draw_string(cx + 12, row_y, agent_names[i], COLOR_TEXT_WHITE, 0);
+            gfx_fill_rounded_rect(cx + 4, row_y - 2, cw - 8, 20, 5, 0xFF2563EB);
+            gfx_draw_rounded_rect(cx + 4, row_y - 2, cw - 8, 20, 5, 0xFF93C5FD);
+            gfx_draw_string(cx + 12, row_y, agent_names[i], 0xFFFFFFFF, 0);
         } else {
+            if (eco_mode) {
+                gfx_fill_rounded_rect(cx + 4, row_y - 2, cw - 8, 20, 4, 0xFF111827);
+            } else {
+                gfx_fill_rounded_rect_alpha(cx + 4, row_y - 2, cw - 8, 20, 4, 0x801E293B);
+            }
             gfx_draw_string(cx + 12, row_y, agent_names[i], txt_main, 0);
         }
         row_y += 22;
     }
 
-    gfx_draw_string(cx + 8, cy + ch - 22, agent_roles[selected_agent], COLOR_ACCENT_GREEN, 0);
+    // Tarjeta del rol seleccionado
+    uint32_t role_y = cy + ch - 24;
+    gfx_fill_rounded_rect(cx + 4, role_y - 2, cw - 8, 22, 4, 0xFF0B132B);
+    gfx_draw_rounded_rect(cx + 4, role_y - 2, cw - 8, 22, 4, 0xFF1E293B);
+    gfx_draw_string(cx + 10, role_y + 2, agent_roles[selected_agent], 0xFF34D399, 0);
 }
 
 void wm_init(void) {
@@ -420,21 +476,20 @@ void wm_init(void) {
     uint32_t sh = fb && fb->height > 0 ? fb->height : 768;
 
     // Crear Ventana 1: Terminal Gráfica Zenthra [REAL]
-    wm_create_window("Terminal Zenthra OS", 24, 36, 460, 210, paint_terminal_window);
+    wm_create_window("Terminal Zenthra OS", 24, 44, 460, 215, paint_terminal_window);
 
     // Crear Ventana 2: Monitor del Sistema & IoT [REAL + SIMULADO]
     uint32_t win2_x = sw > 620 ? sw - 364 : 240;
-    wm_create_window("Monitor de Sistema & IoT", win2_x, 36, 340, 170, paint_monitor_window);
+    wm_create_window("Monitor de Sistema & IoT", win2_x, 44, 340, 180, paint_monitor_window);
 
     // Crear Ventana 3: Jarvis AI [DEMO LOCAL]
-    uint32_t win3_y = sh > 540 ? 260 : 190;
-    wm_create_window("Jarvis AI [DEMO LOCAL]", 24, win3_y, 460, 175, paint_jarvis_window);
+    uint32_t win3_y = sh > 540 ? 275 : 200;
+    wm_create_window("Jarvis AI [DEMO LOCAL]", 24, win3_y, 460, 185, paint_jarvis_window);
 
     // Crear Ventana 4: Centro de 6 Agentes [SIM]
-    uint32_t win4_y = sh > 540 ? 220 : 195;
-    wm_create_window("Centro de 6 Agentes [SIM]", win2_x, win4_y, 340, 215, paint_agents_window);
+    uint32_t win4_y = sh > 540 ? 236 : 210;
+    wm_create_window("Centro de 6 Agentes [SIM]", win2_x, win4_y, 340, 224, paint_agents_window);
 
-    // Enfocar ventana de terminal por defecto
     if (window_count > 0) {
         wm_focus_window(windows[0].id);
     }
@@ -442,7 +497,7 @@ void wm_init(void) {
     term_add_line("Bienvenido a Zenthra OS v20.0 [REAL]");
     term_add_line("Escriba 'help' para ver comandos.");
 
-    serial_write_string("[WM] Zenthra Window Manager inicializado con 4 ventanas nativas (Terminal, Monitor, Jarvis, 6 Agentes).\r\n");
+    serial_write_string("[WM] Zenthra Window Manager inicializado con 4 ventanas nativas Glassmorphism.\r\n");
 }
 
 struct window* wm_create_window(const char* title, int32_t x, int32_t y, uint32_t w, uint32_t h, void (*on_paint)(struct window*)) {
@@ -461,8 +516,8 @@ struct window* wm_create_window(const char* title, int32_t x, int32_t y, uint32_
     win->y = y;
     win->width = w;
     win->height = h;
-    win->border_color = COLOR_WIN_BORDER;
-    win->titlebar_color = COLOR_WIN_HEADER;
+    win->border_color = 0xFF475569;
+    win->titlebar_color = 0xFF1E293B;
     win->is_visible = true;
     win->is_focused = false;
     win->is_dragging = false;
@@ -519,7 +574,7 @@ void wm_handle_mouse(int32_t mx, int32_t my, bool left_button) {
                 windows[i].x = mx - windows[i].drag_off_x;
                 windows[i].y = my - windows[i].drag_off_y;
 
-                if (windows[i].y < 0) windows[i].y = 0;
+                if (windows[i].y < 32) windows[i].y = 32;
                 if (fb && fb->height > TASKBAR_HEIGHT + TITLEBAR_HEIGHT) {
                     if ((uint32_t)windows[i].y > fb->height - TASKBAR_HEIGHT - TITLEBAR_HEIGHT) {
                         windows[i].y = (int32_t)(fb->height - TASKBAR_HEIGHT - TITLEBAR_HEIGHT);
@@ -545,8 +600,8 @@ void wm_handle_mouse(int32_t mx, int32_t my, bool left_button) {
             return;
         }
 
-        // Comprobar clic en Dock Flotante Inferior y botones Eco / Tema en la barra de tareas
-        if ((uint32_t)my >= ty + 5 && (uint32_t)my <= ty + 31) {
+        // Comprobar clic en Barra de Tareas Inferior / Dock Flotante
+        if ((uint32_t)my >= ty + 4 && (uint32_t)my <= ty + 34) {
             if (mx >= 226 && mx < 310 && window_count > 0) {
                 windows[0].is_visible = true;
                 wm_focus_window(windows[0].id);
@@ -621,10 +676,16 @@ void wm_handle_mouse(int32_t mx, int32_t my, bool left_button) {
 
                 wm_focus_window(win->id);
 
-                // Comprobar botón de cerrar [X]
-                int32_t btn_x = win->x + (int32_t)win->width - 20;
-                int32_t btn_y = win->y + 3;
-                if (mx >= btn_x && mx <= btn_x + 16 && my >= btn_y && my <= btn_y + 16) {
+                // Comprobar botón de cerrar [X]: semáforo rojo en (x+8..x+20, y+4..y+20) o en extremo derecho
+                bool hit_close = false;
+                if (mx >= win->x + 8 && mx <= win->x + 22 && my >= win->y + 4 && my <= win->y + 22) {
+                    hit_close = true;
+                }
+                int32_t btn_x = win->x + (int32_t)win->width - 24;
+                if (mx >= btn_x && mx <= btn_x + 20 && my >= win->y + 2 && my <= win->y + 22) {
+                    hit_close = true;
+                }
+                if (hit_close) {
                     wm_close_window(win->id);
                     break;
                 }
@@ -639,13 +700,13 @@ void wm_handle_mouse(int32_t mx, int32_t my, bool left_button) {
 
                 // Interacción interna con Ventana 3: Jarvis AI [DEMO LOCAL]
                 if (win->id == 3) {
-                    int32_t btn_y_jarvis = win->y + (int32_t)win->height - 32;
-                    if (my >= btn_y_jarvis && my <= btn_y_jarvis + 22) {
-                        if (mx >= win->x + 12 && mx <= win->x + 120) {
+                    int32_t btn_y_jarvis = win->y + (int32_t)win->height - 30;
+                    if (my >= btn_y_jarvis - 4 && my <= btn_y_jarvis + 24) {
+                        if (mx >= win->x + 12 && mx <= win->x + 124) {
                             wm_jarvis_start_plan();
-                        } else if (mx >= win->x + 130 && mx <= win->x + 238) {
+                        } else if (mx >= win->x + 128 && mx <= win->x + 242) {
                             wm_jarvis_approve_step();
-                        } else if (mx >= win->x + 248 && mx <= win->x + 352) {
+                        } else if (mx >= win->x + 246 && mx <= win->x + 356) {
                             wm_jarvis_abort_plan();
                         }
                     }
@@ -653,7 +714,7 @@ void wm_handle_mouse(int32_t mx, int32_t my, bool left_button) {
 
                 // Interacción interna con Ventana 4: Centro de 6 Agentes [SIM]
                 if (win->id == 4) {
-                    int32_t list_top = win->y + TITLEBAR_HEIGHT + 28;
+                    int32_t list_top = win->y + TITLEBAR_HEIGHT + 24;
                     if (my >= list_top && my < list_top + (int32_t)(WM_AGENT_COUNT * 22)) {
                         uint8_t idx = (uint8_t)((my - list_top) / 22);
                         wm_select_agent(idx);
@@ -698,22 +759,51 @@ struct window* wm_get_focused_window(void) {
 static void draw_single_window(struct window* win) {
     if (!win->is_visible) return;
 
-    // Marco exterior y sombra
-    gfx_draw_rect(win->x, win->y, win->width, win->height, win->border_color);
+    // 1. Sombra suave de elevación 3D
+    if (!eco_mode) {
+        gfx_fill_rounded_rect_alpha(win->x - 4, win->y - 3, win->width + 8, win->height + 8, 14, 0x18000000);
+        gfx_fill_rounded_rect_alpha(win->x - 2, win->y - 1, win->width + 4, win->height + 4, 12, 0x2A000000);
+    }
 
-    // Barra de título (con soporte Glassmorphism o Eco)
-    uint32_t tb_glass = win->is_focused ? 0xDD2563EB : 0xCC1E293B;
-    uint32_t tb_solid = win->is_focused ? COLOR_ACCENT_BLUE : COLOR_WIN_HEADER;
-    wm_draw_surface(win->x + 1, win->y + 1, win->width - 2, TITLEBAR_HEIGHT - 1, tb_glass, tb_solid);
+    // 2. Fondo de la ventana (Frosted Glass translúcido o sólido)
+    uint32_t win_glass = (active_theme == WM_THEME_LIGHT) ? 0xD8EFF6FF : 0xD80D1527;
+    uint32_t win_solid = (active_theme == WM_THEME_LIGHT) ? 0xFFF8FAFC : 0xFF0D1527;
+    if (eco_mode) {
+        gfx_fill_rounded_rect(win->x, win->y, win->width, win->height, 10, win_solid);
+    } else {
+        gfx_fill_rounded_rect_alpha(win->x, win->y, win->width, win->height, 10, win_glass);
+    }
+
+    // 3. Barra de Título (Header unificado)
+    uint32_t tb_glass = win->is_focused ? 0xEE1E293B : 0xCC111827;
+    uint32_t tb_solid = win->is_focused ? 0xFF1E293B : 0xFF111827;
+    if (eco_mode) {
+        gfx_fill_rounded_rect(win->x + 1, win->y + 1, win->width - 2, TITLEBAR_HEIGHT + 2, 9, tb_solid);
+    } else {
+        gfx_fill_rounded_rect_alpha(win->x + 1, win->y + 1, win->width - 2, TITLEBAR_HEIGHT + 2, 9, tb_glass);
+    }
+
+    // Brillo superior specular de cristal
+    if (!eco_mode) {
+        gfx_fill_rect_alpha(win->x + 12, win->y + 1, win->width - 24, 1, 0x40FFFFFF);
+    }
+
+    // 4. Semáforo macOS en la esquina superior izquierda
+    gfx_fill_circle(win->x + 14, win->y + 12, 5, 0xFFFF5F56); // Cerrar (Rojo)
+    gfx_fill_circle(win->x + 28, win->y + 12, 5, 0xFFFFBD2E); // Minimizar (Amarillo)
+    gfx_fill_circle(win->x + 42, win->y + 12, 5, 0xFF27C93F); // Maximizar (Verde)
 
     // Título de la ventana
-    gfx_draw_string(win->x + 8, win->y + 4, win->title, COLOR_TEXT_WHITE, 0);
+    uint32_t title_col = win->is_focused ? 0xFFF8FAFC : 0xFF94A3B8;
+    gfx_draw_string(win->x + 58, win->y + 5, win->title, title_col, 0);
 
-    // Botón de cerrar [X]
+    // Botón de cierre sutil en el extremo derecho
     int32_t btn_x = win->x + (int32_t)win->width - 20;
-    int32_t btn_y = win->y + 3;
-    gfx_fill_rect(btn_x, btn_y, 16, 16, COLOR_BTN_CLOSE);
-    gfx_draw_string(btn_x + 4, btn_y + 1, "x", COLOR_TEXT_WHITE, 0);
+    gfx_draw_string(btn_x, win->y + 4, "x", 0xFF64748B, 0);
+
+    // Borde exterior redondeado (con resplandor índigo si está enfocada)
+    uint32_t border_col = win->is_focused ? 0xFF6366F1 : 0xFF334155;
+    gfx_draw_rounded_rect(win->x, win->y, win->width, win->height, 10, border_col);
 
     // Contenido propio de la ventana
     if (win->on_paint) {
@@ -729,28 +819,66 @@ void wm_render_desktop(void) {
     uint32_t sw = fb->width;
     uint32_t sh = fb->height;
 
-    // 1. Dibujar Fondo de Pantalla según el Tema Activo (Oscuro / Claro)
-    for (uint32_t y = 0; y < sh - TASKBAR_HEIGHT; y++) {
+    // 1. Fondo de Pantalla: Gradiente Cósmico Profundo
+    for (uint32_t y = 0; y < sh; y++) {
         uint8_t r, g, b;
         if (active_theme == WM_THEME_LIGHT) {
-            r = (uint8_t)(0xDB - (y * 0x20) / sh);
-            g = (uint8_t)(0xEA - (y * 0x20) / sh);
-            b = (uint8_t)(0xFE - (y * 0x10) / sh);
+            r = (uint8_t)(0xE0 - (y * 0x18) / sh);
+            g = (uint8_t)(0xE7 - (y * 0x12) / sh);
+            b = (uint8_t)(0xFF - (y * 0x10) / sh);
         } else {
-            r = (uint8_t)(0x0F + (y * (0x1E - 0x0F)) / sh);
-            g = (uint8_t)(0x17 + (y * (0x29 - 0x17)) / sh);
-            b = (uint8_t)(0x2A + (y * (0x3B - 0x2A)) / sh);
+            // Gradiente cósmico profundo de #18182E a #060913
+            r = (uint8_t)(0x18 - (y * 0x12) / sh);
+            g = (uint8_t)(0x18 - (y * 0x0F) / sh);
+            b = (uint8_t)(0x2E - (y * 0x1B) / sh);
         }
         uint32_t col = 0xFF000000 | (r << 16) | (g << 8) | b;
         gfx_fill_rect(0, y, sw, 1, col);
     }
 
-    // Marca de agua central
-    uint32_t wm_col = (active_theme == WM_THEME_LIGHT) ? 0xFF64748B : 0xFF334155;
-    gfx_draw_string(sw / 2 - 110, sh / 2 - 20, "ZENTHRA OS v20.0", wm_col, 0);
-    gfx_draw_string(sw / 2 - 140, sh / 2 + 2, "Escritorio VESA LFB Glassmorphism", wm_col, 0);
+    // Orbes de luz ambiental sutiles en el fondo para percibir el Glassmorphism
+    if (!eco_mode && active_theme == WM_THEME_DARK) {
+        gfx_fill_circle(180, 160, 110, 0x186366F1); // Resplandor índigo
+        gfx_fill_circle(sw - 200, 320, 130, 0x140284C7); // Resplandor cian
+    }
 
-    // 2. Renderizar Ventanas: Primero las no enfocadas, luego la enfocada
+    // 2. Barra Superior (Top Menu Bar estilo macOS)
+    uint32_t top_h = 28;
+    if (eco_mode) {
+        gfx_fill_rect(0, 0, sw, top_h, 0xFF0B0F19);
+    } else {
+        gfx_fill_rect_alpha(0, 0, sw, top_h, 0xD80B0F19);
+        gfx_fill_rect_alpha(0, top_h - 1, sw, 1, 0x30FFFFFF);
+    }
+
+    // Logo y Nombre de Marca
+    gfx_draw_string(14, 6, "ZENTHRA OS", 0xFFF8FAFC, 0);
+    gfx_fill_rounded_rect(106, 5, 54, 18, 4, 0x40F59E0B);
+    gfx_draw_string(112, 6, "[DEMO]", 0xFFF59E0B, 0);
+
+    // Título de la app activa
+    struct window* foc = wm_get_focused_window();
+    const char* cur_title = foc ? foc->title : "Escritorio";
+    gfx_draw_string(172, 6, cur_title, 0xFF94A3B8, 0);
+
+    // Reloj central en la barra superior
+    char clock_str[32];
+    uint32_t secs = uptime_ticks / 100;
+    uint32_t mins = secs / 60;
+    secs = secs % 60;
+    clock_str[0] = '0' + (mins / 10) % 10;
+    clock_str[1] = '0' + (mins % 10);
+    clock_str[2] = ':';
+    clock_str[3] = '0' + (secs / 10) % 10;
+    clock_str[4] = '0' + (secs % 10);
+    clock_str[5] = '\0';
+    gfx_draw_string(sw / 2 - 20, 6, clock_str, 0xFFF8FAFC, 0);
+
+    // Indicador de Gateway en el extremo derecho
+    gfx_fill_circle(sw - 210, 14, 4, 0xFF10B981);
+    gfx_draw_string(sw - 200, 6, "Gateway Local [DEMO]", 0xFF94A3B8, 0);
+
+    // 3. Renderizar Ventanas: Primero las no enfocadas, luego la enfocada
     for (size_t i = 0; i < window_count; i++) {
         if (windows[i].is_visible && !windows[i].is_focused) {
             draw_single_window(&windows[i]);
@@ -762,15 +890,21 @@ void wm_render_desktop(void) {
         }
     }
 
-    // 3. Renderizar Barra de Tareas Inferior y Dock Flotante
+    // 4. Barra de Tareas y Dock Flotante Inferior
     uint32_t ty = sh - TASKBAR_HEIGHT;
-    wm_draw_surface(0, ty, sw, TASKBAR_HEIGHT, 0xD8090D16, COLOR_TASKBAR);
-    gfx_fill_rect(0, ty, sw, 1, COLOR_WIN_BORDER);
 
-    // Botón de Inicio / Launcher "Zenthra"
-    gfx_fill_rect(8, ty + 5, 88, 26, COLOR_ACCENT_BLUE);
-    gfx_draw_rect(8, ty + 5, 88, 26, 0xFF60A5FA);
-    gfx_draw_string(20, ty + 10, "Zenthra", COLOR_TEXT_WHITE, 0);
+    // Fondo de la barra inferior con gradiente de cristal
+    if (eco_mode) {
+        gfx_fill_rect(0, ty, sw, TASKBAR_HEIGHT, 0xFF090D16);
+    } else {
+        gfx_fill_rect_alpha(0, ty, sw, TASKBAR_HEIGHT, 0xCC090D16);
+        gfx_fill_rect_alpha(0, ty, sw, 1, 0x20FFFFFF);
+    }
+
+    // Botón Launcher "Zenthra" (preserva coordenadas para tests: x in [8, 96], y in [ty+5, ty+31])
+    gfx_fill_rounded_rect(8, ty + 5, 88, 26, 6, 0xFF2563EB);
+    gfx_draw_rounded_rect(8, ty + 5, 88, 26, 6, 0xFF60A5FA);
+    gfx_draw_string(20, ty + 10, "Zenthra", 0xFFFFFFFF, 0);
 
     // Etiqueta de Perfil de Seguridad Activo
     struct task* cur_task = task_get_current();
@@ -778,59 +912,52 @@ void wm_render_desktop(void) {
     if (cur_task) {
         prof_name = profile_get_name(cur_task->profile);
     }
-    gfx_fill_rect(102, ty + 6, 116, 24, 0xFF1E293B);
-    gfx_draw_rect(102, ty + 6, 116, 24, 0xFF334155);
-    gfx_draw_string(108, ty + 10, prof_name, COLOR_ACCENT_CYAN, 0);
+    gfx_fill_rounded_rect(102, ty + 6, 116, 24, 6, 0xFF1E293B);
+    gfx_draw_rounded_rect(102, ty + 6, 116, 24, 6, 0xFF334155);
+    gfx_draw_string(108, ty + 10, prof_name, 0xFF38BDF8, 0);
 
-    // Dock Flotante con las 4 Aplicaciones Nativas
+    // Dock Flotante con las 4 Aplicaciones Nativas (preserva coordenadas para tests)
     const char* dock_labels[4] = { "1:Shell", "2:Mon", "3:Jarvis", "4:Agents" };
     uint32_t dock_x = 226;
     for (size_t i = 0; i < 4 && i < window_count; i++) {
-        uint32_t dcol = windows[i].is_focused ? COLOR_ACCENT_BLUE : 0xFF1E293B;
-        gfx_fill_rect(dock_x, ty + 6, 84, 24, dcol);
-        gfx_draw_rect(dock_x, ty + 6, 84, 24, 0xFF475569);
-        gfx_draw_string(dock_x + 8, ty + 10, dock_labels[i], COLOR_TEXT_WHITE, 0);
+        uint32_t dcol = windows[i].is_focused ? 0xFF2563EB : 0xFF1E293B;
+        gfx_fill_rounded_rect(dock_x, ty + 6, 84, 24, 6, dcol);
+        gfx_draw_rounded_rect(dock_x, ty + 6, 84, 24, 6, windows[i].is_focused ? 0xFF93C5FD : 0xFF475569);
+        gfx_draw_string(dock_x + 8, ty + 10, dock_labels[i], 0xFFFFFFFF, 0);
+
+        if (windows[i].is_focused) {
+            gfx_fill_circle(dock_x + 42, ty + 31, 2, 0xFFFFFFFF);
+        }
         dock_x += 88;
     }
 
-    // Conmutadores de Modo Eco y Tema en la Barra Inferior
-    gfx_fill_rect(584, ty + 6, 72, 24, eco_mode ? 0xFF059669 : 0xFF1E293B);
-    gfx_draw_rect(584, ty + 6, 72, 24, 0xFF475569);
-    gfx_draw_string(590, ty + 10, eco_mode ? "Eco:ON" : "Eco:OFF", COLOR_TEXT_WHITE, 0);
+    // Botones Modo Eco y Tema en la Barra Inferior
+    gfx_fill_rounded_rect(584, ty + 6, 72, 24, 6, eco_mode ? 0xFF059669 : 0xFF1E293B);
+    gfx_draw_rounded_rect(584, ty + 6, 72, 24, 6, 0xFF475569);
+    gfx_draw_string(590, ty + 10, eco_mode ? "Eco:ON" : "Eco:OFF", 0xFFFFFFFF, 0);
 
-    gfx_fill_rect(660, ty + 6, 72, 24, active_theme == WM_THEME_LIGHT ? COLOR_ACCENT_BLUE : 0xFF1E293B);
-    gfx_draw_rect(660, ty + 6, 72, 24, 0xFF475569);
-    gfx_draw_string(666, ty + 10, active_theme == WM_THEME_LIGHT ? "Tema:L" : "Tema:D", COLOR_TEXT_WHITE, 0);
+    gfx_fill_rounded_rect(660, ty + 6, 72, 24, 6, active_theme == WM_THEME_LIGHT ? 0xFF2563EB : 0xFF1E293B);
+    gfx_draw_rounded_rect(660, ty + 6, 72, 24, 6, 0xFF475569);
+    gfx_draw_string(666, ty + 10, active_theme == WM_THEME_LIGHT ? "Tema:L" : "Tema:D", 0xFFFFFFFF, 0);
 
-    // Reloj del Sistema / Uptime en el extremo derecho
-    char clock_str[32];
-    uint32_t secs = uptime_ticks / 100;
-    uint32_t mins = secs / 60;
-    secs = secs % 60;
-    clock_str[0] = '0' + (mins / 10) % 10;
-    clock_str[1] = '0' + (mins % 10);
-    clock_str[2] = ':';
-    clock_str[3] = '0' + (secs / 10) % 10;
-    clock_str[4] = '0' + (secs % 10);
-    clock_str[5] = '\0';
+    // Reloj inferior derecho
+    gfx_draw_string(sw - 56, ty + 10, clock_str, 0xFF94A3B8, 0);
 
-    gfx_draw_string(sw - 56, ty + 10, clock_str, COLOR_TEXT_WHITE, 0);
-
-    // 4. Renderizar Menú Popup del Launcher (si está desplegado)
+    // 5. Menú Popup del Launcher (si está desplegado)
     if (launcher_open) {
         uint32_t ly = ty - 92;
-        wm_draw_surface(8, ly, 192, 92, 0xEE0F172A, 0xFF0F172A);
-        gfx_draw_rect(8, ly, 192, 92, COLOR_ACCENT_BLUE);
-        gfx_draw_string(14, ly + 4,  "> 1. Terminal [REAL]", COLOR_TEXT_WHITE, 0);
-        gfx_draw_string(14, ly + 27, "> 2. Monitor  [REAL/SIM]", COLOR_TEXT_WHITE, 0);
-        gfx_draw_string(14, ly + 50, "> 3. Jarvis   [DEMO]", COLOR_ACCENT_CYAN, 0);
-        gfx_draw_string(14, ly + 73, "> 4. Agentes  [SIM]", COLOR_ACCENT_GREEN, 0);
+        wm_draw_surface(8, ly, 192, 92, 0xF00F172A, 0xFF0F172A);
+        gfx_draw_rounded_rect(8, ly, 192, 92, 6, 0xFF3B82F6);
+        gfx_draw_string(14, ly + 4,  "> 1. Terminal [REAL]", 0xFFFFFFFF, 0);
+        gfx_draw_string(14, ly + 27, "> 2. Monitor  [REAL/SIM]", 0xFFFFFFFF, 0);
+        gfx_draw_string(14, ly + 50, "> 3. Jarvis   [DEMO]", 0xFF38BDF8, 0);
+        gfx_draw_string(14, ly + 73, "> 4. Agentes  [SIM]", 0xFF34D399, 0);
     }
 
-    // 5. Dibujar Cursor del Ratón
+    // 6. Dibujar Cursor del Ratón
     mouse_draw_cursor();
 
-    // 6. Volcar búfer de composición a pantalla
+    // 7. Volcar búfer de composición a pantalla
     gfx_flip();
     needs_redraw = false;
 }

@@ -233,6 +233,118 @@ void gfx_draw_rect(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint32_t colo
     gfx_fill_rect(x + w - 1, y, 1, h, color);     // Borde derecho
 }
 
+void gfx_fill_circle(int32_t cx, int32_t cy, int32_t r, uint32_t color) {
+    if (r <= 0) return;
+    int32_t r2 = r * r;
+    for (int32_t dy = -r; dy <= r; dy++) {
+        int32_t py = cy + dy;
+        if (py < 0 || (uint32_t)py >= current_fb.height) continue;
+        for (int32_t dx = -r; dx <= r; dx++) {
+            if (dx * dx + dy * dy <= r2) {
+                int32_t px = cx + dx;
+                if (px >= 0 && (uint32_t)px < current_fb.width) {
+                    gfx_putpixel((uint32_t)px, (uint32_t)py, color);
+                }
+            }
+        }
+    }
+}
+
+void gfx_fill_rounded_rect(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint32_t r, uint32_t color) {
+    if (!current_fb.is_active || w == 0 || h == 0) return;
+    if (r == 0) {
+        gfx_fill_rect(x, y, w, h, color);
+        return;
+    }
+    if (r > w / 2) r = w / 2;
+    if (r > h / 2) r = h / 2;
+
+    gfx_fill_rect(x, y + r, w, h - 2 * r, color);
+    gfx_fill_rect(x + r, y, w - 2 * r, r, color);
+    gfx_fill_rect(x + r, y + h - r, w - 2 * r, r, color);
+
+    int32_t r2 = (int32_t)(r * r);
+    for (int32_t dy = 0; dy < (int32_t)r; dy++) {
+        for (int32_t dx = 0; dx < (int32_t)r; dx++) {
+            int32_t dist = (dx - (int32_t)r + 1) * (dx - (int32_t)r + 1) + (dy - (int32_t)r + 1) * (dy - (int32_t)r + 1);
+            if (dist <= r2) {
+                gfx_putpixel(x + dx, y + dy, color);
+                gfx_putpixel(x + w - r + dx, y + dy, color);
+                gfx_putpixel(x + dx, y + h - r + dy, color);
+                gfx_putpixel(x + w - r + dx, y + h - r + dy, color);
+            }
+        }
+    }
+}
+
+void gfx_fill_rounded_rect_alpha(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint32_t r, uint32_t argb_color) {
+    if (!current_fb.is_active || w == 0 || h == 0) return;
+    if (r == 0) {
+        gfx_fill_rect_alpha(x, y, w, h, argb_color);
+        return;
+    }
+    if (r > w / 2) r = w / 2;
+    if (r > h / 2) r = h / 2;
+
+    gfx_fill_rect_alpha(x, y + r, w, h - 2 * r, argb_color);
+    gfx_fill_rect_alpha(x + r, y, w - 2 * r, r, argb_color);
+    gfx_fill_rect_alpha(x + r, y + h - r, w - 2 * r, r, argb_color);
+
+    int32_t r2 = (int32_t)(r * r);
+    for (int32_t dy = 0; dy < (int32_t)r; dy++) {
+        for (int32_t dx = 0; dx < (int32_t)r; dx++) {
+            int32_t dist = (dx - (int32_t)r + 1) * (dx - (int32_t)r + 1) + (dy - (int32_t)r + 1) * (dy - (int32_t)r + 1);
+            if (dist <= r2) {
+                uint32_t px0 = x + dx;
+                uint32_t py0 = y + dy;
+                gfx_putpixel(px0, py0, gfx_blend_argb(gfx_getpixel(px0, py0), argb_color));
+
+                uint32_t px1 = x + w - r + dx;
+                uint32_t py1 = y + dy;
+                gfx_putpixel(px1, py1, gfx_blend_argb(gfx_getpixel(px1, py1), argb_color));
+
+                uint32_t px2 = x + dx;
+                uint32_t py2 = y + h - r + dy;
+                gfx_putpixel(px2, py2, gfx_blend_argb(gfx_getpixel(px2, py2), argb_color));
+
+                uint32_t px3 = x + w - r + dx;
+                uint32_t py3 = y + h - r + dy;
+                gfx_putpixel(px3, py3, gfx_blend_argb(gfx_getpixel(px3, py3), argb_color));
+            }
+        }
+    }
+}
+
+void gfx_draw_rounded_rect(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint32_t r, uint32_t color) {
+    if (!current_fb.is_active || w == 0 || h == 0) return;
+    if (r == 0) {
+        gfx_draw_rect(x, y, w, h, color);
+        return;
+    }
+    if (r > w / 2) r = w / 2;
+    if (r > h / 2) r = h / 2;
+
+    gfx_fill_rect(x + r, y, w - 2 * r, 1, color);
+    gfx_fill_rect(x + r, y + h - 1, w - 2 * r, 1, color);
+    gfx_fill_rect(x, y + r, 1, h - 2 * r, color);
+    gfx_fill_rect(x + w - 1, y + r, 1, h - 2 * r, color);
+
+    int32_t r2_outer = (int32_t)(r * r);
+    int32_t r2_inner = (int32_t)((r > 1 ? r - 1 : 0) * (r > 1 ? r - 1 : 0));
+
+    for (int32_t dy = 0; dy < (int32_t)r; dy++) {
+        for (int32_t dx = 0; dx < (int32_t)r; dx++) {
+            int32_t dist = (dx - (int32_t)r + 1) * (dx - (int32_t)r + 1) + (dy - (int32_t)r + 1) * (dy - (int32_t)r + 1);
+            if (dist <= r2_outer && dist >= r2_inner) {
+                gfx_putpixel(x + dx, y + dy, color);
+                gfx_putpixel(x + w - r + dx, y + dy, color);
+                gfx_putpixel(x + dx, y + h - r + dy, color);
+                gfx_putpixel(x + w - r + dx, y + h - r + dy, color);
+            }
+        }
+    }
+}
+
 void gfx_draw_line(int x0, int y0, int x1, int y1, uint32_t color) {
     int dx = (x1 >= x0) ? (x1 - x0) : (x0 - x1);
     int dy = (y1 >= y0) ? (y1 - y0) : (y0 - y1);
