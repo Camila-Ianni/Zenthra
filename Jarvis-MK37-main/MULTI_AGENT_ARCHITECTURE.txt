@@ -1,0 +1,176 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                  JARVIS-MK37: Multi-Agent Architecture                       ║
+║                        Fase 1 & 2 Completadas                               ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         ENTRY POINT: main.py                                │
+│                    Live Audio API / Event Loop                              │
+└────────────────────────────────┬────────────────────────────────────────────┘
+                                 │
+                    User Input (Transcribed Text)
+                                 │
+                                 ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         ORCHESTRATOR CORE                                    │
+│  core/orchestrator.py - Plan → Execute → Review → Correct                  │
+│                                                                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │ STEP 1: PLAN                                                        │   │
+│  │ - LLM analyzes user input                                          │   │
+│  │ - Generates structured plan with steps                            │   │
+│  │ - Each step defines: tool_name, parameters, rationale             │   │
+│  │ Output: ExecutionPlan(steps=[...])                                │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                 │                                            │
+│                                 ▼                                            │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │ STEP 2: EXECUTE                                                    │   │
+│  │ - For each step in plan:                                          │   │
+│  │   1. Call tool via OrchestratorAdapter                            │   │
+│  │   2. Track execution (success/error)                              │   │
+│  │   3. Capture stderr for error detection                           │   │
+│  │ Output: ToolCall[](tool_name, params, result, error, stderr)     │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                 │                                            │
+│                                 ▼                                            │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │ STEP 3: REVIEW                                                     │   │
+│  │ - Analyze each ToolCall for errors                               │   │
+│  │ - Check: stderr non-empty? error field? result is None?          │   │
+│  │ - Generate ReviewResult (is_valid, error_detected, severity)     │   │
+│  │ Output: ReviewResult[]                                           │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                 │                                            │
+│                                 ▼                                            │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │ STEP 4: CORRECT (If errors detected)                             │   │
+│  │ - LLM analyzes error + original code                             │   │
+│  │ - Generates fixed code/params                                    │   │
+│  │ - Retries execution (max 3 attempts)                             │   │
+│  │ - Exponential backoff: 1s → 2s → 3s                              │   │
+│  │ Output: Fixed ToolCall or final error                            │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                 │
+                    Final Result (Success or Error)
+                                 │
+                                 ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    SUPPORTING SYSTEMS                                        │
+│                                                                              │
+│  ┌──────────────────┐  ┌────────────────────┐  ┌──────────────────┐        │
+│  │ AGENT REGISTRY   │  │ GLOBAL STATE       │  │ ORCHESTRATOR     │        │
+│  │ core/agent_      │  │ core/global_state  │  │ ADAPTER          │        │
+│  │ registry.py      │  │ .py                │  │ core/orch_       │        │
+│  │                  │  │                    │  │ adapter.py       │        │
+│  │ • Entertainment  │  │ • Agent states     │  │                  │        │
+│  │ • Coder          │  │ • Task states      │  │ • Tool registry  │        │
+│  │ • Research       │  │ • Context vars     │  │ • Tool execution │        │
+│  │ • System         │  │ • Execution hist.  │  │ • Healing bridge │        │
+│  │                  │  │ • Persistent       │  │                  │        │
+│  │ + Custom         │  │   (blackboard.json)│  │ + SelfHealing    │        │
+│  │                  │  │                    │  │   Executor       │        │
+│  └──────────────────┘  └────────────────────┘  └──────────────────┘        │
+│       │                      │                        │                     │
+│       └──────────────────────┼────────────────────────┘                     │
+│                              │                                              │
+│                        SHARED STATE                                         │
+│                   (Thread-Safe Communication)                               │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         EXECUTION ENGINES                                    │
+│                                                                              │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │ SELF-HEALING EXECUTOR                                               │  │
+│  │ actions/executor_healing.py                                         │  │
+│  │                                                                      │  │
+│  │ For each tool execution:                                           │  │
+│  │  1. Run code/command                                               │  │
+│  │  2. Check stderr and return code                                   │  │
+│  │  3. If error detected:                                             │  │
+│  │     - Analyze with LLM                                             │  │
+│  │     - Generate corrected code                                      │  │
+│  │     - Retry (max 3 times)                                          │  │
+│  │  4. Return success or final error                                  │  │
+│  │                                                                      │  │
+│  │ Retry Logic:                                                        │  │
+│  │  Attempt 1 → Error → Analyze → Fix → Attempt 2 (+ 1s delay)       │  │
+│  │  Attempt 2 → Error → Analyze → Fix → Attempt 3 (+ 2s delay)       │  │
+│  │  Attempt 3 → Error → Failure (+ 3s delay)                         │  │
+│  │                                                                      │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                                                              │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │ TOOL EXECUTION INTERFACE                                            │  │
+│  │                                                                      │  │
+│  │ Standard response format:                                           │  │
+│  │ {                                                                   │  │
+│  │   "success": bool,                                                 │  │
+│  │   "output": str,                                                   │  │
+│  │   "error": str or None,                                            │  │
+│  │   "stderr": str or None,                                           │  │
+│  │   "metadata": {...}  (optional)                                    │  │
+│  │ }                                                                   │  │
+│  │                                                                      │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         DATA FLOW EXAMPLE                                    │
+│                                                                              │
+│  User: "Escribe código que busque archivos grandes"                        │
+│                                                                              │
+│  1. PLAN                                                                    │
+│     Input: "Escribe código que busque archivos grandes"                    │
+│     Output: ExecutionPlan(                                                 │
+│       steps=[                                                               │
+│         {action: "code_helper", params: {description: "..."}},            │
+│         {action: "executor", params: {code: "<generated>"}}               │
+│       ]                                                                     │
+│     )                                                                       │
+│                                                                              │
+│  2. EXECUTE - Step 1: code_helper                                          │
+│     Result: "import os\nfor f in glob.glob('...'):\n..."                  │
+│     Error: None                                                             │
+│                                                                              │
+│  3. EXECUTE - Step 2: executor                                             │
+│     Run attempt 1: ERROR - "NameError: name 'os' is not defined"          │
+│     → Go to CORRECT                                                         │
+│                                                                              │
+│  4. REVIEW                                                                  │
+│     Step 1: ✅ Valid                                                        │
+│     Step 2: ❌ Invalid (stderr="NameError...")                             │
+│                                                                              │
+│  5. CORRECT                                                                 │
+│     LLM Analysis: "Missing 'import os' at top"                            │
+│     Fixed Code: "import os\nimport glob\n..." (with os imported)          │
+│     Retry execution → SUCCESS                                               │
+│                                                                              │
+│  6. FINAL RESULT                                                            │
+│     {                                                                       │
+│       "status": "completed",                                               │
+│       "results": [                                                         │
+│         {tool: "code_helper", result: "import os..."},                    │
+│         {tool: "executor", result: "Found 3 large files..."}              │
+│       ]                                                                     │
+│     }                                                                       │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                            KEY STATISTICS                                    ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║ Files Created: 6                                                             ║
+║ Total Lines: 1,607                                                           ║
+║ Agentes Predefinidos: 4 (Entertainment, Coder, Research, System)           ║
+║ Max Retry Attempts: 3 per tool                                              ║
+║ Backoff Delays: 1s, 2s, 3s                                                 ║
+║ State Persistence: memory/blackboard.json                                   ║
+║ Thread Safety: RLock (all components)                                       ║
+║ LLM Model: gemini-2.5-flash (with thinking disabled)                        ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+

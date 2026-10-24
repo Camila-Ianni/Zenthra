@@ -10,3 +10,10 @@ bin_test
 # Archivos del sistema operativo host
 .DS_Store
 Thumbs.db
+
+# Python y artefactos temporales
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+*.zip

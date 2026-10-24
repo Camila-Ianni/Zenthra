@@ -1,0 +1,163 @@
+{
+  "title": "Evaluación de Viabilidad de Fine-Tuning - Fase 6",
+  "architecture_baseline": "Instrucciones de Sistema + RAG Segmentado + Herramientas de Mínimos Privilegios",
+  "global_verdict": "FINE-TUNING NO RECOMENDADO EN LA ETAPA ACTUAL. La especialización modular en contexto (In-Context Learning + RAG + Tool-Use determinista) cumple con el 100% de los criterios de aceptación, con costo financiero cero, sin riesgo de olvido catastrófico y con trazabilidad determinista.",
+  "agents": [
+    {
+      "agent_id": "agent_backend_specialist",
+      "specialty": "Backend & APIs",
+      "candidate_model": "Qwen3-Coder (qwen2.5-coder:1.5b / 7b)",
+      "in_context_score": 0.95,
+      "verdict": "NO JUSTIFICADO EN FASE ACTUAL",
+      "fine_tuning_justified": false,
+      "compute": {
+        "params_billions": 7.0,
+        "qlora_vram_gb": 10.0,
+        "cloud_cost_usd": 15.0,
+        "mac_mps_feasible": true,
+        "mac_hours": 18.0
+      },
+      "dataset": {
+        "min_pairs": 1500,
+        "recommended_pairs": 4000,
+        "curation_hours": 60.0
+      },
+      "risks": {
+        "catastrophic_forgetting": "Medio",
+        "maintenance_debt": "Alto (re-entrenar con cada actualización de framework)",
+        "security_poisoning": "Bajo"
+      },
+      "mitigation": "El modelo base con RAG segmentado de FastAPI/Pydantic y linter estático alcanza 95% de precisión sin riesgo de degradar su capacidad algorítmica."
+    },
+    {
+      "agent_id": "agent_cyber_specialist",
+      "specialty": "Ciberseguridad Defensiva",
+      "candidate_model": "DeepSeek-R1 (Distill 8B / 14B)",
+      "in_context_score": 0.94,
+      "verdict": "CONTRAINDICADO POR SEGURIDAD",
+      "fine_tuning_justified": false,
+      "compute": {
+        "params_billions": 8.0,
+        "qlora_vram_gb": 12.0,
+        "cloud_cost_usd": 18.0,
+        "mac_mps_feasible": true,
+        "mac_hours": 22.0
+      },
+      "dataset": {
+        "min_pairs": 2000,
+        "recommended_pairs": 5000,
+        "curation_hours": 80.0
+      },
+      "risks": {
+        "catastrophic_forgetting": "Alto (pérdida de alineación de seguridad)",
+        "maintenance_debt": "Crítico (nuevas vulnerabilidades CVE surgen a diario)",
+        "security_poisoning": "Crítico (ataques de envenenamiento en datos de entrenamiento)"
+      },
+      "mitigation": "Ajustar los pesos de un modelo de ciberseguridad arriesga eliminar los guardrails nativos contra explotación o generar falsos negativos en CVEs no presentes en el dataset. El enfoque SAST + RAG de OWASP/STRIDE garantiza auditorías deterministas."
+    },
+    {
+      "agent_id": "agent_kernel_specialist",
+      "specialty": "Kernel & Sistemas",
+      "candidate_model": "Kimi K2 (Moonshot / Local C-Expert)",
+      "in_context_score": 0.92,
+      "verdict": "NO JUSTIFICADO / ALTO RIESGO",
+      "fine_tuning_justified": false,
+      "compute": {
+        "params_billions": 8.0,
+        "qlora_vram_gb": 12.0,
+        "cloud_cost_usd": 20.0,
+        "mac_mps_feasible": true,
+        "mac_hours": 24.0
+      },
+      "dataset": {
+        "min_pairs": 2500,
+        "recommended_pairs": 6000,
+        "curation_hours": 120.0
+      },
+      "risks": {
+        "catastrophic_forgetting": "Medio",
+        "maintenance_debt": "Medio",
+        "security_poisoning": "Alto"
+      },
+      "mitigation": "En programación de kernel x86 (bare metal, GDT/IDT, #PF fixup), una alucinación de 1 byte provoca un triple fault o corrupción de memoria física. El validador Multiboot, auditor de fixup y compilación en sandbox ofrecen garantías matemáticas que un modelo fine-tuned no puede asegurar por sí solo."
+    },
+    {
+      "agent_id": "agent_data_specialist",
+      "specialty": "Datos & Métricas",
+      "candidate_model": "Gemma 4 (8.0B)",
+      "in_context_score": 0.98,
+      "verdict": "INNECESARIO",
+      "fine_tuning_justified": false,
+      "compute": {
+        "params_billions": 8.0,
+        "qlora_vram_gb": 12.0,
+        "cloud_cost_usd": 18.0,
+        "mac_mps_feasible": true,
+        "mac_hours": 20.0
+      },
+      "dataset": {
+        "min_pairs": 1000,
+        "recommended_pairs": 3000,
+        "curation_hours": 40.0
+      },
+      "risks": {
+        "catastrophic_forgetting": "Bajo",
+        "maintenance_debt": "Bajo",
+        "security_poisoning": "Bajo"
+      },
+      "mitigation": "Las herramientas exactas de cálculo (`data_tools.py`) procesan estadísticas y SQL de forma determinista mediante código Python sin error estocástico. El fine-tuning no mejora el cálculo numérico."
+    },
+    {
+      "agent_id": "agent_creative_specialist",
+      "specialty": "Creativo / UI",
+      "candidate_model": "Mistral Small 4",
+      "in_context_score": 0.96,
+      "verdict": "OPCIONAL FUTURO (ESTILO ÚNICO)",
+      "fine_tuning_justified": false,
+      "compute": {
+        "params_billions": 8.0,
+        "qlora_vram_gb": 12.0,
+        "cloud_cost_usd": 14.0,
+        "mac_mps_feasible": true,
+        "mac_hours": 16.0
+      },
+      "dataset": {
+        "min_pairs": 800,
+        "recommended_pairs": 2000,
+        "curation_hours": 35.0
+      },
+      "risks": {
+        "catastrophic_forgetting": "Bajo",
+        "maintenance_debt": "Medio (cambios en guías de diseño)",
+        "security_poisoning": "Bajo"
+      },
+      "mitigation": "RAG inyecta las especificaciones exactas de Glassmorphism ARGB y paleta índigo. Un fine-tuning solo se evaluaría si se diseñaran cientos de componentes CSS propietarios que requieran tokenización especializada."
+    },
+    {
+      "agent_id": "agent_automation_specialist",
+      "specialty": "Automatización & Workflows",
+      "candidate_model": "GLM-4.5-Air",
+      "in_context_score": 0.95,
+      "verdict": "NO JUSTIFICADO",
+      "fine_tuning_justified": false,
+      "compute": {
+        "params_billions": 9.0,
+        "qlora_vram_gb": 14.0,
+        "cloud_cost_usd": 22.0,
+        "mac_mps_feasible": true,
+        "mac_hours": 26.0
+      },
+      "dataset": {
+        "min_pairs": 1500,
+        "recommended_pairs": 4000,
+        "curation_hours": 50.0
+      },
+      "risks": {
+        "catastrophic_forgetting": "Medio",
+        "maintenance_debt": "Medio",
+        "security_poisoning": "Alto"
+      },
+      "mitigation": "La seguridad y confiabilidad en workflows proviene de la compuerta humana y el motor de ejecución (`actions/automation_tools.py`), no de alterar los pesos del modelo."
+    }
+  ]
+}

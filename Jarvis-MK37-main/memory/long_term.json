@@ -1,0 +1,22 @@
+{
+  "identity": {},
+  "preferences": {
+    "language": {
+      "value": "Spanish",
+      "updated": "2026-04-23"
+    },
+    "coding_constraints": {
+      "value": "Do not use Copilot or make requests to GitHub.",
+      "updated": "2026-04-24"
+    }
+  },
+  "projects": {},
+  "relationships": {},
+  "wishes": {
+    "opus_coding_preference": {
+      "value": "User wants model to have Opus 4.6 coding abilities",
+      "updated": "2026-04-24"
+    }
+  },
+  "notes": {}
+}

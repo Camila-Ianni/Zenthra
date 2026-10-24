@@ -1,0 +1,15 @@
+{
+  "agent_id": "agent_test_safety",
+  "decisions": [
+    {
+      "id": "dec_1792807984079",
+      "timestamp": 1792807984.079215,
+      "expires_at": 1795399984.079215,
+      "tool_used": "none",
+      "approved": true,
+      "summary": "Se procesó la clave [REDACTED_GOOGLE_KEY] y token [REDACTED_GITHUB_TOKEN]"
+    }
+  ],
+  "context_notes": {},
+  "last_updated": 1792807984.079218
+}

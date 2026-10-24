@@ -1,0 +1,23 @@
+{
+  "agent_id": "agent_automation_specialist",
+  "decisions": [
+    {
+      "id": "dec_1792807053866",
+      "timestamp": 1792807053.866466,
+      "expires_at": 1795399053.866466,
+      "tool_used": "inference",
+      "approved": true,
+      "summary": "Tarea: Generar los pasos secuenciales para desplegar un microservic -> Respuesta del usuario:\nPara desplegar un microservicio, se d"
+    },
+    {
+      "id": "dec_1792807481287",
+      "timestamp": 1792807481.287982,
+      "expires_at": 1795399481.287982,
+      "tool_used": "inference",
+      "approved": true,
+      "summary": "Tarea: Generar los pasos secuenciales para desplegar un microservicio. -> Respuesta del usuario:\nPara desplegar un microservicio, primero se deben definir los pasos secuencia"
+    }
+  ],
+  "context_notes": {},
+  "last_updated": 1792807481.2879958
+}

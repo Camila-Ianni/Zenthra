@@ -1,0 +1,331 @@
+{
+  "version": "1.0",
+  "description": "Centralized tool definitions for JARVIS-MK37 Orchestrator",
+  "tools": [
+    {
+      "id": "open_app",
+      "name": "Open Application",
+      "category": "system",
+      "description": "Abre una aplicaci\u00f3n en el sistema",
+      "module": "actions.open_app",
+      "function": "open_app",
+      "parameters": {
+        "app_name": {
+          "type": "string",
+          "description": "Nombre de la aplicaci\u00f3n a abrir",
+          "required": true
+        }
+      },
+      "returns": "str (success or error message)",
+      "retry_on_failure": true,
+      "max_retries": 3,
+      "timeout_seconds": 30,
+      "requires_healing": true
+    },
+    {
+      "id": "code_helper",
+      "name": "Code Generation & Fix",
+      "category": "coder",
+      "description": "Genera, arregla u optimiza c\u00f3digo",
+      "module": "actions.code_helper",
+      "function": "code_helper",
+      "parameters": {
+        "action": {
+          "type": "string",
+          "description": "write, fix, explain, optimize",
+          "required": true,
+          "enum": [
+            "write",
+            "fix",
+            "explain",
+            "optimize"
+          ]
+        },
+        "code": {
+          "type": "string",
+          "description": "C\u00f3digo a procesar (required para fix/explain/optimize)",
+          "required": false
+        },
+        "description": {
+          "type": "string",
+          "description": "Descripci\u00f3n de qu\u00e9 generar (required para write)",
+          "required": false
+        },
+        "language": {
+          "type": "string",
+          "description": "Lenguaje de programaci\u00f3n (python, javascript, etc)",
+          "required": false,
+          "default": "python"
+        }
+      },
+      "returns": "str (generated/fixed code or explanation)",
+      "retry_on_failure": true,
+      "max_retries": 3,
+      "timeout_seconds": 120,
+      "requires_healing": true
+    },
+    {
+      "id": "executor",
+      "name": "Code Executor",
+      "category": "coder",
+      "description": "Ejecuta c\u00f3digo Python o comandos shell",
+      "module": "actions.executor_healing",
+      "function": "run_code_with_healing",
+      "parameters": {
+        "code": {
+          "type": "string",
+          "description": "C\u00f3digo Python a ejecutar",
+          "required": true
+        },
+        "description": {
+          "type": "string",
+          "description": "Descripci\u00f3n de qu\u00e9 hace el c\u00f3digo",
+          "required": false
+        }
+      },
+      "returns": "dict (success, output, metadata)",
+      "retry_on_failure": true,
+      "max_retries": 3,
+      "timeout_seconds": 120,
+      "requires_healing": true
+    },
+    {
+      "id": "web_search",
+      "name": "Web Search",
+      "category": "research",
+      "description": "Busca informaci\u00f3n en internet",
+      "module": "actions.web_search",
+      "function": "web_search",
+      "parameters": {
+        "query": {
+          "type": "string",
+          "description": "B\u00fasqueda a realizar",
+          "required": true
+        },
+        "max_results": {
+          "type": "integer",
+          "description": "M\u00e1ximo n\u00famero de resultados",
+          "required": false,
+          "default": 5
+        }
+      },
+      "returns": "list of search results",
+      "retry_on_failure": true,
+      "max_retries": 2,
+      "timeout_seconds": 60,
+      "requires_healing": false
+    },
+    {
+      "id": "weather_report",
+      "name": "Weather Report",
+      "category": "research",
+      "description": "Obtiene informaci\u00f3n del clima",
+      "module": "actions.weather_report",
+      "function": "weather_action",
+      "parameters": {
+        "location": {
+          "type": "string",
+          "description": "Ciudad o ubicaci\u00f3n",
+          "required": true
+        }
+      },
+      "returns": "dict (weather information)",
+      "retry_on_failure": true,
+      "max_retries": 2,
+      "timeout_seconds": 30,
+      "requires_healing": false
+    },
+    {
+      "id": "screenshot",
+      "name": "Screenshot",
+      "category": "system",
+      "description": "Toma una captura de pantalla",
+      "module": "actions.screen_processor",
+      "function": "screen_process",
+      "parameters": {},
+      "returns": "str (path to screenshot file)",
+      "retry_on_failure": false,
+      "max_retries": 1,
+      "timeout_seconds": 10,
+      "requires_healing": false
+    },
+    {
+      "id": "file_controller",
+      "name": "File Operations",
+      "category": "system",
+      "description": "Leer, escribir y gestionar archivos",
+      "module": "actions.file_controller",
+      "function": "file_controller",
+      "parameters": {
+        "action": {
+          "type": "string",
+          "description": "read, write, list, delete",
+          "required": true,
+          "enum": [
+            "read",
+            "write",
+            "list",
+            "delete"
+          ]
+        },
+        "path": {
+          "type": "string",
+          "description": "Ruta del archivo o carpeta",
+          "required": true
+        },
+        "content": {
+          "type": "string",
+          "description": "Contenido a escribir (required para write)",
+          "required": false
+        }
+      },
+      "returns": "str (file content or operation result)",
+      "retry_on_failure": true,
+      "max_retries": 2,
+      "timeout_seconds": 30,
+      "requires_healing": false
+    },
+    {
+      "id": "youtube_video",
+      "name": "YouTube Operations",
+      "category": "entertainment",
+      "description": "Reproduce videos de YouTube",
+      "module": "actions.youtube_video",
+      "function": "youtube_video",
+      "parameters": {
+        "query": {
+          "type": "string",
+          "description": "B\u00fasqueda de video",
+          "required": true
+        }
+      },
+      "returns": "str (video title and status)",
+      "retry_on_failure": true,
+      "max_retries": 2,
+      "timeout_seconds": 30,
+      "requires_healing": false
+    }
+  ],
+  "categories": {
+    "system": "Sistema operativo, archivos, pantalla",
+    "coder": "Generaci\u00f3n y ejecuci\u00f3n de c\u00f3digo",
+    "research": "B\u00fasqueda y an\u00e1lisis de informaci\u00f3n",
+    "entertainment": "M\u00fasica, videos, entretenimiento",
+    "communication": "Slack, email, mensajes",
+    "productivity": "Documentos, hojas de c\u00e1lculo"
+  },
+  "mcp_tools": [
+    {
+      "id": "mcp_slack",
+      "name": "Slack Operations",
+      "category": "communication",
+      "description": "Env\u00eda mensajes a Slack, lee canales",
+      "mcp_server": "slack",
+      "capabilities": [
+        "send_message",
+        "read_messages",
+        "create_channel"
+      ],
+      "requires_auth": true,
+      "auth_type": "token"
+    },
+    {
+      "id": "mcp_drive",
+      "name": "Google Drive Operations",
+      "category": "productivity",
+      "description": "Lee, escribe, lista archivos en Google Drive",
+      "mcp_server": "google-drive",
+      "capabilities": [
+        "list_files",
+        "read_file",
+        "write_file",
+        "create_folder"
+      ],
+      "requires_auth": true,
+      "auth_type": "oauth"
+    },
+    {
+      "id": "mcp_notion",
+      "name": "Notion Operations",
+      "category": "productivity",
+      "description": "Interact\u00faa con bases de datos de Notion",
+      "mcp_server": "notion",
+      "capabilities": [
+        "query_database",
+        "create_page",
+        "update_page"
+      ],
+      "requires_auth": true,
+      "auth_type": "token"
+    },
+    {
+      "id": "mcp_vscode",
+      "name": "VS Code Editor",
+      "category": "coder",
+      "description": "Abre archivos en VS Code, edita c\u00f3digo",
+      "mcp_server": "vscode",
+      "capabilities": [
+        "open_file",
+        "edit_file",
+        "run_terminal",
+        "execute_extension"
+      ],
+      "requires_auth": false,
+      "auth_type": "local"
+    },
+    {
+      "id": "mcp_git",
+      "name": "Git Operations",
+      "category": "coder",
+      "description": "Git commands: commit, push, pull, status",
+      "mcp_server": "git",
+      "capabilities": [
+        "commit",
+        "push",
+        "pull",
+        "status",
+        "branch"
+      ],
+      "requires_auth": false,
+      "auth_type": "local"
+    },
+    {
+      "id": "mcp_github",
+      "name": "GitHub API",
+      "category": "coder",
+      "description": "Interact\u00faa con GitHub: PRs, issues, repos",
+      "mcp_server": "github",
+      "capabilities": [
+        "list_repos",
+        "create_issue",
+        "create_pr",
+        "get_repo_info"
+      ],
+      "requires_auth": true,
+      "auth_type": "token"
+    }
+  ],
+  "presets": {
+    "entertainment_bundle": [
+      "spotify_player",
+      "youtube_video",
+      "open_app"
+    ],
+    "coder_bundle": [
+      "code_helper",
+      "executor",
+      "file_controller",
+      "screenshot",
+      "mcp_vscode",
+      "mcp_git",
+      "mcp_github"
+    ],
+    "research_bundle": [
+      "web_search",
+      "weather_report",
+      "mcp_drive",
+      "mcp_notion"
+    ],
+    "full_suite": "all"
+  }
+}

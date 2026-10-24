@@ -1,0 +1,55 @@
+{
+  "agent_id": "agent_data_specialist",
+  "decisions": [
+    {
+      "id": "dec_1792807034354",
+      "timestamp": 1792807034.3547919,
+      "expires_at": 1795399034.354793,
+      "tool_used": "inference",
+      "approved": true,
+      "summary": "Tarea: Definir la diferencia entre media y mediana con datos asimét -> La media y la mediana son dos medidas de tendencia central, "
+    },
+    {
+      "id": "dec_1792807133304",
+      "timestamp": 1792807133.3040829,
+      "expires_at": 1795399133.3040829,
+      "tool_used": "inference",
+      "approved": true,
+      "summary": "Tarea: Explicar en 2 líneas qué métrica representa la mediana frent -> **Mediana:** Es la métrica de tendencia central más robusta,"
+    },
+    {
+      "id": "dec_1792807227355",
+      "timestamp": 1792807227.3559911,
+      "expires_at": 1795399227.3559911,
+      "tool_used": "inference",
+      "approved": true,
+      "summary": "Tarea: Explicar en 2 líneas qué métrica representa la mediana frente al promedio en datos con outliers. -> La **mediana** representa el valor central de un conjunto de datos ordenados, siendo robusta porque "
+    },
+    {
+      "id": "dec_1792807425691",
+      "timestamp": 1792807425.691165,
+      "expires_at": 1795399425.691166,
+      "tool_used": "inference",
+      "approved": true,
+      "summary": "Tarea: Definir la diferencia entre media y mediana con datos asimétricos. -> La diferencia entre la media y la mediana en datos asimétricos se refiere al desequilibrio o la pres"
+    },
+    {
+      "id": "dec_1792807566726",
+      "timestamp": 1792807566.7265248,
+      "expires_at": 1795399566.7265248,
+      "tool_used": "inference",
+      "approved": true,
+      "summary": "Tarea: Explicar en 2 líneas qué métrica representa la mediana frente al promedio en datos con outliers. -> La **mediana** es más robusta porque solo depende del valor central del dataset, ignorando el impact"
+    },
+    {
+      "id": "dec_1792807910073",
+      "timestamp": 1792807910.073205,
+      "expires_at": 1795399910.073205,
+      "tool_used": "inference",
+      "approved": true,
+      "summary": "Tarea: Explicar en 2 líneas qué métrica representa la mediana frente al promedio en datos con outliers. -> La mediana es más robusta que el promedio porque representa el valor central (el percentil 50), sien"
+    }
+  ],
+  "context_notes": {},
+  "last_updated": 1792807910.07321
+}

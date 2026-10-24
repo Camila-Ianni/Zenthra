@@ -1,0 +1,23 @@
+{
+  "agent_id": "agent_kernel_specialist",
+  "decisions": [
+    {
+      "id": "dec_1792806966114",
+      "timestamp": 1792806966.1145442,
+      "expires_at": 1795398966.1145442,
+      "tool_used": "inference",
+      "approved": true,
+      "summary": "Tarea: Explicar por qué redirigir EIP a fixup en Page Fault #PF evi -> En la práctica, el código de la página de página de página d"
+    },
+    {
+      "id": "dec_1792807361635",
+      "timestamp": 1792807361.635743,
+      "expires_at": 1795399361.635743,
+      "tool_used": "inference",
+      "approved": true,
+      "summary": "Tarea: Explicar por qué redirigir EIP a fixup en Page Fault #PF evita un bucle infinito. -> Explicar por qué redirigir EIP a fixup en Page Fault #PF evita un bucle infinito.\nEn el contexto de "
+    }
+  ],
+  "context_notes": {},
+  "last_updated": 1792807361.6357682
+}

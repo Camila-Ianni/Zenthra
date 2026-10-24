@@ -1,0 +1,181 @@
+{
+  "version": "1.0",
+  "description": "MCP (Model Context Protocol) Provider Configurations",
+  "providers": {
+    "slack": {
+      "name": "Slack",
+      "type": "mcp",
+      "enabled": false,
+      "endpoint": "stdio",
+      "command": "npx",
+      "args": ["@anthropic-ai/mcp-server-slack"],
+      "env": {
+        "SLACK_BOT_TOKEN": "${SLACK_BOT_TOKEN}",
+        "SLACK_USER_TOKEN": "${SLACK_USER_TOKEN}"
+      },
+      "capabilities": ["send_message", "read_messages", "create_channel", "list_channels"],
+      "description": "Send and receive messages from Slack channels",
+      "docs": "https://github.com/anthropics/mcp-servers/tree/main/src/slack",
+      "setup_instructions": "1. Create Slack App at api.slack.com\n2. Get bot and user tokens\n3. Set SLACK_BOT_TOKEN and SLACK_USER_TOKEN env vars"
+    },
+    "google-drive": {
+      "name": "Google Drive",
+      "type": "mcp",
+      "enabled": false,
+      "endpoint": "stdio",
+      "command": "npx",
+      "args": ["@anthropic-ai/mcp-server-google-drive"],
+      "env": {
+        "GOOGLE_APPLICATION_CREDENTIALS": "${GOOGLE_APPLICATION_CREDENTIALS}"
+      },
+      "capabilities": ["list_files", "read_file", "write_file", "create_folder", "share_file"],
+      "description": "Read, write, and manage files on Google Drive",
+      "docs": "https://github.com/anthropics/mcp-servers/tree/main/src/google-drive",
+      "setup_instructions": "1. Create service account on Google Cloud Console\n2. Download credentials JSON\n3. Set GOOGLE_APPLICATION_CREDENTIALS path"
+    },
+    "notion": {
+      "name": "Notion",
+      "type": "mcp",
+      "enabled": false,
+      "endpoint": "stdio",
+      "command": "npx",
+      "args": ["@anthropic-ai/mcp-server-notion"],
+      "env": {
+        "NOTION_API_KEY": "${NOTION_API_KEY}"
+      },
+      "capabilities": ["query_database", "create_page", "update_page", "delete_page", "append_block"],
+      "description": "Interact with Notion databases and pages",
+      "docs": "https://github.com/anthropics/mcp-servers/tree/main/src/notion",
+      "setup_instructions": "1. Create Notion integration at notion.so/my-integrations\n2. Copy API key\n3. Set NOTION_API_KEY env var"
+    },
+    "vscode": {
+      "name": "VS Code",
+      "type": "mcp",
+      "enabled": false,
+      "endpoint": "stdio",
+      "command": "npx",
+      "args": ["@anthropic-ai/mcp-server-vscode"],
+      "env": {},
+      "capabilities": ["open_file", "edit_file", "run_terminal", "execute_extension", "list_extensions"],
+      "description": "Control VS Code editor locally",
+      "docs": "https://github.com/anthropics/mcp-servers/tree/main/src/vscode",
+      "setup_instructions": "1. Install VS Code\n2. Enable MCP support (local only)\n3. No auth required"
+    },
+    "git": {
+      "name": "Git",
+      "type": "mcp",
+      "enabled": false,
+      "endpoint": "stdio",
+      "command": "npx",
+      "args": ["@anthropic-ai/mcp-server-git"],
+      "env": {},
+      "capabilities": ["commit", "push", "pull", "status", "branch", "log", "diff"],
+      "description": "Execute Git commands",
+      "docs": "https://github.com/anthropics/mcp-servers/tree/main/src/git",
+      "setup_instructions": "1. Install Git\n2. Configure user.name and user.email\n3. No auth required"
+    },
+    "github": {
+      "name": "GitHub",
+      "type": "mcp",
+      "enabled": false,
+      "endpoint": "stdio",
+      "command": "npx",
+      "args": ["@anthropic-ai/mcp-server-github"],
+      "env": {
+        "GITHUB_TOKEN": "${GITHUB_TOKEN}"
+      },
+      "capabilities": ["list_repos", "create_issue", "create_pr", "get_repo_info", "list_issues", "close_issue"],
+      "description": "Interact with GitHub repositories",
+      "docs": "https://github.com/anthropics/mcp-servers/tree/main/src/github",
+      "setup_instructions": "1. Create GitHub personal access token\n2. Set GITHUB_TOKEN env var\n3. Token needs: repo, workflow, user scopes"
+    },
+    "postgres": {
+      "name": "PostgreSQL",
+      "type": "mcp",
+      "enabled": false,
+      "endpoint": "stdio",
+      "command": "npx",
+      "args": ["@anthropic-ai/mcp-server-postgres"],
+      "env": {
+        "DATABASE_URL": "${DATABASE_URL}"
+      },
+      "capabilities": ["query", "insert", "update", "delete", "schema_introspection"],
+      "description": "Query and manage PostgreSQL databases",
+      "docs": "https://github.com/anthropics/mcp-servers/tree/main/src/postgres",
+      "setup_instructions": "Set DATABASE_URL with connection string: postgresql://user:pass@host/db"
+    },
+    "sqlite": {
+      "name": "SQLite",
+      "type": "mcp",
+      "enabled": false,
+      "endpoint": "stdio",
+      "command": "npx",
+      "args": ["@anthropic-ai/mcp-server-sqlite"],
+      "env": {
+        "SQLITE_PATH": "${SQLITE_PATH}"
+      },
+      "capabilities": ["query", "insert", "update", "delete", "schema_introspection"],
+      "description": "Query and manage SQLite databases",
+      "docs": "https://github.com/anthropics/mcp-servers/tree/main/src/sqlite",
+      "setup_instructions": "Set SQLITE_PATH to your database file path"
+    },
+    "filesystem": {
+      "name": "Filesystem",
+      "type": "mcp",
+      "enabled": true,
+      "endpoint": "stdio",
+      "command": "npx",
+      "args": ["@anthropic-ai/mcp-server-filesystem"],
+      "env": {
+        "ALLOWED_PATHS": "${HOME}/Desktop:${HOME}/Documents:${HOME}/Downloads"
+      },
+      "capabilities": ["list_directory", "read_file", "write_file", "move_file", "delete_file"],
+      "description": "Safe filesystem access with allowed paths",
+      "docs": "https://github.com/anthropics/mcp-servers/tree/main/src/filesystem",
+      "setup_instructions": "Define ALLOWED_PATHS env var with colon-separated list"
+    }
+  },
+  "authentication": {
+    "token_providers": {
+      "env_vars": {
+        "description": "Read tokens from environment variables",
+        "precedence": 1
+      },
+      "config_file": {
+        "description": "Read tokens from .env file",
+        "path": ".env",
+        "precedence": 2
+      },
+      "keychain": {
+        "description": "macOS Keychain (future)",
+        "precedence": 3
+      }
+    }
+  },
+  "groups": {
+    "development": {
+      "description": "Tools for development and coding",
+      "providers": ["vscode", "git", "github", "sqlite"]
+    },
+    "productivity": {
+      "description": "Tools for productivity and collaboration",
+      "providers": ["slack", "google-drive", "notion"]
+    },
+    "data": {
+      "description": "Tools for database access",
+      "providers": ["postgres", "sqlite"]
+    },
+    "all": {
+      "description": "All available providers",
+      "providers": "all"
+    }
+  },
+  "startup_config": {
+    "auto_enable": ["filesystem"],
+    "optional": ["slack", "google-drive", "notion", "vscode", "git", "github", "postgres", "sqlite"],
+    "lazy_load": true,
+    "connection_timeout": 5000,
+    "retry_on_failure": true,
+    "max_retries": 3
+  }
+}

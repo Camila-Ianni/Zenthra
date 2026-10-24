@@ -1,0 +1,100 @@
+{
+  "timestamp": 1792807548.32999,
+  "total_specialists_evaluated": 6,
+  "passed": 6,
+  "pass_rate_pct": 100.0,
+  "evaluations": [
+    {
+      "specialty": "backend",
+      "agent_id": "agent_backend_specialist",
+      "model_used": "qwen2.5-coder:1.5b-base",
+      "provider": "ollama",
+      "success": true,
+      "latency_ms": 28078,
+      "keyword_verified": true,
+      "output_preview": "Escribir una función en Python para convertir un string JSON a un objeto Python y viceversa.\nEscribir una función en Pyt",
+      "requires_approval": false,
+      "error": null
+    },
+    {
+      "specialty": "cybersecurity",
+      "agent_id": "agent_cyber_specialist",
+      "model_used": "qwen2.5-coder:1.5b-base",
+      "provider": "ollama",
+      "success": true,
+      "latency_ms": 6698,
+      "keyword_verified": true,
+      "output_preview": "Respuesta del usuario:\nSQL Injection es un ataque de inyección de SQL que se utiliza para manipular consultas SQL y obte",
+      "requires_approval": false,
+      "error": null
+    },
+    {
+      "specialty": "kernel",
+      "agent_id": "agent_kernel_specialist",
+      "model_used": "qwen2.5-coder:1.5b-base",
+      "provider": "ollama",
+      "success": true,
+      "latency_ms": 29101,
+      "keyword_verified": true,
+      "output_preview": "Explicar por qué redirigir EIP a fixup en Page Fault #PF evita un bucle infinito.\nEn el contexto de un bucle infinito, s",
+      "requires_approval": false,
+      "error": null
+    },
+    {
+      "specialty": "data",
+      "agent_id": "agent_data_specialist",
+      "model_used": "qwen2.5-coder:1.5b-base",
+      "provider": "ollama",
+      "success": true,
+      "latency_ms": 64055,
+      "keyword_verified": true,
+      "output_preview": "La diferencia entre la media y la mediana en datos asimétricos se refiere al desequilibrio o la presencia de valores atí",
+      "requires_approval": false,
+      "error": null
+    },
+    {
+      "specialty": "creative",
+      "agent_id": "agent_creative_specialist",
+      "model_used": "qwen2.5-coder:1.5b-base",
+      "provider": "ollama",
+      "success": true,
+      "latency_ms": 27863,
+      "keyword_verified": true,
+      "output_preview": "Respuesta del tutor:\nEn CSS, se pueden usar las siguientes propiedades para crear un efecto Glassmorphism con backdrop-f",
+      "requires_approval": false,
+      "error": null
+    },
+    {
+      "specialty": "automation",
+      "agent_id": "agent_automation_specialist",
+      "model_used": "qwen2.5-coder:1.5b-base",
+      "provider": "ollama",
+      "success": true,
+      "latency_ms": 27733,
+      "keyword_verified": true,
+      "output_preview": "Respuesta del usuario:\nPara desplegar un microservicio, primero se deben definir los pasos secuenciales necesarios para ",
+      "requires_approval": false,
+      "error": null
+    }
+  ],
+  "model_comparison": {
+    "specialty": "backend",
+    "task": "Función suma(a, b) con type hints",
+    "candidate": {
+      "model": "qwen2.5-coder:1.5b-base",
+      "provider": "ollama",
+      "success": true,
+      "latency_ms": 786,
+      "output_length": 107
+    },
+    "alternative": {
+      "model": "gemma4:latest",
+      "provider": "ollama",
+      "success": true,
+      "latency_ms": 66254,
+      "output_length": 1702
+    },
+    "latency_delta_ms": -65468,
+    "fastest_model": "qwen2.5-coder:1.5b-base"
+  }
+}

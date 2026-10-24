@@ -1,0 +1,241 @@
+{
+  "version": "1.0",
+  "description": "Model Provider Configuration - Free tier models for code generation",
+  "last_updated": "2026-04-25",
+  
+  "providers": {
+    "openrouter": {
+      "enabled": true,
+      "type": "http",
+      "base_url": "https://openrouter.ai/api/v1",
+      "auth_header": "Authorization",
+      "api_key_env": "OPENROUTER_API_KEY",
+      "api_key_fallback": null,
+      "description": "OpenRouter - Free tier models with fallback support",
+      "models": {
+        "deepseek_v4_free": {
+          "id": "deepseek/deepseek-v4:free",
+          "name": "DeepSeek V4 (Free)",
+          "category": "thinking",
+          "cost_tier": "free",
+          "max_tokens": 8000,
+          "supports_thinking": true,
+          "best_for": ["architecture", "complex_logic", "refactoring"],
+          "latency_ms": 3000,
+          "enabled": true
+        },
+        "qwen3_coder_free": {
+          "id": "qwen/qwen3-coder:free",
+          "name": "Qwen3-Coder (Free)",
+          "category": "coding",
+          "cost_tier": "free",
+          "max_tokens": 4000,
+          "supports_thinking": false,
+          "best_for": ["quick_implementation", "debugging", "snippets"],
+          "latency_ms": 1500,
+          "enabled": true
+        }
+      }
+    },
+    
+    "ollama": {
+      "enabled": true,
+      "type": "local",
+      "base_url": "http://localhost:11434/api",
+      "auth_header": null,
+      "api_key_env": null,
+      "api_key_fallback": null,
+      "description": "Ollama - Local models running on MacBook Pro",
+      "models": {
+        "qwen3_5_coder_local": {
+          "id": "qwen3.5-coder:32b",
+          "name": "Qwen3.5-Coder 32B (Local)",
+          "category": "coding",
+          "cost_tier": "free",
+          "max_tokens": 16000,
+          "supports_thinking": false,
+          "best_for": ["sensitive_code", "large_context", "offline"],
+          "latency_ms": 5000,
+          "enabled": true,
+          "requires_download": true,
+          "installation_cmd": "ollama pull qwen3.5-coder:32b"
+        },
+        "deepseek_local": {
+          "id": "deepseek-coder:7b",
+          "name": "DeepSeek Coder 7B (Local)",
+          "category": "coding",
+          "cost_tier": "free",
+          "max_tokens": 8000,
+          "supports_thinking": false,
+          "best_for": ["lightweight_tasks", "edge_inference"],
+          "latency_ms": 2000,
+          "enabled": false,
+          "requires_download": true,
+          "installation_cmd": "ollama pull deepseek-coder:7b"
+        }
+      }
+    },
+    
+    "zhipu_ai": {
+      "enabled": true,
+      "type": "http",
+      "base_url": "https://open.bigmodel.cn/api/paas/v4",
+      "auth_header": "Authorization",
+      "api_key_env": "ZHIPU_API_KEY",
+      "api_key_fallback": null,
+      "description": "Zhipu AI - GLM models with free tier access",
+      "models": {
+        "glm5_code": {
+          "id": "glm-5-code",
+          "name": "GLM-5-Code",
+          "category": "optimization",
+          "cost_tier": "free",
+          "max_tokens": 8000,
+          "supports_thinking": false,
+          "best_for": ["optimization", "refactoring", "code_review"],
+          "latency_ms": 2500,
+          "enabled": false,
+          "requires_api_key": true
+        }
+      }
+    },
+    
+    "gemini": {
+      "enabled": true,
+      "type": "http",
+      "base_url": "https://generativelanguage.googleapis.com/v1beta",
+      "auth_header": "x-goog-api-key",
+      "api_key_env": "GOOGLE_API_KEY",
+      "api_key_fallback": null,
+      "description": "Google Gemini - Fallback model for critical operations",
+      "models": {
+        "gemini_flash_2_5": {
+          "id": "gemini-2.5-flash",
+          "name": "Gemini 2.5 Flash",
+          "category": "fallback",
+          "cost_tier": "free",
+          "max_tokens": 8000,
+          "supports_thinking": false,
+          "best_for": ["fallback", "general_purpose"],
+          "latency_ms": 1500,
+          "enabled": true
+        }
+      }
+    }
+  },
+
+  "routing_rules": {
+    "architecture_planning": {
+      "primary": "deepseek/deepseek-v4:free",
+      "secondary": "qwen/qwen3-coder:free",
+      "tertiary": "gemini-2.5-flash",
+      "fallback": "http://localhost:11434/api",
+      "description": "Complex architecture and design tasks",
+      "complexity_threshold": 0.8
+    },
+    "quick_implementation": {
+      "primary": "qwen/qwen3-coder:free",
+      "secondary": "qwen3.5-coder:32b",
+      "tertiary": "gemini-2.5-flash",
+      "fallback": "http://localhost:11434/api",
+      "description": "Fast code generation for simple tasks",
+      "complexity_threshold": 0.4
+    },
+    "optimization_refactoring": {
+      "primary": "glm-5-code",
+      "secondary": "deepseek/deepseek-v4:free",
+      "tertiary": "gemini-2.5-flash",
+      "fallback": "http://localhost:11434/api",
+      "description": "Code optimization and refactoring",
+      "complexity_threshold": 0.6
+    },
+    "sensitive_operations": {
+      "primary": "qwen3.5-coder:32b",
+      "secondary": "deepseek-coder:7b",
+      "tertiary": "gemini-2.5-flash",
+      "fallback": null,
+      "description": "Sensitive data processing (local only)",
+      "complexity_threshold": 0.5
+    },
+    "fallback_default": {
+      "primary": "gemini-2.5-flash",
+      "secondary": "qwen/qwen3-coder:free",
+      "tertiary": "http://localhost:11434/api",
+      "fallback": null,
+      "description": "Default fallback routing",
+      "complexity_threshold": 0.0
+    }
+  },
+
+  "default_settings": {
+    "default_provider": "openrouter",
+    "fallback_to_local": true,
+    "fallback_to_gemini": true,
+    "thinking_enabled": true,
+    "max_context_tokens": 8000,
+    "min_confidence_threshold": 0.7,
+    "timeout_seconds": 30,
+    "retry_attempts": 3,
+    "retry_delay_ms": 500,
+    "log_model_usage": true,
+    "track_latency": true,
+    "privacy_mode": true,
+    "sanitize_secrets": true
+  },
+
+  "language_specific": {
+    "java": {
+      "preferred_models": ["deepseek/deepseek-v4:free", "glm-5-code"],
+      "complexity_multiplier": 1.2,
+      "context_priority": "high"
+    },
+    "php": {
+      "preferred_models": ["qwen/qwen3-coder:free", "gemini-2.5-flash"],
+      "complexity_multiplier": 1.0,
+      "context_priority": "medium"
+    },
+    "go": {
+      "preferred_models": ["deepseek/deepseek-v4:free", "qwen3.5-coder:32b"],
+      "complexity_multiplier": 1.1,
+      "context_priority": "high"
+    },
+    "python": {
+      "preferred_models": ["qwen/qwen3-coder:free", "deepseek/deepseek-v4:free"],
+      "complexity_multiplier": 0.9,
+      "context_priority": "medium"
+    },
+    "javascript": {
+      "preferred_models": ["qwen/qwen3-coder:free", "gemini-2.5-flash"],
+      "complexity_multiplier": 0.8,
+      "context_priority": "low"
+    },
+    "typescript": {
+      "preferred_models": ["qwen/qwen3-coder:free", "deepseek/deepseek-v4:free"],
+      "complexity_multiplier": 1.0,
+      "context_priority": "medium"
+    }
+  },
+
+  "health_checks": {
+    "openrouter": {
+      "endpoint": "https://openrouter.ai/api/v1/models",
+      "timeout_seconds": 5,
+      "interval_seconds": 300
+    },
+    "ollama": {
+      "endpoint": "http://localhost:11434/api/tags",
+      "timeout_seconds": 5,
+      "interval_seconds": 60
+    },
+    "zhipu_ai": {
+      "endpoint": "https://open.bigmodel.cn/api/paas/v4/models",
+      "timeout_seconds": 5,
+      "interval_seconds": 300
+    },
+    "gemini": {
+      "endpoint": "https://generativelanguage.googleapis.com/v1beta/models",
+      "timeout_seconds": 5,
+      "interval_seconds": 300
+    }
+  }
+}

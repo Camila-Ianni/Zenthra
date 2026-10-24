@@ -1,0 +1,137 @@
+{
+  "agents_state": {},
+  "tasks_state": {},
+  "context": {
+    "last_tool_execution": {
+      "tool_id": "web_search",
+      "success": false,
+      "timestamp": "2026-10-23T22:00:36.220563"
+    },
+    "test_key": {
+      "test": "value"
+    }
+  },
+  "execution_history": [
+    {
+      "action": "context_set",
+      "key": "last_tool_execution",
+      "timestamp": "2026-04-25T14:51:10.150005"
+    },
+    {
+      "action": "context_set",
+      "key": "test_key",
+      "timestamp": "2026-04-25T14:51:10.150264"
+    },
+    {
+      "action": "context_set",
+      "key": "last_tool_execution",
+      "timestamp": "2026-04-25T14:52:03.070233"
+    },
+    {
+      "action": "context_set",
+      "key": "test_key",
+      "timestamp": "2026-04-25T14:52:03.070455"
+    },
+    {
+      "action": "context_set",
+      "key": "last_tool_execution",
+      "timestamp": "2026-04-25T14:52:07.405044"
+    },
+    {
+      "action": "context_set",
+      "key": "test_key",
+      "timestamp": "2026-04-25T14:52:07.405350"
+    },
+    {
+      "action": "context_set",
+      "key": "last_tool_execution",
+      "timestamp": "2026-04-25T17:34:05.977284"
+    },
+    {
+      "action": "context_set",
+      "key": "last_tool_execution",
+      "timestamp": "2026-04-25T17:34:07.367594"
+    },
+    {
+      "action": "context_set",
+      "key": "last_tool_execution",
+      "timestamp": "2026-04-25T17:35:18.053618"
+    },
+    {
+      "action": "context_set",
+      "key": "last_tool_execution",
+      "timestamp": "2026-04-25T17:50:25.934193"
+    },
+    {
+      "action": "context_set",
+      "key": "last_tool_execution",
+      "timestamp": "2026-04-25T17:51:11.078289"
+    },
+    {
+      "action": "context_set",
+      "key": "last_tool_execution",
+      "timestamp": "2026-04-25T17:51:31.021151"
+    },
+    {
+      "action": "context_set",
+      "key": "last_tool_execution",
+      "timestamp": "2026-04-25T17:51:54.688541"
+    },
+    {
+      "action": "context_set",
+      "key": "last_tool_execution",
+      "timestamp": "2026-04-25T23:31:53.467445"
+    },
+    {
+      "action": "context_set",
+      "key": "last_tool_execution",
+      "timestamp": "2026-04-25T23:31:58.291138"
+    },
+    {
+      "action": "context_set",
+      "key": "last_tool_execution",
+      "timestamp": "2026-04-25T23:32:19.328103"
+    },
+    {
+      "action": "context_set",
+      "key": "last_tool_execution",
+      "timestamp": "2026-04-25T23:32:30.079013"
+    },
+    {
+      "action": "context_set",
+      "key": "last_tool_execution",
+      "timestamp": "2026-04-25T23:33:02.191461"
+    },
+    {
+      "action": "context_set",
+      "key": "last_tool_execution",
+      "timestamp": "2026-10-23T22:00:07.706002"
+    },
+    {
+      "action": "context_set",
+      "key": "test_key",
+      "timestamp": "2026-10-23T22:00:07.706296"
+    },
+    {
+      "action": "context_set",
+      "key": "last_tool_execution",
+      "timestamp": "2026-10-23T22:00:36.218958"
+    },
+    {
+      "action": "context_set",
+      "key": "test_key",
+      "timestamp": "2026-10-23T22:00:36.219663"
+    },
+    {
+      "action": "context_set",
+      "key": "last_tool_execution",
+      "timestamp": "2026-10-23T22:00:36.220566"
+    },
+    {
+      "action": "context_set",
+      "key": "test_key",
+      "timestamp": "2026-10-23T22:00:36.220880"
+    }
+  ],
+  "last_saved": "2026-10-23T22:00:36.220884"
+}
