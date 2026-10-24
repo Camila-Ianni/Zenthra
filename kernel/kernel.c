@@ -343,7 +343,7 @@ void kernel_main(uint32_t magic, uintptr_t mbi_addr) {
         if (wm_get_window_count() == 4 &&
             wm_get_jarvis_state() == JARVIS_COMPLETED_SIM &&
             wm_get_selected_agent() == 2 &&
-            fb && fb->frontbuffer && fb->frontbuffer[0] != 0) {
+            fb && fb->address && fb->address[0] != 0) {
             serial_write_string("[GUI_DESKTOP_QEMU_PASS] Escritorio VESA LFB 1024x768x32bpp con Glassmorphism, 4 ventanas, Jarvis y 6 Agentes verificado en QEMU.\r\n");
         }
     } else {
