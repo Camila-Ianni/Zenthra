@@ -407,6 +407,59 @@
       "name": "Project-Context-Skill-4997603088",
       "category": "test",
       "node_id": "Project-Context-Skill-4997603088"
+    },
+    "Valid-Skill-5207350928": {
+      "type": "Skill",
+      "name": "Valid-Skill-5207350928",
+      "category": "test",
+      "node_id": "Valid-Skill-5207350928"
+    },
+    "JARVIS_REL_TEST_5207314320": {
+      "type": "User",
+      "name": "JARVIS_REL_TEST_5207314320",
+      "node_id": "JARVIS_REL_TEST_5207314320"
+    },
+    "test-project-rel-5207314320": {
+      "type": "Project",
+      "name": "test-project-rel-5207314320",
+      "language": "Python",
+      "node_id": "test-project-rel-5207314320"
+    },
+    "Persist-Test-Skill-5207628816": {
+      "type": "Skill",
+      "name": "Persist-Test-Skill-5207628816",
+      "category": "test",
+      "node_id": "Persist-Test-Skill-5207628816"
+    },
+    "Dedup-Test-Skill-5207627152": {
+      "type": "Skill",
+      "name": "Dedup-Test-Skill-5207627152",
+      "category": "test",
+      "node_id": "Dedup-Test-Skill-5207627152"
+    },
+    "Rel-Test-Skill-5207420368": {
+      "type": "Skill",
+      "name": "Rel-Test-Skill-5207420368",
+      "category": "test",
+      "node_id": "Rel-Test-Skill-5207420368"
+    },
+    "Rel-Test-Concept-5207420368": {
+      "type": "Concept",
+      "name": "Rel-Test-Concept-5207420368",
+      "domain": "test",
+      "node_id": "Rel-Test-Concept-5207420368"
+    },
+    "learning-context-proj-5207409168": {
+      "type": "Project",
+      "name": "learning-context-proj-5207409168",
+      "language": "Python",
+      "node_id": "learning-context-proj-5207409168"
+    },
+    "Project-Context-Skill-5207409168": {
+      "type": "Skill",
+      "name": "Project-Context-Skill-5207409168",
+      "category": "test",
+      "node_id": "Project-Context-Skill-5207409168"
     }
   },
   "relationships": [
@@ -679,6 +732,58 @@
       "target": "Rel-Test-Concept-4997857552",
       "created_from_task": "task-003",
       "created_at": "548388.915999083"
+    },
+    {
+      "source": "workflow-test-proj",
+      "type": "USES_SKILL",
+      "target": "goroutines",
+      "created_at": "553047.980431958"
+    },
+    {
+      "source": "Go",
+      "type": "RELATED_TO",
+      "target": "Caching",
+      "created_from_task": "cycle-task-2",
+      "created_at": "553047.984527208"
+    },
+    {
+      "source": "Go",
+      "type": "RELATED_TO",
+      "target": "Microservices",
+      "created_from_task": "cycle-task-2",
+      "created_at": "553047.984530333"
+    },
+    {
+      "source": "JARVIS_REL_TEST_5207314320",
+      "type": "WORKS_ON",
+      "target": "test-project-rel-5207314320",
+      "started_date": "2026-04-25",
+      "created_at": "553048.006738958"
+    },
+    {
+      "source": "graphrag-test-proj",
+      "type": "USES_SKILL",
+      "target": "async",
+      "created_at": "553048.02528475"
+    },
+    {
+      "source": "depth-test-proj",
+      "type": "USES_SKILL",
+      "target": "goroutines",
+      "created_at": "553048.027445583"
+    },
+    {
+      "source": "http",
+      "type": "LEARNED_IN",
+      "target": "websockets",
+      "created_at": "553048.036221625"
+    },
+    {
+      "source": "Rel-Test-Skill-5207420368",
+      "type": "RELATED_TO",
+      "target": "Rel-Test-Concept-5207420368",
+      "created_from_task": "task-003",
+      "created_at": "553048.058499"
     }
   ],
   "metadata": {

@@ -5,7 +5,7 @@
     "last_tool_execution": {
       "tool_id": "web_search",
       "success": false,
-      "timestamp": "2026-10-23T22:00:36.220563"
+      "timestamp": "2026-10-23T23:22:10.123427"
     },
     "test_key": {
       "test": "value"
@@ -131,7 +131,27 @@
       "action": "context_set",
       "key": "test_key",
       "timestamp": "2026-10-23T22:00:36.220880"
+    },
+    {
+      "action": "context_set",
+      "key": "last_tool_execution",
+      "timestamp": "2026-10-23T23:22:10.121729"
+    },
+    {
+      "action": "context_set",
+      "key": "test_key",
+      "timestamp": "2026-10-23T23:22:10.122394"
+    },
+    {
+      "action": "context_set",
+      "key": "last_tool_execution",
+      "timestamp": "2026-10-23T23:22:10.123430"
+    },
+    {
+      "action": "context_set",
+      "key": "test_key",
+      "timestamp": "2026-10-23T23:22:10.123644"
     }
   ],
-  "last_saved": "2026-10-23T22:00:36.220884"
+  "last_saved": "2026-10-23T23:22:10.123647"
 }

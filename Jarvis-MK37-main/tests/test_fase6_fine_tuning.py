@@ -15,6 +15,8 @@ from pathlib import Path
 
 from core.fine_tuning_evaluator import FineTuningEvaluator
 
+pytestmark = pytest.mark.unit
+
 
 def test_fine_tuning_evaluator_covers_all_agents():
     """Verifica que el evaluador cubra exactamente a los 6 especialistas."""

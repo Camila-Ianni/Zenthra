@@ -63,14 +63,20 @@ El análisis formal de viabilidad (`core/fine_tuning_evaluator.py`, exportado en
 ## 🧪 Ejecución de Pruebas Automatizadas
 
 ```bash
-# Ejecutar todas las pruebas unitarias y de integración de Jarvis MK37:
-PYTHONPATH=. pytest tests/ -v
+# 1. Pruebas Unitarias Rápidas (Offline / Sin dependencias de red o Ollama):
+PYTHONPATH=. pytest tests/ -v -m "unit"
+# Resultado: 25 aprobadas en ~4.9s (Aislamiento de memoria, RAG, herramientas, fallback explícito y fine-tuning)
 
-# Pruebas específicas por fase:
-PYTHONPATH=. pytest tests/test_specialist_agents.py -v   # Fases 2 y 4 (Agentes & Privilegios)
-PYTHONPATH=. pytest tests/test_model_comparisons.py -v   # Fase 3 (Evaluación & Benchmarks)
-PYTHONPATH=. pytest tests/test_fase5_memory_rag.py -v    # Fase 5 (Memoria Selectiva & RAG)
-PYTHONPATH=. pytest tests/test_fase6_fine_tuning.py -v   # Fase 6 (Viabilidad de Fine-Tuning)
+# 2. Pruebas de Integración (Requieren Ollama local activo en localhost:11434):
+PYTHONPATH=. pytest tests/ -v -m "integration"
+
+# 3. Pruebas de Sistema y Habilidades del Asistente:
+PYTHONPATH=. pytest examples/phase6_pillar2_test.py -v
+# Resultado: 24 aprobadas (Compatibilidad multiplataforma con _safe_run_subprocess)
+
+# 4. Suite Completa del Kernel C Zenthra OS:
+cd .. && make clean && make test
+# Resultado: 505 aprobadas · 0 fallidas
 ```
 
 ---

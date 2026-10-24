@@ -1,8 +1,33 @@
 {
   "agent_id": "agent_cyber_specialist",
-  "decisions": [],
+  "decisions": [
+    {
+      "id": "dec_1792809443483",
+      "timestamp": 1792809443.4834628,
+      "expires_at": 1795401443.4834628,
+      "tool_used": "inference",
+      "approved": true,
+      "summary": "Tarea: Explicar cómo prevenir SQL Injection -> Para prevenir SQL Injection es mandatorio usar Prepared Statements y bind variables."
+    },
+    {
+      "id": "dec_1792809443484",
+      "timestamp": 1792809443.484152,
+      "expires_at": 1795401443.484152,
+      "tool_used": "inference",
+      "approved": true,
+      "summary": "Tarea: Explicar cómo prevenir SQL Injection -> Debe sanitizar los inputs y usar funciones de escape nativas de la base de datos."
+    },
+    {
+      "id": "dec_1792809506171",
+      "timestamp": 1792809506.171198,
+      "expires_at": 1795401506.171198,
+      "tool_used": "inference",
+      "approved": true,
+      "summary": "Tarea: Explicar cómo prevenir SQL Injection mediante Prepared Statements. -> Explicar cómo prevenir SQL Injection mediante Prepared Statements.\nPrepared statements son una forma"
+    }
+  ],
   "context_notes": {
     "threat_model": "STRIDE"
   },
-  "last_updated": 1792807984.078368
+  "last_updated": 1792809506.171227
 }

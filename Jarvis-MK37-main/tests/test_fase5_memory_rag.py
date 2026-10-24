@@ -18,6 +18,8 @@ from core.selective_memory import get_selective_memory_manager, sanitize_text
 from core.specialist_rag import get_specialist_rag, sanitize_rag_content
 from core.specialist_agents import get_specialist_agent
 
+pytestmark = pytest.mark.unit
+
 
 def test_selective_memory_agent_isolation():
     """Valida que la memoria de un especialista esté completamente aislada de los demás."""
@@ -119,9 +121,20 @@ def test_prompt_injection_defense_in_rag():
 @pytest.mark.asyncio
 async def test_agent_task_execution_records_in_selective_memory():
     """Valida que la ejecución de una tarea por un especialista registre la decisión en su memoria aislada."""
+    from unittest.mock import AsyncMock
+    from core.model_router import is_ollama_available
+
     backend = get_specialist_agent("backend")
     mem_mgr = get_selective_memory_manager()
     mem_mgr.clear_agent_memory(backend.agent_id)
+
+    if not is_ollama_available():
+        backend.router.execute_model = AsyncMock(return_value={
+            "success": True,
+            "content": "def factorial(n: int) -> int:\n    return 1 if n <= 1 else n * factorial(n - 1)",
+            "model": "qwen2.5-coder:1.5b-base",
+            "provider": "mock_offline_fallback"
+        })
 
     res = await backend.execute_task(
         task_description="Crear una función simple en Python para calcular el factorial."

@@ -2,14 +2,38 @@
   "agent_id": "agent_backend_specialist",
   "decisions": [
     {
-      "id": "dec_1792807987548",
-      "timestamp": 1792807987.548079,
-      "expires_at": 1795399987.548079,
+      "id": "dec_1792809443461",
+      "timestamp": 1792809443.461081,
+      "expires_at": 1795401443.461081,
       "tool_used": "inference",
       "approved": true,
-      "summary": "Tarea: Crear una función simple en Python para calcular el factorial. -> Tarea del profesor:\nEl profesor desea crear una función que tome una lista de números enteros y devu"
+      "summary": "Tarea: Crear una función simple en Python para calcular el factorial. -> Sólo la función, no hacer una variable.\nEl usuario debe ingresar el número con el que se calculará e"
+    },
+    {
+      "id": "dec_1792809447537",
+      "timestamp": 1792809447.537478,
+      "expires_at": 1795401447.537478,
+      "tool_used": "inference",
+      "approved": true,
+      "summary": "Tarea: Escribir una función en Python para validar si un string es un JSON válido. -> Utilizar el método JSON.fromstring de Python para convertir un JSON string a un objeto Python.\nEscri"
+    },
+    {
+      "id": "dec_1792809790328",
+      "timestamp": 1792809790.328911,
+      "expires_at": 1795401790.328911,
+      "tool_used": "inference",
+      "approved": true,
+      "summary": "Tarea: Crear función suma en Python -> def suma(a: int, b: int) -> int:\n    return a + b"
+    },
+    {
+      "id": "dec_1792810714710",
+      "timestamp": 1792810714.7104168,
+      "expires_at": 1795402714.7104168,
+      "tool_used": "inference",
+      "approved": true,
+      "summary": "Tarea: Escribir una función en Python para validar si un string es un JSON válido. -> Enunciado:\nValidar si un string es un JSON válido.\n\nInstrucciones:\nUtilizar las librerías nativas de"
     }
   ],
   "context_notes": {},
-  "last_updated": 1792807987.548086
+  "last_updated": 1792810714.7104309
 }

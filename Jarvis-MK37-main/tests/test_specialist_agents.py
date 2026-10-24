@@ -1,16 +1,19 @@
 """
-Test Suite - 6 Agentes Especialistas de Jarvis-MK37
+Test Suite - 6 Agentes Especialistas de Jarvis-MK37 (Auditoría v21)
 Verifica:
 1. Registro y descubrimiento de los 6 agentes en AgentRegistry.
 2. Contrato unificado y validación de permisos mínimos por especialista.
 3. Puertas de seguridad (Safety Policies) para Ciberseguridad, Kernel y Automatización.
-4. Sobreescritura de modelos por variables de entorno.
-5. Inferencia y resolución de tareas reales con trazabilidad de evidencia.
+4. Transparencia en resolución de modelos: candidate_model vs effective_model y detección de fallback.
+5. Manejo explícito de estado 'no disponible' cuando se desactiva el fallback genérico.
+6. Ejecución unitaria determinista con mock (sin depender de red ni Ollama).
+7. Pruebas de integración con Ollama marcadas explícitamente con skipif.
 """
 
 import os
 import pytest
 import asyncio
+from unittest.mock import AsyncMock
 
 from core.agent_registry import get_agent_registry, AgentType
 from core.specialist_agents import (
@@ -23,9 +26,10 @@ from core.specialist_agents import (
     CreativeUISpecialistAgent,
     AutomationSpecialistAgent,
 )
-from core.model_router import get_model_router
+from core.model_router import get_model_router, is_ollama_available
 
 
+@pytest.mark.unit
 def test_registry_contains_all_six_specialists():
     """Prueba 1: AgentRegistry inicializa y contiene los 6 especialistas con prioridad 9."""
     reg = get_agent_registry()
@@ -45,6 +49,7 @@ def test_registry_contains_all_six_specialists():
         assert agent.priority == 9, f"Prioridad incorrecta para {agent.id}"
 
 
+@pytest.mark.unit
 def test_specialist_factory_and_listing():
     """Prueba 2: Factory list_specialist_agents devuelve exactamente los 6 agentes."""
     specialists = list_specialist_agents()
@@ -53,6 +58,7 @@ def test_specialist_factory_and_listing():
     assert specs == {"backend", "cybersecurity", "kernel", "data", "creative", "automation"}
 
 
+@pytest.mark.unit
 def test_least_privilege_tool_permissions():
     """Prueba 3: Cada especialista solo tiene autorizadas sus herramientas asignadas."""
     backend = get_specialist_agent("backend")
@@ -80,6 +86,7 @@ def test_least_privilege_tool_permissions():
     assert data.validate_tool_permission("security_scanner") is False
 
 
+@pytest.mark.unit
 def test_cybersecurity_defensive_safety_policy():
     """Prueba 4: Ciberseguridad bloquea payloads ofensivos o DDoS."""
     cyber = get_specialist_agent("cybersecurity")
@@ -93,6 +100,7 @@ def test_cybersecurity_defensive_safety_policy():
     assert "prohibida por la política defensiva" in reason
 
 
+@pytest.mark.unit
 def test_kernel_systems_sandbox_policy():
     """Prueba 5: Kernel y Sistemas bloquea escritura destructiva en discos o Ring 0 caliente."""
     kernel = get_specialist_agent("kernel")
@@ -106,6 +114,7 @@ def test_kernel_systems_sandbox_policy():
     assert "bloqueada" in reason
 
 
+@pytest.mark.unit
 def test_automation_approval_gate():
     """Prueba 6: Automatización exige confirmación en comandos irreversibles."""
     auto = get_specialist_agent("automation")
@@ -120,6 +129,7 @@ def test_automation_approval_gate():
     assert "requiere aprobación humana" in reason
 
 
+@pytest.mark.unit
 def test_model_override_via_environment(monkeypatch):
     """Prueba 7: Los modelos de cada agente pueden sobreescribirse por configuración."""
     backend = get_specialist_agent("backend")
@@ -131,9 +141,65 @@ def test_model_override_via_environment(monkeypatch):
     assert data.get_configured_model() == "custom-gemma-analytics"
 
 
+@pytest.mark.unit
+def test_specialist_fallback_transparency(monkeypatch):
+    """Prueba 8 (Auditoría v21): Valida que cuando faltan claves, el fallback sea transparente y explícito."""
+    cyber = get_specialist_agent("cybersecurity")
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.delenv("AGENT_CYBER_MODEL", raising=False)
+    monkeypatch.setenv("AGENT_ALLOW_GENERIC_FALLBACK", "true")
+
+    model_eff, provider, is_fb, fb_reason, is_avail = cyber.resolve_model_and_availability()
+    assert is_fb is True
+    assert "OPENROUTER_API_KEY ausente" in fb_reason
+    assert model_eff == "qwen2.5-coder:1.5b-base"
+    assert is_avail is True
+
+
+@pytest.mark.unit
+def test_specialist_unavailable_when_fallback_disabled(monkeypatch):
+    """Prueba 9 (Auditoría v21): Con fallback genérico desactivado, reporta no disponible sin simulación."""
+    cyber = get_specialist_agent("cybersecurity")
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.delenv("AGENT_CYBER_MODEL", raising=False)
+    monkeypatch.setenv("AGENT_ALLOW_GENERIC_FALLBACK", "false")
+
+    model_eff, provider, is_fb, fb_reason, is_avail = cyber.resolve_model_and_availability()
+    assert is_avail is False
+    assert is_fb is False
+    assert "no disponible" in fb_reason.lower()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_specialist_mock_task_execution(monkeypatch):
+    """Prueba 10 (Auditoría v21): Ejecución unitaria determinista con mock (sin depender de red)."""
+    backend = get_specialist_agent("backend")
+    
+    mock_response = {
+        "success": True,
+        "content": "def suma(a: int, b: int) -> int:\n    return a + b",
+        "model": "mock-qwen-coder",
+        "provider": "mock_unit_provider"
+    }
+    
+    # Inyectar mock en el router de forma segura para evitar contaminar otros tests
+    monkeypatch.setattr(backend.router, "execute_model", AsyncMock(return_value=mock_response))
+    
+    res = await backend.execute_task("Crear función suma en Python")
+    assert res.success is True
+    assert "def suma" in res.output
+    assert res.provider_used == "mock_unit_provider"
+    assert len(res.evidence) > 0
+
+
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_backend_agent_task_execution():
-    """Prueba 8: Agente Backend resuelve una tarea real con trazabilidad y evidencia."""
+    """Prueba 11 (Integración): Agente Backend resuelve una tarea real con Ollama local."""
+    if not is_ollama_available():
+        pytest.skip("Ollama local no disponible en http://localhost:11434")
+
     backend = get_specialist_agent("backend")
     result = await backend.execute_task(
         task_description="Escribir una función en Python para validar si un string es un JSON válido.",
@@ -147,9 +213,13 @@ async def test_backend_agent_task_execution():
     assert len(result.evidence) > 0
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_data_agent_task_execution():
-    """Prueba 9: Agente de Datos resuelve una tarea con modelo local de Ollama (Gemma 4 / Qwen)."""
+    """Prueba 12 (Integración): Agente de Datos resuelve una tarea con modelo local de Ollama (Gemma 4 / Qwen)."""
+    if not is_ollama_available():
+        pytest.skip("Ollama local no disponible en http://localhost:11434")
+
     data_agent = get_specialist_agent("data")
     result = await data_agent.execute_task(
         task_description="Explicar en 2 líneas qué métrica representa la mediana frente al promedio en datos con outliers."

@@ -16,8 +16,40 @@
       "tool_used": "inference",
       "approved": true,
       "summary": "Tarea: Explicar por qué redirigir EIP a fixup en Page Fault #PF evita un bucle infinito. -> Explicar por qué redirigir EIP a fixup en Page Fault #PF evita un bucle infinito.\nEn el contexto de "
+    },
+    {
+      "id": "dec_1792808662220",
+      "timestamp": 1792808662.2200918,
+      "expires_at": 1795400662.2200918,
+      "tool_used": "inference",
+      "approved": true,
+      "summary": "Tarea: Explicar por qué redirigir EIP a fixup en Page Fault #PF evita un bucle infinito. -> Explicar por qué redirigir EIP a fixup en Page Fault #PF evita un bucle infinito.\nEn el contexto de "
+    },
+    {
+      "id": "dec_1792809222388",
+      "timestamp": 1792809222.3889909,
+      "expires_at": 1795401222.3889909,
+      "tool_used": "inference",
+      "approved": true,
+      "summary": "Tarea: Explicar por qué redirigir EIP a fixup en Page Fault #PF evita un bucle infinito. -> Debe sanitizar los inputs y usar funciones de escape nativas de la base de datos."
+    },
+    {
+      "id": "dec_1792809302320",
+      "timestamp": 1792809302.320281,
+      "expires_at": 1795401302.320281,
+      "tool_used": "inference",
+      "approved": true,
+      "summary": "Tarea: Explicar por qué redirigir EIP a fixup en Page Fault #PF evita un bucle infinito. -> Explicar por qué redirigir EIP a fixup en Page Fault #PF evita un bucle infinito.\nRedirigir EIP a fi"
+    },
+    {
+      "id": "dec_1792809565048",
+      "timestamp": 1792809565.048563,
+      "expires_at": 1795401565.048563,
+      "tool_used": "inference",
+      "approved": true,
+      "summary": "Tarea: Explicar por qué redirigir EIP a fixup en Page Fault #PF evita un bucle infinito. -> A continuación, proporcionamos un ejemplo de código C++ que muestra cómo se puede implementar la sol"
     }
   ],
   "context_notes": {},
-  "last_updated": 1792807361.6357682
+  "last_updated": 1792809565.048587
 }

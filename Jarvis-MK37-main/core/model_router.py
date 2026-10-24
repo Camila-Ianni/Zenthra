@@ -248,7 +248,7 @@ class OllamaProvider(ProviderInterface):
                     return models
         except Exception:
             pass
-        return self.models_cache or ["qwen3.5:latest", "gemma4:latest", "qwen2.5-coder:1.5b-base"]
+        return self.models_cache if self.available else []
 
     async def generate(self, model: str, prompt: str, system: Optional[str] = None,
                        temperature: float = 0.7, max_tokens: int = 2048) -> Dict[str, Any]:
@@ -678,3 +678,15 @@ def get_model_router() -> ModelRouter:
     if _router_instance is None:
         _router_instance = ModelRouter()
     return _router_instance
+
+
+def is_ollama_available(timeout: float = 0.8) -> bool:
+    """Verificación rápida de disponibilidad local de Ollama en localhost:11434."""
+    try:
+        import urllib.request
+        base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+        req = urllib.request.Request(f"{base_url}/api/tags", headers={"User-Agent": "pytest-check"})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return resp.status == 200
+    except Exception:
+        return False

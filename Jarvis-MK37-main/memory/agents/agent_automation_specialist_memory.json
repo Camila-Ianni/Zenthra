@@ -16,8 +16,32 @@
       "tool_used": "inference",
       "approved": true,
       "summary": "Tarea: Generar los pasos secuenciales para desplegar un microservicio. -> Respuesta del usuario:\nPara desplegar un microservicio, primero se deben definir los pasos secuencia"
+    },
+    {
+      "id": "dec_1792809222391",
+      "timestamp": 1792809222.39116,
+      "expires_at": 1795401222.39116,
+      "tool_used": "inference",
+      "approved": true,
+      "summary": "Tarea: Generar los pasos secuenciales para desplegar un microservicio. -> Debe sanitizar los inputs y usar funciones de escape nativas de la base de datos."
+    },
+    {
+      "id": "dec_1792809333566",
+      "timestamp": 1792809333.56663,
+      "expires_at": 1795401333.56663,
+      "tool_used": "inference",
+      "approved": true,
+      "summary": "Tarea: Generar los pasos secuenciales para desplegar un microservicio. -> Respuesta del usuario:\nPara desplegar un microservicio, se pueden seguir los siguientes pasos secuen"
+    },
+    {
+      "id": "dec_1792809639678",
+      "timestamp": 1792809639.67876,
+      "expires_at": 1795401639.67876,
+      "tool_used": "inference",
+      "approved": true,
+      "summary": "Tarea: Generar los pasos secuenciales para desplegar un microservicio. -> Respuesta del usuario:\nPara desplegar un microservicio, se necesitan los siguientes pasos secuencial"
     }
   ],
   "context_notes": {},
-  "last_updated": 1792807481.2879958
+  "last_updated": 1792809639.6788092
 }

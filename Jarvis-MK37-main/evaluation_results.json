@@ -1,78 +1,139 @@
 {
-  "timestamp": 1792807548.32999,
+  "timestamp": 1792809790.2666051,
+  "ollama_online": true,
   "total_specialists_evaluated": 6,
-  "passed": 6,
-  "pass_rate_pct": 100.0,
+  "passed": 5,
+  "pass_rate_pct": 83.3,
   "evaluations": [
     {
       "specialty": "backend",
       "agent_id": "agent_backend_specialist",
-      "model_used": "qwen2.5-coder:1.5b-base",
+      "candidate_model": "qwen2.5-coder:1.5b-base",
+      "effective_model": "qwen2.5-coder:1.5b-base",
+      "is_fallback": false,
+      "fallback_reason": null,
       "provider": "ollama",
       "success": true,
-      "latency_ms": 28078,
+      "raw_success": true,
+      "latency_ms": 4047,
       "keyword_verified": true,
-      "output_preview": "Escribir una función en Python para convertir un string JSON a un objeto Python y viceversa.\nEscribir una función en Pyt",
+      "expected_keyword": "json",
+      "rubric": {
+        "keyword_match": true,
+        "has_content": true,
+        "no_error": true
+      },
+      "output_preview": "Utilizar el método JSON.fromstring de Python para convertir un JSON string a un objeto Python.\nEscribir una función en P",
       "requires_approval": false,
       "error": null
     },
     {
       "specialty": "cybersecurity",
       "agent_id": "agent_cyber_specialist",
-      "model_used": "qwen2.5-coder:1.5b-base",
+      "candidate_model": "DeepSeek-R1",
+      "effective_model": "qwen2.5-coder:1.5b-base",
+      "is_fallback": true,
+      "fallback_reason": "OPENROUTER_API_KEY ausente: ejecutando fallback local 'qwen2.5-coder:1.5b-base'",
       "provider": "ollama",
       "success": true,
-      "latency_ms": 6698,
+      "raw_success": true,
+      "latency_ms": 58633,
       "keyword_verified": true,
-      "output_preview": "Respuesta del usuario:\nSQL Injection es un ataque de inyección de SQL que se utiliza para manipular consultas SQL y obte",
+      "expected_keyword": "prepared",
+      "rubric": {
+        "keyword_match": true,
+        "has_content": true,
+        "no_error": true
+      },
+      "output_preview": "Explicar cómo prevenir SQL Injection mediante Prepared Statements.\nPrepared statements son una forma de prevenir el SQL ",
       "requires_approval": false,
       "error": null
     },
     {
       "specialty": "kernel",
       "agent_id": "agent_kernel_specialist",
-      "model_used": "qwen2.5-coder:1.5b-base",
+      "candidate_model": "Kimi-K2",
+      "effective_model": "qwen2.5-coder:1.5b-base",
+      "is_fallback": true,
+      "fallback_reason": "OPENROUTER_API_KEY ausente: ejecutando fallback local 'qwen2.5-coder:1.5b-base'",
       "provider": "ollama",
-      "success": true,
-      "latency_ms": 29101,
-      "keyword_verified": true,
-      "output_preview": "Explicar por qué redirigir EIP a fixup en Page Fault #PF evita un bucle infinito.\nEn el contexto de un bucle infinito, s",
+      "success": false,
+      "raw_success": true,
+      "latency_ms": 58877,
+      "keyword_verified": false,
+      "expected_keyword": "eip",
+      "rubric": {
+        "keyword_match": false,
+        "has_content": true,
+        "no_error": true
+      },
+      "output_preview": "A continuación, proporcionamos un ejemplo de código C++ que muestra cómo se puede implementar la solución:\n\n```cpp\n#incl",
       "requires_approval": false,
       "error": null
     },
     {
       "specialty": "data",
       "agent_id": "agent_data_specialist",
-      "model_used": "qwen2.5-coder:1.5b-base",
+      "candidate_model": "Gemma-4",
+      "effective_model": "qwen2.5-coder:1.5b-base",
+      "is_fallback": false,
+      "fallback_reason": null,
       "provider": "ollama",
       "success": true,
-      "latency_ms": 64055,
+      "raw_success": true,
+      "latency_ms": 3695,
       "keyword_verified": true,
-      "output_preview": "La diferencia entre la media y la mediana en datos asimétricos se refiere al desequilibrio o la presencia de valores atí",
+      "expected_keyword": "mediana",
+      "rubric": {
+        "keyword_match": true,
+        "has_content": true,
+        "no_error": true
+      },
+      "output_preview": "Respuesta del asesor:\nUna media es la suma de todos los números dividida entre la cantidad de números, y la mediana es e",
       "requires_approval": false,
       "error": null
     },
     {
       "specialty": "creative",
       "agent_id": "agent_creative_specialist",
-      "model_used": "qwen2.5-coder:1.5b-base",
+      "candidate_model": "Mistral-Small-4",
+      "effective_model": "qwen2.5-coder:1.5b-base",
+      "is_fallback": true,
+      "fallback_reason": "Credencial de Mistral ausente: ejecutando fallback local 'qwen2.5-coder:1.5b-base'",
       "provider": "ollama",
       "success": true,
-      "latency_ms": 27863,
+      "raw_success": true,
+      "latency_ms": 13200,
       "keyword_verified": true,
-      "output_preview": "Respuesta del tutor:\nEn CSS, se pueden usar las siguientes propiedades para crear un efecto Glassmorphism con backdrop-f",
+      "expected_keyword": "blur",
+      "rubric": {
+        "keyword_match": true,
+        "has_content": true,
+        "no_error": true
+      },
+      "output_preview": "Respuesta:\nPara crear un efecto Glassmorphism con backdrop-filter, se puede utilizar la siguiente lista de atributos CSS",
       "requires_approval": false,
       "error": null
     },
     {
       "specialty": "automation",
       "agent_id": "agent_automation_specialist",
-      "model_used": "qwen2.5-coder:1.5b-base",
+      "candidate_model": "GLM-4.5-Air",
+      "effective_model": "qwen2.5-coder:1.5b-base",
+      "is_fallback": true,
+      "fallback_reason": "ZHIPU_API_KEY ausente: ejecutando fallback local 'qwen2.5-coder:1.5b-base'",
       "provider": "ollama",
       "success": true,
-      "latency_ms": 27733,
+      "raw_success": true,
+      "latency_ms": 57734,
       "keyword_verified": true,
-      "output_preview": "Respuesta del usuario:\nPara desplegar un microservicio, primero se deben definir los pasos secuenciales necesarios para ",
+      "expected_keyword": "paso",
+      "rubric": {
+        "keyword_match": true,
+        "has_content": true,
+        "no_error": true
+      },
+      "output_preview": "Respuesta del usuario:\nPara desplegar un microservicio, se necesitan los siguientes pasos secuenciales:\n\n1. Crear el pro",
       "requires_approval": false,
       "error": null
     }
@@ -84,17 +145,17 @@
       "model": "qwen2.5-coder:1.5b-base",
       "provider": "ollama",
       "success": true,
-      "latency_ms": 786,
-      "output_length": 107
+      "latency_ms": 6311,
+      "output_length": 552
     },
     "alternative": {
       "model": "gemma4:latest",
       "provider": "ollama",
-      "success": true,
-      "latency_ms": 66254,
-      "output_length": 1702
+      "success": false,
+      "latency_ms": 144274,
+      "output_length": 0
     },
-    "latency_delta_ms": -65468,
+    "latency_delta_ms": -137963,
     "fastest_model": "qwen2.5-coder:1.5b-base"
   }
 }

@@ -48,8 +48,56 @@
       "tool_used": "inference",
       "approved": true,
       "summary": "Tarea: Explicar en 2 líneas qué métrica representa la mediana frente al promedio en datos con outliers. -> La mediana es más robusta que el promedio porque representa el valor central (el percentil 50), sien"
+    },
+    {
+      "id": "dec_1792809222389",
+      "timestamp": 1792809222.389684,
+      "expires_at": 1795401222.389684,
+      "tool_used": "inference",
+      "approved": true,
+      "summary": "Tarea: Definir la diferencia entre media y mediana con datos asimétricos. -> Debe sanitizar los inputs y usar funciones de escape nativas de la base de datos."
+    },
+    {
+      "id": "dec_1792809222436",
+      "timestamp": 1792809222.436884,
+      "expires_at": 1795401222.436884,
+      "tool_used": "inference",
+      "approved": true,
+      "summary": "Tarea: Explicar en 2 líneas qué métrica representa la mediana frente al promedio en datos con outliers. -> def suma(a: int, b: int) -> int:\n    return a + b"
+    },
+    {
+      "id": "dec_1792809282859",
+      "timestamp": 1792809282.859391,
+      "expires_at": 1795401282.859392,
+      "tool_used": "inference",
+      "approved": true,
+      "summary": "Tarea: Explicar en 2 líneas qué métrica representa la mediana frente al promedio en datos con outliers. -> Respuesta:\nLa mediana es la medida central de un conjunto de datos en caso de que se encuentren en u"
+    },
+    {
+      "id": "dec_1792809313504",
+      "timestamp": 1792809313.50478,
+      "expires_at": 1795401313.50478,
+      "tool_used": "inference",
+      "approved": true,
+      "summary": "Tarea: Definir la diferencia entre media y mediana con datos asimétricos. -> Respuesta de la comunidad:\nEl usuario quiere saber la diferencia entre media y mediana con datos asi"
+    },
+    {
+      "id": "dec_1792809568744",
+      "timestamp": 1792809568.744622,
+      "expires_at": 1795401568.744622,
+      "tool_used": "inference",
+      "approved": true,
+      "summary": "Tarea: Definir la diferencia entre media y mediana con datos asimétricos. -> Respuesta del asesor:\nUna media es la suma de todos los números dividida entre la cantidad de número"
+    },
+    {
+      "id": "dec_1792810715094",
+      "timestamp": 1792810715.094899,
+      "expires_at": 1795402715.094899,
+      "tool_used": "inference",
+      "approved": true,
+      "summary": "Tarea: Explicar en 2 líneas qué métrica representa la mediana frente al promedio en datos con outliers. -> Escribe una pregunta para el usuario:\n¿Por qué es importante tener en cuenta outliers al calcular el"
     }
   ],
   "context_notes": {},
-  "last_updated": 1792807910.07321
+  "last_updated": 1792810715.094912
 }

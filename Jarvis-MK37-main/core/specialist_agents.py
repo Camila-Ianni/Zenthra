@@ -1,12 +1,17 @@
 """
 Specialist Agents Framework - 6 Agentes Especialistas de Jarvis-MK37
 
-1. Backend: Python, PHP, JS, SQL, APIs REST, pruebas y revisión de repositorios. (Candidato: Qwen3-Coder / qwen3.5 local)
+1. Backend: Python, PHP, JS, SQL, APIs REST, pruebas y revisión de repositorios. (Candidato: Qwen3-Coder / qwen2.5-coder local)
 2. Ciberseguridad Defensiva: Auditoría de código, secretos, CVEs y mitigaciones en modo solo lectura. (Candidato: DeepSeek-R1)
 3. Kernel y Sistemas: C/ASM, interrupciones, paginación, scheduler y drivers en sandbox aislado. (Candidato: Kimi K2)
 4. Datos: SQL, análisis descriptivo CSV, transformaciones y visualizaciones reproducibles. (Candidato: Gemma 4 / gemma4 local)
 5. Creativo / UI: Temas, Glassmorphism, widgets, semáforos, dock y accesibilidad. (Candidato: Mistral Small 4)
 6. Automatización: Descomposición de planes, workflows y confirmación de acciones sensibles. (Candidato: GLM-4.5-Air)
+
+Cumplimiento de Seguridad (Auditoría v21):
+- Transparencia total en resolución de modelos: sin fallback oculto.
+- Registro explícito de candidate_model, effective_model, is_fallback y fallback_reason.
+- Si el modelo especialista no está disponible y el fallback está desactivado, retorna estado 'no disponible' explícito.
 """
 
 import os
@@ -26,15 +31,24 @@ class SpecialistEvaluationResult:
     """Resultado de evaluación de una tarea por un especialista."""
     task_name: str
     agent_id: str
-    model_used: str
-    provider_used: str
-    success: bool
-    output: str
+    specialty: str = ""
+    candidate_model: str = ""
+    effective_model: str = ""
+    provider_used: str = ""
+    is_fallback: bool = False
+    fallback_reason: Optional[str] = None
+    success: bool = False
+    output: str = ""
     tools_executed: List[str] = field(default_factory=list)
     latency_ms: int = 0
     requires_approval: bool = False
     evidence: str = ""
     error: Optional[str] = None
+
+    @property
+    def model_used(self) -> str:
+        """Compatibilidad con código que consume .model_used."""
+        return self.effective_model
 
 
 Tuple_Safety = Tuple[bool, bool, str]  # (is_safe, requires_approval, reason)
@@ -50,11 +64,13 @@ class SpecialistAgent(ABC):
                  candidate_model: str,
                  allowed_tools: List[str],
                  system_prompt: str,
+                 approved_fallback_model: Optional[str] = "qwen2.5-coder:1.5b-base",
                  safe_mode: bool = True):
         self.agent_id = agent_id
         self.name = name
         self.specialty = specialty
         self.candidate_model = candidate_model
+        self.approved_fallback_model = approved_fallback_model
         self.allowed_tools = set(allowed_tools)
         self.system_prompt = system_prompt
         self.safe_mode = safe_mode
@@ -64,23 +80,92 @@ class SpecialistAgent(ABC):
         self.memory = get_selective_memory_manager()
         self.rag = get_specialist_rag()
 
-    def get_configured_model(self) -> str:
-        """Determina el modelo exacto a usar según variables de entorno o local."""
+    def resolve_model_and_availability(self) -> Tuple[str, str, bool, Optional[str], bool]:
+        """
+        Determina explícitamente el modelo a usar, el proveedor, si es fallback y disponibilidad.
+        Returns:
+            (effective_model, provider, is_fallback, fallback_reason, is_available)
+        """
         env_var = f"AGENT_{self.specialty.upper()}_MODEL"
         override = os.getenv(env_var)
         if override:
-            return override
+            return override, "env_override", False, None, True
+
         cand = self.candidate_model
-        # Si el modelo candidato remoto no tiene API key configurada en entorno, usar local
-        if "deepseek" in cand and not os.getenv("OPENROUTER_API_KEY"):
-            return "qwen2.5-coder:1.5b-base"
-        if "kimi" in cand and not os.getenv("OPENROUTER_API_KEY"):
-            return "qwen2.5-coder:1.5b-base"
-        if "glm" in cand and not os.getenv("ZHIPU_API_KEY"):
-            return "qwen2.5-coder:1.5b-base"
-        if "mistral" in cand:
-            return "qwen2.5-coder:1.5b-base"
-        return self.candidate_model
+        cand_lower = cand.lower()
+
+        # Comprobar si requiere OpenRouter (DeepSeek / Kimi)
+        if any(k in cand_lower for k in ("deepseek", "kimi")):
+            if os.getenv("OPENROUTER_API_KEY"):
+                return cand, "openrouter", False, None, True
+            else:
+                allow_fallback = os.getenv("AGENT_ALLOW_GENERIC_FALLBACK", "true").lower() in ("true", "1", "yes")
+                if allow_fallback and self.approved_fallback_model:
+                    return (
+                        self.approved_fallback_model,
+                        "ollama_fallback",
+                        True,
+                        f"OPENROUTER_API_KEY ausente: ejecutando fallback local '{self.approved_fallback_model}'",
+                        True
+                    )
+                return (
+                    cand,
+                    "openrouter",
+                    False,
+                    f"Modelo especialista '{cand}' no disponible: falta OPENROUTER_API_KEY y fallback genérico desactivado",
+                    False
+                )
+
+        # Comprobar si es GLM (Zhipu AI)
+        if "glm" in cand_lower:
+            if os.getenv("ZHIPU_API_KEY"):
+                return cand, "zhipu_ai", False, None, True
+            else:
+                allow_fallback = os.getenv("AGENT_ALLOW_GENERIC_FALLBACK", "true").lower() in ("true", "1", "yes")
+                if allow_fallback and self.approved_fallback_model:
+                    return (
+                        self.approved_fallback_model,
+                        "ollama_fallback",
+                        True,
+                        f"ZHIPU_API_KEY ausente: ejecutando fallback local '{self.approved_fallback_model}'",
+                        True
+                    )
+                return (
+                    cand,
+                    "zhipu_ai",
+                    False,
+                    f"Modelo especialista '{cand}' no disponible: falta ZHIPU_API_KEY y fallback desactivado",
+                    False
+                )
+
+        # Comprobar si es Mistral
+        if "mistral" in cand_lower:
+            if os.getenv("MISTRAL_API_KEY") or os.getenv("OPENROUTER_API_KEY"):
+                return cand, "remote_api", False, None, True
+            allow_fallback = os.getenv("AGENT_ALLOW_GENERIC_FALLBACK", "true").lower() in ("true", "1", "yes")
+            if allow_fallback and self.approved_fallback_model:
+                return (
+                    self.approved_fallback_model,
+                    "ollama_fallback",
+                    True,
+                    f"Credencial de Mistral ausente: ejecutando fallback local '{self.approved_fallback_model}'",
+                    True
+                )
+            return (
+                cand,
+                "mistral",
+                False,
+                f"Modelo '{cand}' no disponible: falta credencial y fallback desactivado",
+                False
+            )
+
+        # Modelos con resolución local (Backend Qwen, Datos Gemma, etc.)
+        return cand, "ollama", False, None, True
+
+    def get_configured_model(self) -> str:
+        """Compatibilidad: retorna el modelo efectivo resuelto."""
+        effective_model, _, _, _, _ = self.resolve_model_and_availability()
+        return effective_model
 
     def validate_tool_permission(self, tool_name: str) -> bool:
         """Principio de privilegios mínimos: valida si la herramienta está permitida."""
@@ -102,15 +187,37 @@ class SpecialistAgent(ABC):
             return SpecialistEvaluationResult(
                 task_name=task_description[:50],
                 agent_id=self.agent_id,
-                model_used="none",
+                specialty=self.specialty,
+                candidate_model=self.candidate_model,
+                effective_model="none",
                 provider_used="policy_gate",
+                is_fallback=False,
+                fallback_reason=None,
                 success=False,
                 output="",
                 error=f"Bloqueo de seguridad: {safety_reason}",
                 requires_approval=True
             )
 
-        model_name = self.get_configured_model()
+        model_name, provider_name, is_fallback, fallback_reason, is_available = self.resolve_model_and_availability()
+
+        if not is_available:
+            elapsed_ms = int((time.time() - start_time) * 1000)
+            return SpecialistEvaluationResult(
+                task_name=task_description[:50],
+                agent_id=self.agent_id,
+                specialty=self.specialty,
+                candidate_model=self.candidate_model,
+                effective_model=model_name,
+                provider_used=provider_name,
+                is_fallback=is_fallback,
+                fallback_reason=fallback_reason,
+                success=False,
+                output="",
+                latency_ms=elapsed_ms,
+                error=fallback_reason or f"Modelo especialista {self.candidate_model} no disponible"
+            )
+
         rag_doc = self.rag.get_specialist_knowledge(self.specialty, task_description)
         context_notes = self.memory.get_context_notes(self.agent_id)
         notes_str = "\n".join([f"- {k}: {v}" for k, v in context_notes.items()]) if context_notes else ""
@@ -131,14 +238,18 @@ class SpecialistAgent(ABC):
             temperature=0.3 if self.safe_mode else 0.7
         )
 
-        elapsed_ms = int((time.time() - start_time) * 1000)
+        elapsed_ms = max(1, int((time.time() - start_time) * 1000))
 
         if not response.get("success"):
             return SpecialistEvaluationResult(
                 task_name=task_description[:50],
                 agent_id=self.agent_id,
-                model_used=response.get("model", model_name),
-                provider_used=response.get("provider", "unknown"),
+                specialty=self.specialty,
+                candidate_model=self.candidate_model,
+                effective_model=response.get("model", model_name),
+                provider_used=response.get("provider", provider_name),
+                is_fallback=is_fallback,
+                fallback_reason=fallback_reason,
                 success=False,
                 output="",
                 latency_ms=elapsed_ms,
@@ -156,17 +267,25 @@ class SpecialistAgent(ABC):
             approved=not requires_approval
         )
 
+        evidence_msg = f"Respuesta generada por {response.get('model', model_name)} vía {response.get('provider', provider_name)} en {elapsed_ms}ms"
+        if is_fallback:
+            evidence_msg += f" [AVISO FALLBACK: {fallback_reason}]"
+
         return SpecialistEvaluationResult(
             task_name=task_description[:50],
             agent_id=self.agent_id,
-            model_used=response.get("model", model_name),
-            provider_used=response.get("provider", "unknown"),
+            specialty=self.specialty,
+            candidate_model=self.candidate_model,
+            effective_model=response.get("model", model_name),
+            provider_used=response.get("provider", provider_name),
+            is_fallback=is_fallback,
+            fallback_reason=fallback_reason,
             success=True,
             output=content,
             tools_executed=tools_used,
             latency_ms=elapsed_ms,
             requires_approval=requires_approval,
-            evidence=f"Respuesta generada por {response.get('model')} vía {response.get('provider')} en {elapsed_ms}ms"
+            evidence=evidence_msg
         )
 
 
@@ -191,11 +310,11 @@ class BackendSpecialistAgent(SpecialistAgent):
                 "- Nunca declares éxito sin mostrar resultados o evidencia de ejecución.\n"
                 "- Entrega código modular, tipado y testeable."
             ),
+            approved_fallback_model="qwen2.5-coder:1.5b-base",
             safe_mode=False
         )
 
     def verify_safety_policy(self, task_description: str) -> Tuple_Safety:
-        # Detectar comandos potencialmente destructivos
         desc_lower = task_description.lower()
         if any(w in desc_lower for w in ["drop database", "rm -rf /", "truncate table"]):
             return (False, True, "Operación destructiva de base de datos o sistema de archivos detectada")
@@ -211,7 +330,7 @@ class CybersecuritySpecialistAgent(SpecialistAgent):
             agent_id="agent_cyber_specialist",
             name="Defensive Cybersecurity Specialist",
             specialty="cybersecurity",
-            candidate_model=os.getenv("AGENT_CYBER_MODEL", "deepseek/deepseek-r1:free"),
+            candidate_model=os.getenv("AGENT_CYBER_MODEL", "DeepSeek-R1"),
             allowed_tools=[
                 "security_scanner", "secret_leak_checker", "dependency_audit", "read_file"
             ],
@@ -223,6 +342,7 @@ class CybersecuritySpecialistAgent(SpecialistAgent):
                 "- Estructura siempre los hallazgos en: Hallazgo, Severidad (Crítica/Alta/Media/Baja), Evidencia, Impacto, Pasos de Reproducción Seguros y Mitigación Sugerida.\n"
                 "- Prioriza la protección de credenciales y aislamiento de procesos."
             ),
+            approved_fallback_model="qwen2.5-coder:1.5b-base",
             safe_mode=True
         )
 
@@ -242,7 +362,7 @@ class KernelSystemsSpecialistAgent(SpecialistAgent):
             agent_id="agent_kernel_specialist",
             name="Kernel & Systems Specialist",
             specialty="kernel",
-            candidate_model=os.getenv("AGENT_KERNEL_MODEL", "kimi-k2"),
+            candidate_model=os.getenv("AGENT_KERNEL_MODEL", "Kimi-K2"),
             allowed_tools=[
                 "c_asm_linter", "diff_generator", "sandbox_compiler", "verify_qemu_test"
             ],
@@ -254,6 +374,7 @@ class KernelSystemsSpecialistAgent(SpecialistAgent):
                 "- Toda modificación requiere diff, explicación técnica, verificación de compilación y pruebas.\n"
                 "- Nunca afirmes haber resuelto un fallo de CPU (#PF, #GP) basándote solo en pruebas simuladas."
             ),
+            approved_fallback_model="qwen2.5-coder:1.5b-base",
             safe_mode=True
         )
 
@@ -273,7 +394,7 @@ class DataSpecialistAgent(SpecialistAgent):
             agent_id="agent_data_specialist",
             name="Data & Analytics Specialist",
             specialty="data",
-            candidate_model=os.getenv("AGENT_DATA_MODEL", "gemma4:latest"),
+            candidate_model=os.getenv("AGENT_DATA_MODEL", "Gemma-4"),
             allowed_tools=[
                 "csv_analyzer", "sql_validator", "stats_calculator", "read_data_file"
             ],
@@ -284,6 +405,7 @@ class DataSpecialistAgent(SpecialistAgent):
                 "- Muestra supuestos, metodología, resultados reproducibles y límites de los datos.\n"
                 "- Prohibido inventar filas, imputar métricas sin declarar o simular distribuciones inexistentes."
             ),
+            approved_fallback_model="gemma4:latest",
             safe_mode=False
         )
 
@@ -300,7 +422,7 @@ class CreativeUISpecialistAgent(SpecialistAgent):
             agent_id="agent_creative_specialist",
             name="Creative & UI Specialist",
             specialty="creative",
-            candidate_model=os.getenv("AGENT_CREATIVE_MODEL", "mistral-small"),
+            candidate_model=os.getenv("AGENT_CREATIVE_MODEL", "Mistral-Small-4"),
             allowed_tools=[
                 "ui_theme_generator", "css_component_builder", "accessibility_checker"
             ],
@@ -311,6 +433,7 @@ class CreativeUISpecialistAgent(SpecialistAgent):
                 "- Respeta la estética acordada (Glassmorphism, sombras 3D de elevación, bordes redondeados y contraste WCAG AA).\n"
                 "- Entrega componentes claros, reutilizables y sin alterar funcionalidades de backend."
             ),
+            approved_fallback_model="qwen2.5-coder:1.5b-base",
             safe_mode=False
         )
 
@@ -327,7 +450,7 @@ class AutomationSpecialistAgent(SpecialistAgent):
             agent_id="agent_automation_specialist",
             name="Automation & Workflows Specialist",
             specialty="automation",
-            candidate_model=os.getenv("AGENT_AUTOMATION_MODEL", "glm-4.5-air"),
+            candidate_model=os.getenv("AGENT_AUTOMATION_MODEL", "GLM-4.5-Air"),
             allowed_tools=[
                 "task_decomposer", "workflow_runner", "plan_validator", "cancel_task"
             ],
@@ -339,6 +462,7 @@ class AutomationSpecialistAgent(SpecialistAgent):
                 "- Exige aprobación humana explícita antes de ejecutar pasos sensibles o destructivos.\n"
                 "- Soporta cancelación de planes en cualquier momento mediante botón o comando de aborto."
             ),
+            approved_fallback_model="qwen2.5-coder:1.5b-base",
             safe_mode=True
         )
 
