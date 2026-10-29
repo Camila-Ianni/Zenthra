@@ -2,14 +2,14 @@
   "agent_id": "agent_test_safety",
   "decisions": [
     {
-      "id": "dec_1792809439096",
-      "timestamp": 1792809439.09615,
-      "expires_at": 1795401439.09615,
+      "id": "dec_1793317383483",
+      "timestamp": 1793317383.4835799,
+      "expires_at": 1795909383.4835799,
       "tool_used": "none",
       "approved": true,
       "summary": "Se procesó la clave [REDACTED_GOOGLE_KEY] y token [REDACTED_GITHUB_TOKEN]"
     }
   ],
   "context_notes": {},
-  "last_updated": 1792809439.096153
+  "last_updated": 1793317383.483584
 }

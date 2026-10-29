@@ -31,8 +31,10 @@ SECTIONS
     /* Datos sin inicializar y la pila del kernel */
     .bss BLOCK(4K) : ALIGN(4K)
     {
+        _bss_start = .;
         *(COMMON)
         *(.bss)
+        _bss_end = .;
     }
 
     /* Símbolo para calcular el final de la memoria del kernel */

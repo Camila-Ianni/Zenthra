@@ -23,6 +23,8 @@
 #include "gfx.h"
 #include "mouse.h"
 #include "window_manager.h"
+#include "hal.h"
+#include "vfs.h"
 
 #define KHEAP_START 0x00400000
 #define KHEAP_SIZE  (6 * 1024 * 1024) // 6 MiB de Heap inicial (incluye Backbuffer VESA 1024x768x32 = 3 MiB)
@@ -174,6 +176,7 @@ void kernel_main(uint32_t magic, uintptr_t mbi_addr) {
     vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
     kprintf("[*] Cargando GDT (Kernel & User Segments)... ");
     gdt_init();
+    hal_post_code(POST_GDT_OK);
     vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
     kprintf("[OK]\n");
 
@@ -181,6 +184,7 @@ void kernel_main(uint32_t magic, uintptr_t mbi_addr) {
     vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
     kprintf("[*] Inicializando IDT y remapeo PIC 8259... ");
     idt_init();
+    hal_post_code(POST_IDT_OK);
     vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
     kprintf("[OK]\n");
 
@@ -188,6 +192,7 @@ void kernel_main(uint32_t magic, uintptr_t mbi_addr) {
     vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
     kprintf("[*] Configurando Timer PIT (100 Hz / IRQ0)... ");
     pit_init(100);
+    hal_post_code(POST_PIT_OK);
     vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
     kprintf("[OK]\n");
 
@@ -209,6 +214,7 @@ void kernel_main(uint32_t magic, uintptr_t mbi_addr) {
     vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
     kprintf("[*] Inicializando PMM (Deteccion fisica Multiboot)... ");
     pmm_init(magic, mbi_addr);
+    hal_post_code(POST_PMM_OK);
     vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
     kprintf("[OK]\n");
 
@@ -216,6 +222,7 @@ void kernel_main(uint32_t magic, uintptr_t mbi_addr) {
     vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
     kprintf("[*] Activando Paginacion x86 (CR0.PG, CR3, VMM %u MiB)... ", (uint32_t)(KERNEL_IDENTITY_MAP_SIZE / (1024 * 1024)));
     vmm_init();
+    hal_post_code(POST_VMM_OK);
     vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
     kprintf("[OK]\n");
 
@@ -223,6 +230,7 @@ void kernel_main(uint32_t magic, uintptr_t mbi_addr) {
     vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
     kprintf("[*] Inicializando Kernel Heap en 0x%x (6 MiB)... ", KHEAP_START);
     kheap_init((void*)KHEAP_START, KHEAP_SIZE);
+    hal_post_code(POST_KHEAP_OK);
     vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
     kprintf("[OK]\n");
 
@@ -230,6 +238,7 @@ void kernel_main(uint32_t magic, uintptr_t mbi_addr) {
     vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
     kprintf("[*] Inicializando Planificador Multitarea (Scheduler)... ");
     scheduler_init();
+    hal_post_code(POST_SCHEDULER_OK);
     task_create("worker_a", worker_task_a);
     task_create("worker_b", worker_task_b);
     task_create("worker_cpubound", worker_task_c_cpubound);
@@ -237,14 +246,22 @@ void kernel_main(uint32_t magic, uintptr_t mbi_addr) {
     vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
     kprintf("[OK]\n");
 
-    // 10. Inicializar sistema de archivos en memoria (RAMFS)
+    // 12. Inicializar sistema de archivos en memoria (RAMFS)
     vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
     kprintf("[*] Montando sistema de archivos RAMFS... ");
     ramfs_init();
     vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
     kprintf("[OK]\n");
 
-    // 11. Inicializar catálogo y tienda de aplicaciones (Zenthra Store)
+    // 12b. Inicializar Capa Virtual de Archivos (VFS, /dev y /proc)
+    vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
+    kprintf("[*] Montando Capa VFS (/dev/null, /dev/ttyS0, /proc)... ");
+    vfs_init();
+    hal_post_code(POST_VFS_MOUNT_OK);
+    vga_set_color(vga_entry_color(VGA_COLOR_LIGHT_GREEN, VGA_COLOR_BLACK));
+    kprintf("[OK]\n");
+
+    // 13. Inicializar catálogo y tienda de aplicaciones (Zenthra Store)
     vga_set_color(vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
     kprintf("[*] Inicializando catalogo Zenthra Store (11 Perfiles)... ");
     pkg_init();

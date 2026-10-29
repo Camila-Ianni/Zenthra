@@ -34,16 +34,31 @@ stack_top:
 .global _start
 .type _start, @function
 _start:
-    /* Inicializamos el puntero de pila */
-    mov $stack_top, %esp
-
-    /* Limpiar flags de CPU (asegurar dirección de cadenas e interrupciones apagadas) */
+    /* Limpiar flags de CPU (asegurar dirección hacia adelante e interrupciones apagadas) */
     cld
     cli
 
+    /* Preservar parámetros Multiboot en registros no modificados por rep stosb */
+    mov %eax, %esi  /* %esi = Magic Multiboot (0x2BADB002) */
+    mov %ebx, %edx  /* %edx = Puntero a Multiboot Info */
+
+    /* Purgado explícito de la sección .bss a ceros (Bare-Metal Startup CRT0) */
+    mov $_bss_start, %edi
+    mov $_bss_end, %ecx
+    sub %edi, %ecx
+    xor %eax, %eax
+    rep stosb
+
+    /* Inicializamos el puntero de pila una vez sanitizada la memoria .bss */
+    mov $stack_top, %esp
+
+    /* Emitir código de diagnóstico POST 0x01 al puerto I/O 0x80 (BSS purgada y CRT0 listo) */
+    mov $0x01, %al
+    out %al, $0x80
+
     /* Pasamos los parámetros Multiboot a kernel_main(magic, multiboot_info_ptr) */
-    push %ebx  /* Puntero a la estructura Multiboot Info provista por el bootloader */
-    push %eax  /* Valor mágico (debe ser 0x2BADB002) */
+    push %edx  /* mbi_addr */
+    push %esi  /* magic */
 
     /* Llamar a la función principal en C */
     call kernel_main

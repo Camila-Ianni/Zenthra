@@ -96,8 +96,24 @@
       "tool_used": "inference",
       "approved": true,
       "summary": "Tarea: Explicar en 2 líneas qué métrica representa la mediana frente al promedio en datos con outliers. -> Escribe una pregunta para el usuario:\n¿Por qué es importante tener en cuenta outliers al calcular el"
+    },
+    {
+      "id": "dec_1793317426738",
+      "timestamp": 1793317426.738413,
+      "expires_at": 1795909426.738413,
+      "tool_used": "inference",
+      "approved": true,
+      "summary": "Tarea: Definir la diferencia entre media y mediana con datos asimétricos. -> Resumen de la tarea del usuario:\nLa media es el promedio de los datos, mientras que la mediana es el"
+    },
+    {
+      "id": "dec_1793317577330",
+      "timestamp": 1793317577.330318,
+      "expires_at": 1795909577.3303192,
+      "tool_used": "inference",
+      "approved": true,
+      "summary": "Tarea: Explicar en 2 líneas qué métrica representa la mediana frente al promedio en datos con outliers. -> La mediana representa el valor central de los datos, mientras que el promedio es la suma de los dato"
     }
   ],
   "context_notes": {},
-  "last_updated": 1792810715.094912
+  "last_updated": 1793317577.330336
 }

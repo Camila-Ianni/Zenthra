@@ -71,3 +71,11 @@ void serial_write_string(const char* s) {
         serial_write_char(*s++);
     }
 }
+
+int serial_received(void) {
+    return 0;
+}
+
+char serial_read(void) {
+    return 0;
+}

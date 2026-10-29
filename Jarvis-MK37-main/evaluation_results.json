@@ -1,5 +1,5 @@
 {
-  "timestamp": 1792809790.2666051,
+  "timestamp": 1793317549.057108,
   "ollama_online": true,
   "total_specialists_evaluated": 6,
   "passed": 5,
@@ -15,7 +15,7 @@
       "provider": "ollama",
       "success": true,
       "raw_success": true,
-      "latency_ms": 4047,
+      "latency_ms": 4120,
       "keyword_verified": true,
       "expected_keyword": "json",
       "rubric": {
@@ -23,7 +23,7 @@
         "has_content": true,
         "no_error": true
       },
-      "output_preview": "Utilizar el método JSON.fromstring de Python para convertir un JSON string a un objeto Python.\nEscribir una función en P",
+      "output_preview": "Ejemplo:\nEntrada: '{\"name\": \"John\", \"age\": 30}'\nSalida: True\nEntrada: '{name: \"John\", \"age\": 30}'\nSalida: False\n\nRespues",
       "requires_approval": false,
       "error": null
     },
@@ -37,7 +37,7 @@
       "provider": "ollama",
       "success": true,
       "raw_success": true,
-      "latency_ms": 58633,
+      "latency_ms": 5993,
       "keyword_verified": true,
       "expected_keyword": "prepared",
       "rubric": {
@@ -45,7 +45,7 @@
         "has_content": true,
         "no_error": true
       },
-      "output_preview": "Explicar cómo prevenir SQL Injection mediante Prepared Statements.\nPrepared statements son una forma de prevenir el SQL ",
+      "output_preview": "Respuesta del usuario:\nSQL Injection es un tipo de ataque de seguridad en el que un atacante intenta introducir código S",
       "requires_approval": false,
       "error": null
     },
@@ -57,17 +57,17 @@
       "is_fallback": true,
       "fallback_reason": "OPENROUTER_API_KEY ausente: ejecutando fallback local 'qwen2.5-coder:1.5b-base'",
       "provider": "ollama",
-      "success": false,
+      "success": true,
       "raw_success": true,
-      "latency_ms": 58877,
-      "keyword_verified": false,
+      "latency_ms": 4103,
+      "keyword_verified": true,
       "expected_keyword": "eip",
       "rubric": {
-        "keyword_match": false,
+        "keyword_match": true,
         "has_content": true,
         "no_error": true
       },
-      "output_preview": "A continuación, proporcionamos un ejemplo de código C++ que muestra cómo se puede implementar la solución:\n\n```cpp\n#incl",
+      "output_preview": "Respuesta del usuario:\nEn el contexto de un sistema de páginas, un bucle infinito puede ocurrir si no se puede resolver ",
       "requires_approval": false,
       "error": null
     },
@@ -81,7 +81,7 @@
       "provider": "ollama",
       "success": true,
       "raw_success": true,
-      "latency_ms": 3695,
+      "latency_ms": 26936,
       "keyword_verified": true,
       "expected_keyword": "mediana",
       "rubric": {
@@ -89,7 +89,7 @@
         "has_content": true,
         "no_error": true
       },
-      "output_preview": "Respuesta del asesor:\nUna media es la suma de todos los números dividida entre la cantidad de números, y la mediana es e",
+      "output_preview": "Resumen de la tarea del usuario:\nLa media es el promedio de los datos, mientras que la mediana es el número que está en ",
       "requires_approval": false,
       "error": null
     },
@@ -101,17 +101,17 @@
       "is_fallback": true,
       "fallback_reason": "Credencial de Mistral ausente: ejecutando fallback local 'qwen2.5-coder:1.5b-base'",
       "provider": "ollama",
-      "success": true,
+      "success": false,
       "raw_success": true,
-      "latency_ms": 13200,
-      "keyword_verified": true,
+      "latency_ms": 3530,
+      "keyword_verified": false,
       "expected_keyword": "blur",
       "rubric": {
-        "keyword_match": true,
+        "keyword_match": false,
         "has_content": true,
         "no_error": true
       },
-      "output_preview": "Respuesta:\nPara crear un efecto Glassmorphism con backdrop-filter, se puede utilizar la siguiente lista de atributos CSS",
+      "output_preview": "Respuesta:\nPara el efecto Glassmorphism con backdrop-filter, se necesitan los siguientes atributos CSS:\n\n1. `backdrop-fi",
       "requires_approval": false,
       "error": null
     },
@@ -125,7 +125,7 @@
       "provider": "ollama",
       "success": true,
       "raw_success": true,
-      "latency_ms": 57734,
+      "latency_ms": 27048,
       "keyword_verified": true,
       "expected_keyword": "paso",
       "rubric": {
@@ -133,7 +133,7 @@
         "has_content": true,
         "no_error": true
       },
-      "output_preview": "Respuesta del usuario:\nPara desplegar un microservicio, se necesitan los siguientes pasos secuenciales:\n\n1. Crear el pro",
+      "output_preview": "Tarea del usuario:\nGenerar los pasos secuenciales para desplegar un microservicio.\nTarea del usuario:\nGenerar los pasos ",
       "requires_approval": false,
       "error": null
     }
@@ -145,17 +145,17 @@
       "model": "qwen2.5-coder:1.5b-base",
       "provider": "ollama",
       "success": true,
-      "latency_ms": 6311,
-      "output_length": 552
+      "latency_ms": 2929,
+      "output_length": 632
     },
     "alternative": {
       "model": "gemma4:latest",
       "provider": "ollama",
-      "success": false,
-      "latency_ms": 144274,
-      "output_length": 0
+      "success": true,
+      "latency_ms": 88809,
+      "output_length": 6631
     },
-    "latency_delta_ms": -137963,
+    "latency_delta_ms": -85880,
     "fastest_model": "qwen2.5-coder:1.5b-base"
   }
 }

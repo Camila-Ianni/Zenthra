@@ -2,32 +2,32 @@
   "agent_id": "agent_cyber_specialist",
   "decisions": [
     {
-      "id": "dec_1792809443483",
-      "timestamp": 1792809443.4834628,
-      "expires_at": 1795401443.4834628,
+      "id": "dec_1793317385579",
+      "timestamp": 1793317385.5797179,
+      "expires_at": 1795909385.5797179,
       "tool_used": "inference",
       "approved": true,
       "summary": "Tarea: Explicar cómo prevenir SQL Injection -> Para prevenir SQL Injection es mandatorio usar Prepared Statements y bind variables."
     },
     {
-      "id": "dec_1792809443484",
-      "timestamp": 1792809443.484152,
-      "expires_at": 1795401443.484152,
+      "id": "dec_1793317385580",
+      "timestamp": 1793317385.580503,
+      "expires_at": 1795909385.5805042,
       "tool_used": "inference",
       "approved": true,
       "summary": "Tarea: Explicar cómo prevenir SQL Injection -> Debe sanitizar los inputs y usar funciones de escape nativas de la base de datos."
     },
     {
-      "id": "dec_1792809506171",
-      "timestamp": 1792809506.171198,
-      "expires_at": 1795401506.171198,
+      "id": "dec_1793317395698",
+      "timestamp": 1793317395.698446,
+      "expires_at": 1795909395.698446,
       "tool_used": "inference",
       "approved": true,
-      "summary": "Tarea: Explicar cómo prevenir SQL Injection mediante Prepared Statements. -> Explicar cómo prevenir SQL Injection mediante Prepared Statements.\nPrepared statements son una forma"
+      "summary": "Tarea: Explicar cómo prevenir SQL Injection mediante Prepared Statements. -> Respuesta del usuario:\nSQL Injection es un tipo de ataque de seguridad en el que un atacante intenta"
     }
   ],
   "context_notes": {
     "threat_model": "STRIDE"
   },
-  "last_updated": 1792809506.171227
+  "last_updated": 1793317395.6984699
 }

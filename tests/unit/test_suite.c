@@ -26,6 +26,8 @@
 #include "errno.h"
 #include "spinlock.h"
 #include "slab.h"
+#include "hal.h"
+#include "vfs.h"
 
 // Variables y stubs requeridos por drivers en host
 void vga_putc(char c) {
@@ -1691,6 +1693,69 @@ void test_phase2_slab_spinlocks_and_dirty_rectangles(void) {
     TEST_ASSERT(wm_needs_redraw() == true, "wm_mark_dirty solicita actualizacion del gestor de ventanas");
 }
 
+/* Test 25: Fase 1 — Cimientos de Arranque, HAL, Códigos POST y Capa Canónica VFS */
+void test_phase1_hal_boot_and_vfs_architecture(void) {
+    printf("[*] Ejecutando: test_phase1_hal_boot_and_vfs_architecture...\n");
+
+    // 1. Verificación de Hardware Abstraction Layer (HAL) y Códigos POST
+    hal_post_code(POST_BSS_CLEARED);
+    TEST_ASSERT(true, "hal_post_code emite diagnostico POST 0x01 al puerto I/O 0x80");
+    TEST_ASSERT(hal_has_cpuid() == true, "hal_has_cpuid detecta soporte de extension CPUID x86");
+
+    // 2. Verificación de Inicialización de la Capa VFS
+    vfs_init();
+    TEST_ASSERT(vfs_get_node_count() >= 5, "vfs_init monta al menos los 5 nodos estandar (/dev y /proc)");
+    TEST_ASSERT(vfs_exists("/dev/null") == true, "Nodo pseudo-dispositivo /dev/null existe en VFS");
+    TEST_ASSERT(vfs_exists("/dev/zero") == true, "Nodo pseudo-dispositivo /dev/zero existe en VFS");
+    TEST_ASSERT(vfs_exists("/dev/ttyS0") == true, "Nodo pseudo-dispositivo /dev/ttyS0 existe en VFS");
+    TEST_ASSERT(vfs_exists("/proc/version") == true, "Nodo pseudo-archivo /proc/version existe en VFS");
+    TEST_ASSERT(vfs_exists("/proc/meminfo") == true, "Nodo pseudo-archivo /proc/meminfo existe en VFS");
+
+    // 3. Verificación de Operaciones en /dev/null
+    int fd_null = vfs_open("/dev/null", VFS_O_RDWR);
+    TEST_ASSERT(fd_null >= 0, "vfs_open abre con exito /dev/null");
+    int32_t wr_null = vfs_write(fd_null, "Prueba de volcado", 17);
+    TEST_ASSERT(wr_null == 17, "vfs_write en /dev/null consume todos los bytes");
+    char rd_buf[32];
+    int32_t rd_null = vfs_read(fd_null, rd_buf, sizeof(rd_buf));
+    TEST_ASSERT(rd_null == 0, "vfs_read en /dev/null reporta EOF inmediato (0 bytes)");
+    TEST_ASSERT(vfs_close(fd_null) == 0, "vfs_close cierra descriptor de /dev/null");
+
+    // 4. Verificación de Operaciones en /dev/zero
+    int fd_zero = vfs_open("/dev/zero", VFS_O_RDONLY);
+    TEST_ASSERT(fd_zero >= 0, "vfs_open abre con exito /dev/zero");
+    char zero_buf[16];
+    k_memset(zero_buf, 0xFF, sizeof(zero_buf));
+    int32_t rd_zero = vfs_read(fd_zero, zero_buf, 16);
+    TEST_ASSERT(rd_zero == 16, "vfs_read en /dev/zero llena el buffer solicitado");
+    bool all_zero = true;
+    for (int i = 0; i < 16; i++) {
+        if (zero_buf[i] != 0) all_zero = false;
+    }
+    TEST_ASSERT(all_zero == true, "vfs_read en /dev/zero entrega ceros absolutos");
+    vfs_close(fd_zero);
+
+    // 5. Verificación de Pseudo-archivos /proc
+    int fd_proc_ver = vfs_open("/proc/version", VFS_O_RDONLY);
+    TEST_ASSERT(fd_proc_ver >= 0, "vfs_open abre /proc/version");
+    char ver_buf[128];
+    k_memset(ver_buf, 0, sizeof(ver_buf));
+    int32_t rd_ver = vfs_read(fd_proc_ver, ver_buf, sizeof(ver_buf) - 1);
+    TEST_ASSERT(rd_ver > 0, "vfs_read en /proc/version extrae cadena informativa");
+    TEST_ASSERT(strstr(ver_buf, "Zenthra OS") != NULL, "/proc/version contiene identificador del sistema");
+    vfs_close(fd_proc_ver);
+
+    int fd_proc_mem = vfs_open("/proc/meminfo", VFS_O_RDONLY);
+    TEST_ASSERT(fd_proc_mem >= 0, "vfs_open abre /proc/meminfo");
+    char mem_buf[256];
+    k_memset(mem_buf, 0, sizeof(mem_buf));
+    int32_t rd_mem = vfs_read(fd_proc_mem, mem_buf, sizeof(mem_buf) - 1);
+    TEST_ASSERT(rd_mem > 0, "vfs_read en /proc/meminfo reporta telemetria de memoria");
+    TEST_ASSERT(strstr(mem_buf, "MemTotal:") != NULL, "/proc/meminfo reporta campo MemTotal");
+    TEST_ASSERT(strstr(mem_buf, "MemFree:") != NULL, "/proc/meminfo reporta campo MemFree");
+    vfs_close(fd_proc_mem);
+}
+
 int main(void) {
     printf("====================================================\n");
     printf("    ZENTHRA OS — SUITE DE PRUEBAS AUTOMATIZADAS     \n");
@@ -1720,6 +1785,7 @@ int main(void) {
     test_ps2_keyboard_driver();
     test_native_glassmorphism_jarvis_and_agents();
     test_phase2_slab_spinlocks_and_dirty_rectangles();
+    test_phase1_hal_boot_and_vfs_architecture();
 
     printf("\n----------------------------------------------------\n");
     printf("Resultados: %d Aprobados | %d Fallidos\n", tests_passed, tests_failed);
