@@ -89,7 +89,9 @@ El proyecto cuenta con un pipeline automatizado en **GitHub Actions** ([`.github
 
 ## 6. Documentación Adicional
 
+- [**Documentación Integral de Ingeniería de Software y Sistemas Operativos (20 Secciones)**](docs/DOCUMENTACION_INTEGRAL_PROYECTO.md) *(Propuesta, Mobile, Web, Repo, Video Demo, Usuario Prueba, Manual, Casos de Uso, Casos de Prueba, RF/RNF, DER, Diagrama de Clases, Arquitectura C4, Componentes, Gantt, FODA, Mapa de Empatía, Buyer Persona, Benchmarking, SCAMPER)*
 - [Guía de Arranque en VirtualBox](docs/virtualbox_guia.md)
 - [Especificación Técnica del MVP Gráfico](docs/DESKTOP_MVP.md)
 - [Estado Detallado y Matriz de Auditoría](docs/STATUS.md)
 - [Hoja de Ruta del Proyecto (Roadmap)](docs/ROADMAP.md)
+
