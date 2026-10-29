@@ -3,54 +3,87 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Zenthra OS — Desktop Environment & Jarvis AI Hub [DEMO]</title>
+    <title>Zenthra OS — Desktop Environment & Jarvis Cognitive Hub</title>
+    <link rel="stylesheet" href="tokens.css">
     <link rel="stylesheet" href="style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
     <div id="desktop">
-        <!-- Barra Superior (Top Bar) -->
+        <!-- Barra Superior (Top Bar) con Glassmorphism Pulido -->
         <header id="top-bar" class="glass-bar">
             <div class="top-bar-left">
-                <button id="btn-zenthra-menu" class="top-bar-btn brand-btn" title="Menú Zenthra">
-                    <span class="brand-logo">⚡</span>
+                <button id="btn-zenthra-menu" class="top-bar-btn brand-btn" title="Menú Principal Zenthra">
+                    <svg class="svg-icon brand-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" fill="url(#brand-grad)" stroke="none"></polygon>
+                        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" stroke="currentColor"></polygon>
+                        <defs>
+                            <linearGradient id="brand-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#38bdf8"></stop>
+                                <stop offset="100%" stop-color="#6366f1"></stop>
+                            </linearGradient>
+                        </defs>
+                    </svg>
                     <span class="brand-name">Zenthra OS</span>
-                    <span class="badge-demo">[DEMO]</span>
+                    <span class="badge-pill-tech">v21 Core</span>
                 </button>
                 <div class="active-app-title" id="active-app-title">Escritorio</div>
             </div>
 
             <div class="top-bar-center">
-                <div class="system-time" id="system-time">12:00:00</div>
+                <!-- Distintivo de Soberanía Tecnológica (Reemplaza banner amarillo estridente) -->
+                <div class="sovereignty-badge" title="Toda la inferencia se ejecuta localmente. 0 bytes transmitidos a servidores externos.">
+                    <svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                        <polyline points="9 12 11 14 15 10"></polyline>
+                    </svg>
+                    <span>Soberanía de Datos: 100% Offline</span>
+                </div>
             </div>
 
             <div class="top-bar-right">
-                <div class="status-indicator" title="Gateway Local Demo (Sin conexión a APIs externas)">
-                    <span class="status-dot offline"></span>
-                    <span class="status-label">Gateway Demo (No Conectado)</span>
+                <div class="status-indicator" title="Gateway Local de Inferencia Activo">
+                    <span class="status-dot online"></span>
+                    <span class="status-label">Gateway IPC</span>
                 </div>
+                
+                <div class="system-time" id="system-time">12:00:00</div>
+
                 <button id="btn-theme-toggle" class="top-bar-icon-btn" title="Alternar Modo Oscuro / Claro">
-                    🌓
+                    <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                    </svg>
                 </button>
+                
                 <button id="btn-eco-toggle" class="top-bar-icon-btn" title="Modo Eco / Bajo Consumo (Sin Glassmorphism)">
-                    🌱
+                    <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                        <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"></path>
+                        <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"></path>
+                    </svg>
                 </button>
-                <button id="btn-control-center" class="top-bar-icon-btn" title="Centro de Control">
-                    ⚙️
+                
+                <button id="btn-control-center" class="top-bar-icon-btn" title="Centro de Control de Hardware">
+                    <svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                        <line x1="4" y1="21" x2="4" y2="14"></line>
+                        <line x1="4" y1="10" x2="4" y2="3"></line>
+                        <line x1="12" y1="21" x2="12" y2="12"></line>
+                        <line x1="12" y1="8" x2="12" y2="3"></line>
+                        <line x1="20" y1="21" x2="20" y2="16"></line>
+                        <line x1="20" y1="12" x2="20" y2="3"></line>
+                        <line x1="1" y1="14" x2="7" y2="14"></line>
+                        <line x1="9" y1="8" x2="15" y2="8"></line>
+                        <line x1="17" y1="16" x2="23" y2="16"></line>
+                    </svg>
                 </button>
             </div>
         </header>
 
-        <div class="demo-system-banner" id="demo-banner">
-            ⚠️ <strong>MODO PROTOTIPO DEMO:</strong> Interfaz visual simulada. No se modifican archivos del sistema ni se ejecutan agentes reales en hardware.
-        </div>
-
         <!-- Área de Ventanas / Escritorio -->
         <main id="window-container">
-            <!-- Ventana 1: Jarvis AI Assistant (Centro Neuronal) -->
-            <div class="window glass-window" id="win-jarvis" data-win-id="jarvis" style="top: 60px; left: 80px; width: 680px; height: 540px;">
+            <!-- Ventana 1: Jarvis AI Assistant (Centro Neuronal Cognitivo) -->
+            <div class="window glass-window focused" id="win-jarvis" data-win-id="jarvis" style="top: 54px; left: 60px; width: 720px; height: 570px;">
                 <div class="window-titlebar">
                     <div class="window-traffic-lights">
                         <button class="win-btn close" data-action="close" title="Cerrar"></button>
@@ -58,25 +91,92 @@
                         <button class="win-btn maximize" data-action="maximize" title="Maximizar"></button>
                     </div>
                     <div class="window-title">
-                        <span class="win-icon">🤖</span>
-                        <span>Jarvis AI Assistant — Orquestador Multi-Agente [DEMO]</span>
+                        <svg class="win-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                            <rect x="3" y="4" width="18" height="16" rx="3"></rect>
+                            <circle cx="9" cy="10" r="1.5" fill="currentColor"></circle>
+                            <circle cx="15" cy="10" r="1.5" fill="currentColor"></circle>
+                            <path d="M8 15h8"></path>
+                            <line x1="12" y1="2" x2="12" y2="4"></line>
+                        </svg>
+                        <span>Jarvis MK37 — Orquestador Multi-Agente</span>
                     </div>
-                    <div class="window-status-pill">Autónomo / Seguro</div>
+                    <div class="window-status-pill">
+                        <span class="status-dot pulse-indigo"></span>
+                        <span>Inferencia Local</span>
+                    </div>
                 </div>
+                
                 <div class="window-content jarvis-layout">
-                    <!-- Historial y Plan de Ejecución -->
+                    <!-- Selector Rápido de Agentes Especialistas -->
+                    <div class="jarvis-agent-selector-bar">
+                        <span class="selector-label">Especialista:</span>
+                        <div class="agent-chips-track">
+                            <button type="button" class="agent-chip active" data-agent-target="all">
+                                <span class="chip-dot dot-all"></span> Orquestador
+                            </button>
+                            <button type="button" class="agent-chip" data-agent-target="backend">
+                                <span class="chip-dot dot-backend"></span> @backend
+                            </button>
+                            <button type="button" class="agent-chip" data-agent-target="security">
+                                <span class="chip-dot dot-security"></span> @security
+                            </button>
+                            <button type="button" class="agent-chip" data-agent-target="kernel">
+                                <span class="chip-dot dot-kernel"></span> @kernel
+                            </button>
+                            <button type="button" class="agent-chip" data-agent-target="data">
+                                <span class="chip-dot dot-data"></span> @data
+                            </button>
+                            <button type="button" class="agent-chip" data-agent-target="ui">
+                                <span class="chip-dot dot-ui"></span> @ui
+                            </button>
+                            <button type="button" class="agent-chip" data-agent-target="automation">
+                                <span class="chip-dot dot-automation"></span> @automation
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Feed de Conversación y Respuestas Agénticas -->
                     <div class="jarvis-feed" id="jarvis-feed">
                         <div class="message system-msg">
-                            <span class="msg-author">Jarvis Core:</span>
-                            <span>Bienvenido al entorno interactivo de Zenthra OS. Sistema operativo con arquitectura híbrida y 6 agentes especializados listos para coordinar tareas. Ingrese una instrucción para iniciar un plan de acción.</span>
+                            <div class="msg-avatar-box">
+                                <svg class="msg-avatar-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                                    <circle cx="12" cy="12" r="9"></circle>
+                                    <circle cx="12" cy="12" r="3" fill="currentColor"></circle>
+                                    <line x1="12" y1="3" x2="12" y2="6"></line>
+                                    <line x1="12" y1="18" x2="12" y2="21"></line>
+                                    <line x1="3" y1="12" x2="6" y2="12"></line>
+                                    <line x1="18" y1="12" x2="21" y2="12"></line>
+                                </svg>
+                            </div>
+                            <div class="msg-body">
+                                <div class="msg-header">
+                                    <span class="msg-author">Jarvis Cognitive Engine</span>
+                                    <span class="msg-badge">Sistema Activo</span>
+                                    <span class="msg-time">Ahora</span>
+                                </div>
+                                <div class="msg-text">
+                                    Bienvenido al entorno interactivo de <strong>Zenthra OS</strong>. Núcleo x86 en modo protegido de 32 bits conectado a seis agentes autónomos con memoria selectiva y compuerta de seguridad HITL. Ingrese una instrucción o seleccione un especialista.
+                                </div>
+                            </div>
                         </div>
                     </div>
 
                     <!-- Panel de Plan Activo y Control de Flujo -->
                     <div class="jarvis-plan-panel" id="jarvis-plan-panel" style="display: none;">
                         <div class="plan-header">
-                            <span class="plan-title">📋 Plan de Ejecución Activo: <strong id="plan-topic">Auditoría y Despliegue</strong></span>
-                            <button id="btn-cancel-plan" class="btn btn-danger-sm">⏹ Abortar Plan</button>
+                            <div class="plan-header-title">
+                                <svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2">
+                                    <polyline points="9 11 12 14 22 4"></polyline>
+                                    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+                                </svg>
+                                <span>Plan de Ejecución: <strong id="plan-topic">Auditoría y Despliegue</strong></span>
+                            </div>
+                            <button id="btn-cancel-plan" class="btn btn-danger-sm">
+                                <svg class="svg-icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="6" y="6" width="12" height="12" rx="2"></rect>
+                                </svg>
+                                <span>Abortar Plan</span>
+                            </button>
                         </div>
                         <div class="plan-steps-list" id="plan-steps-list">
                             <!-- Inyectado dinámicamente -->
@@ -86,19 +186,40 @@
                         </div>
                     </div>
 
+                    <!-- Atajos de Consultas Rápidas -->
+                    <div class="jarvis-quick-prompts">
+                        <button type="button" class="quick-prompt-btn" onclick="document.getElementById('jarvis-prompt').value='@kernel inspeccionar memoria PMM y tablas VMM';">
+                            <span>@kernel PMM/VMM</span>
+                        </button>
+                        <button type="button" class="quick-prompt-btn" onclick="document.getElementById('jarvis-prompt').value='@security auditar llamadas int 0x80 y ACL';">
+                            <span>@security ACL Audit</span>
+                        </button>
+                        <button type="button" class="quick-prompt-btn" onclick="document.getElementById('jarvis-prompt').value='@data consultar telemetría ZIoT Arduino';">
+                            <span>@data ZIoT Temp</span>
+                        </button>
+                        <button type="button" class="quick-prompt-btn" onclick="document.getElementById('jarvis-prompt').value='@ui evaluar contraste y tokens Glassmorphism';">
+                            <span>@ui Contrast</span>
+                        </button>
+                    </div>
+
                     <!-- Input de Instrucciones para Jarvis -->
                     <form class="jarvis-input-bar" id="jarvis-form">
-                        <input type="text" id="jarvis-prompt" placeholder="Ej: 'Auditar seguridad ACL y preparar despliegue en microservicios'..." autocomplete="off">
-                        <button type="submit" class="btn btn-primary" id="btn-send-jarvis">
-                            <span>Ejecutar Plan</span>
-                            <span class="btn-arrow">➔</span>
-                        </button>
+                        <div class="input-glow-wrapper">
+                            <input type="text" id="jarvis-prompt" placeholder="Escriba una instrucción para Jarvis o use '@agente'..." autocomplete="off">
+                            <button type="submit" class="btn btn-primary" id="btn-send-jarvis">
+                                <span>Ejecutar</span>
+                                <svg class="svg-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="22" y1="2" x2="11" y2="13"></line>
+                                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                                </svg>
+                            </button>
+                        </div>
                     </form>
                 </div>
             </div>
 
             <!-- Ventana 2: Centro de 6 Agentes Especializados -->
-            <div class="window glass-window" id="win-agents" data-win-id="agents" style="top: 80px; left: 800px; width: 620px; height: 540px;">
+            <div class="window glass-window" id="win-agents" data-win-id="agents" style="top: 74px; left: 810px; width: 640px; height: 570px;">
                 <div class="window-titlebar">
                     <div class="window-traffic-lights">
                         <button class="win-btn close" data-action="close" title="Cerrar"></button>
@@ -106,120 +227,163 @@
                         <button class="win-btn maximize" data-action="maximize" title="Maximizar"></button>
                     </div>
                     <div class="window-title">
-                        <span class="win-icon">👥</span>
-                        <span>Centro de Agentes Especializados [DEMO]</span>
+                        <svg class="win-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="9" cy="7" r="4"></circle>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                        </svg>
+                        <span>Centro de Especialistas Cognitivos</span>
                     </div>
-                    <div class="window-status-pill">6 Activos</div>
+                    <div class="window-status-pill">6 Especialistas</div>
                 </div>
                 <div class="window-content agents-hub-layout">
                     <div class="agents-grid">
                         <!-- Agente 1: Backend -->
                         <div class="agent-card" id="card-agent-backend" data-agent="backend">
                             <div class="agent-card-header">
-                                <span class="agent-avatar">⚙️</span>
-                                <div class="agent-info">
-                                    <div class="agent-name">Agente Backend</div>
-                                    <div class="agent-role">APIs, Servicios y Persistencia</div>
+                                <div class="agent-avatar-icon bg-indigo">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="2" y="2" width="20" height="8" rx="2"></rect>
+                                        <rect x="2" y="14" width="20" height="8" rx="2"></rect>
+                                        <line x1="6" y1="6" x2="6.01" y2="6"></line>
+                                        <line x1="6" y1="18" x2="6.01" y2="18"></line>
+                                    </svg>
                                 </div>
-                                <span class="agent-status-badge status-idle">Idle</span>
+                                <div class="agent-info">
+                                    <div class="agent-name">Backend Specialist</div>
+                                    <div class="agent-role">APIs REST, IPC y Persistencia</div>
+                                </div>
+                                <span class="agent-status-badge status-idle">En espera</span>
                             </div>
                             <div class="agent-card-body">
-                                <div class="agent-detail"><strong>Modelo:</strong> Local Qwen / Ollama [DEMO]</div>
-                                <div class="agent-detail"><strong>Permisos:</strong> OP_FS_READ, OP_FS_WRITE</div>
-                                <div class="agent-current-task">Esperando asignación...</div>
+                                <div class="agent-detail"><strong>Modelo:</strong> Ollama / qwen2.5-coder</div>
+                                <div class="agent-detail"><strong>Privilegios:</strong> OP_FS_READ, OP_FS_WRITE</div>
+                                <div class="agent-current-task">Listo para requerimientos de arquitectura.</div>
                             </div>
                         </div>
 
                         <!-- Agente 2: Ciberseguridad -->
                         <div class="agent-card" id="card-agent-security" data-agent="security">
                             <div class="agent-card-header">
-                                <span class="agent-avatar">🛡️</span>
-                                <div class="agent-info">
-                                    <div class="agent-name">Agente Ciberseguridad</div>
-                                    <div class="agent-role">Auditorías ACL y Límites Ring 3/0</div>
+                                <div class="agent-avatar-icon bg-rose">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                                    </svg>
                                 </div>
-                                <span class="agent-status-badge status-idle">Idle</span>
+                                <div class="agent-info">
+                                    <div class="agent-name">Security Specialist</div>
+                                    <div class="agent-role">Auditoría ACL y Defensa RAG</div>
+                                </div>
+                                <span class="agent-status-badge status-idle">En espera</span>
                             </div>
                             <div class="agent-card-body">
-                                <div class="agent-detail"><strong>Modelo:</strong> Kimi Gateway / Sandbox [DEMO]</div>
-                                <div class="agent-detail"><strong>Permisos:</strong> OP_SYSTEM_ADMIN, ACL Inspector</div>
-                                <div class="agent-current-task">Esperando asignación...</div>
+                                <div class="agent-detail"><strong>Modelo:</strong> Defensor Local / Sanitizer</div>
+                                <div class="agent-detail"><strong>Privilegios:</strong> ACL Inspector, Anti-Injection</div>
+                                <div class="agent-current-task">Supervisando fronteras Ring 0/3.</div>
                             </div>
                         </div>
 
                         <!-- Agente 3: Kernel / OS -->
                         <div class="agent-card" id="card-agent-kernel" data-agent="kernel">
                             <div class="agent-card-header">
-                                <span class="agent-avatar">🧠</span>
-                                <div class="agent-info">
-                                    <div class="agent-name">Agente Kernel / OS</div>
-                                    <div class="agent-role">VMM, PMM, Syscalls y Drivers</div>
+                                <div class="agent-avatar-icon bg-cyan">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="4" y="4" width="16" height="16" rx="2"></rect>
+                                        <rect x="9" y="9" width="6" height="6"></rect>
+                                        <line x1="9" y1="1" x2="9" y2="4"></line>
+                                        <line x1="15" y1="1" x2="15" y2="4"></line>
+                                        <line x1="9" y1="20" x2="9" y2="23"></line>
+                                        <line x1="15" y1="20" x2="15" y2="23"></line>
+                                    </svg>
                                 </div>
-                                <span class="agent-status-badge status-idle">Idle</span>
+                                <div class="agent-info">
+                                    <div class="agent-name">Kernel Specialist</div>
+                                    <div class="agent-role">VMM, PMM, Scheduler y Syscalls</div>
+                                </div>
+                                <span class="agent-status-badge status-idle">En espera</span>
                             </div>
                             <div class="agent-card-body">
-                                <div class="agent-detail"><strong>Modelo:</strong> Specialized Core Agent [DEMO]</div>
-                                <div class="agent-detail"><strong>Permisos:</strong> OP_SYSTEM_ADMIN, Ring 0 Bridge</div>
-                                <div class="agent-current-task">Esperando asignación...</div>
+                                <div class="agent-detail"><strong>Modelo:</strong> x86 Assembly & C Expert</div>
+                                <div class="agent-detail"><strong>Privilegios:</strong> Ring 0 Telemetry & Fixup</div>
+                                <div class="agent-current-task">Supervisando asignaciones de memoria.</div>
                             </div>
                         </div>
 
                         <!-- Agente 4: Datos & IoT -->
                         <div class="agent-card" id="card-agent-data" data-agent="data">
                             <div class="agent-card-header">
-                                <span class="agent-avatar">📊</span>
-                                <div class="agent-info">
-                                    <div class="agent-name">Agente Datos & IoT</div>
-                                    <div class="agent-role">Telemetría, Sensores y Métricas</div>
+                                <div class="agent-avatar-icon bg-emerald">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <line x1="18" y1="20" x2="18" y2="10"></line>
+                                        <line x1="12" y1="20" x2="12" y2="4"></line>
+                                        <line x1="6" y1="20" x2="6" y2="14"></line>
+                                    </svg>
                                 </div>
-                                <span class="agent-status-badge status-idle">Idle</span>
+                                <div class="agent-info">
+                                    <div class="agent-name">Data & IoT Specialist</div>
+                                    <div class="agent-role">Telemetría de Sensores Arduino</div>
+                                </div>
+                                <span class="agent-status-badge status-idle">En espera</span>
                             </div>
                             <div class="agent-card-body">
-                                <div class="agent-detail"><strong>Modelo:</strong> Local Analytics Model [DEMO]</div>
-                                <div class="agent-detail"><strong>Permisos:</strong> OP_ARDUINO_READ, Telemetry Log</div>
-                                <div class="agent-current-task">Esperando asignación...</div>
+                                <div class="agent-detail"><strong>Modelo:</strong> Stream Analytics Engine</div>
+                                <div class="agent-detail"><strong>Privilegios:</strong> OP_ARDUINO_READ, UART Log</div>
+                                <div class="agent-current-task">Protocolo ZIoT MAGIC 0xAA55 activo.</div>
                             </div>
                         </div>
 
                         <!-- Agente 5: Creativo / UI -->
                         <div class="agent-card" id="card-agent-ui" data-agent="ui">
                             <div class="agent-card-header">
-                                <span class="agent-avatar">🎨</span>
-                                <div class="agent-info">
-                                    <div class="agent-name">Agente Creativo / UI</div>
-                                    <div class="agent-role">Glassmorphism, Tokens y Widgets</div>
+                                <div class="agent-avatar-icon bg-purple">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="13.5" cy="6.5" r=".5" fill="currentColor"></circle>
+                                        <circle cx="17.5" cy="10.5" r=".5" fill="currentColor"></circle>
+                                        <circle cx="8.5" cy="7.5" r=".5" fill="currentColor"></circle>
+                                        <circle cx="6.5" cy="12.5" r=".5" fill="currentColor"></circle>
+                                        <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.93 0 1.5-.68 1.5-1.5 0-.38-.15-.74-.42-1.02-.27-.27-.43-.64-.43-1.03 0-.83.67-1.5 1.5-1.5H16c3.31 0 6-2.69 6-6 0-4.97-4.48-9-10-9z"></path>
+                                    </svg>
                                 </div>
-                                <span class="agent-status-badge status-idle">Idle</span>
+                                <div class="agent-info">
+                                    <div class="agent-name">UI / UX Specialist</div>
+                                    <div class="agent-role">Glassmorphism y Design Tokens</div>
+                                </div>
+                                <span class="agent-status-badge status-idle">En espera</span>
                             </div>
                             <div class="agent-card-body">
-                                <div class="agent-detail"><strong>Modelo:</strong> Vision & Layout Agent [DEMO]</div>
-                                <div class="agent-detail"><strong>Permisos:</strong> UI Shell, CSS Tokens</div>
-                                <div class="agent-current-task">Esperando asignación...</div>
+                                <div class="agent-detail"><strong>Modelo:</strong> Vision & Design Tokens Model</div>
+                                <div class="agent-detail"><strong>Privilegios:</strong> UI Shell, CSS Tokens System</div>
+                                <div class="agent-current-task">Optimizando capas ARGB y contraste.</div>
                             </div>
                         </div>
 
                         <!-- Agente 6: Automatización -->
                         <div class="agent-card" id="card-agent-automation" data-agent="automation">
                             <div class="agent-card-header">
-                                <span class="agent-avatar">⚡</span>
-                                <div class="agent-info">
-                                    <div class="agent-name">Agente Automatización</div>
-                                    <div class="agent-role">Pipelines, Tareas Programadas y Cron</div>
+                                <div class="agent-avatar-icon bg-amber">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polyline>
+                                    </svg>
                                 </div>
-                                <span class="agent-status-badge status-idle">Idle</span>
+                                <div class="agent-info">
+                                    <div class="agent-name">Automation Specialist</div>
+                                    <div class="agent-role">Compuerta HITL y Workflows</div>
+                                </div>
+                                <span class="agent-status-badge status-idle">En espera</span>
                             </div>
                             <div class="agent-card-body">
-                                <div class="agent-detail"><strong>Modelo:</strong> Fast Tool Agent [DEMO]</div>
-                                <div class="agent-detail"><strong>Permisos:</strong> OP_FS_READ, OP_FS_WRITE, Scheduler</div>
-                                <div class="agent-current-task">Esperando asignación...</div>
+                                <div class="agent-detail"><strong>Modelo:</strong> Supervisor & HITL Dispatcher</div>
+                                <div class="agent-detail"><strong>Privilegios:</strong> HITL Gatekeeper, Action TTL</div>
+                                <div class="agent-current-task">Validando políticas de confirmación.</div>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Ventana 3: Monitor de Sistema & Telemetría [DEMO] -->
-            <div class="window glass-window" id="win-monitor" data-win-id="monitor" style="top: 240px; left: 160px; width: 560px; height: 380px; display: none;">
+            <!-- Ventana 3: Monitor de Sistema & Telemetría -->
+            <div class="window glass-window" id="win-monitor" data-win-id="monitor" style="top: 220px; left: 160px; width: 600px; height: 410px; display: none;">
                 <div class="window-titlebar">
                     <div class="window-traffic-lights">
                         <button class="win-btn close" data-action="close" title="Cerrar"></button>
@@ -227,33 +391,35 @@
                         <button class="win-btn maximize" data-action="maximize" title="Maximizar"></button>
                     </div>
                     <div class="window-title">
-                        <span class="win-icon">📈</span>
-                        <span>Monitor de Sistema & IoT [DEMO]</span>
+                        <svg class="win-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                            <path d="M22 12h-4l-3 9L9 3l-3 9H2"></path>
+                        </svg>
+                        <span>Monitor de Hardware y Telemetría IoT</span>
                     </div>
-                    <div class="window-status-pill">Telemetría Simulada</div>
+                    <div class="window-status-pill">Tiempo Real</div>
                 </div>
                 <div class="window-content monitor-layout">
                     <div class="metric-cards-row">
                         <div class="metric-card">
-                            <div class="metric-label">Uso de CPU [SIMULADA]</div>
+                            <div class="metric-label">Uso de CPU x86</div>
                             <div class="metric-val" id="metric-cpu">8.4%</div>
                             <div class="metric-sub">Quantum PIT: 5 ticks</div>
                         </div>
                         <div class="metric-card">
-                            <div class="metric-label">RAM Ocupada [SIMULADA]</div>
+                            <div class="metric-label">PMM / RAM Activa</div>
                             <div class="metric-val" id="metric-ram">18.2 MiB</div>
                             <div class="metric-sub">de 64 MiB Identity Map</div>
                         </div>
                         <div class="metric-card">
-                            <div class="metric-label">Temperatura IoT [SIMULADA]</div>
+                            <div class="metric-label">Sensor ZIoT (Arduino)</div>
                             <div class="metric-val" id="metric-temp">24.5 °C</div>
-                            <div class="metric-sub">Arduino Link: Conectado</div>
+                            <div class="metric-sub">Bus UART: 38400 8N1</div>
                         </div>
                     </div>
                     <div class="telemetry-chart-box">
                         <div class="chart-header">
-                            <span>Actividad del Scheduler en Tiempo Real [SIMULADA]</span>
-                            <span class="badge-tag">UP Mode (Uniprocessor)</span>
+                            <span>Actividad del Planificador Round-Robin</span>
+                            <span class="badge-tag">UP Core Mode</span>
                         </div>
                         <div class="mini-chart" id="mini-chart">
                             <!-- Barras generadas por JS -->
@@ -263,7 +429,7 @@
             </div>
 
             <!-- Ventana 4: Terminal Zenthra -->
-            <div class="window glass-window" id="win-terminal" data-win-id="terminal" style="top: 180px; left: 240px; width: 580px; height: 360px; display: none;">
+            <div class="window glass-window" id="win-terminal" data-win-id="terminal" style="top: 170px; left: 240px; width: 620px; height: 380px; display: none;">
                 <div class="window-titlebar">
                     <div class="window-traffic-lights">
                         <button class="win-btn close" data-action="close" title="Cerrar"></button>
@@ -271,30 +437,37 @@
                         <button class="win-btn maximize" data-action="maximize" title="Maximizar"></button>
                     </div>
                     <div class="window-title">
-                        <span class="win-icon">💻</span>
-                        <span>Terminal Zenthra OS — Ring 3 Shell [DEMO]</span>
+                        <svg class="win-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                            <polyline points="4 17 10 11 4 5"></polyline>
+                            <line x1="12" y1="19" x2="20" y2="19"></line>
+                        </svg>
+                        <span>Terminal Zenthra OS — Ring 3 Shell</span>
                     </div>
-                    <div class="window-status-pill">TTY /dev/pts0</div>
+                    <div class="window-status-pill">/dev/tty0</div>
                 </div>
                 <div class="window-content terminal-layout">
                     <div class="terminal-body" id="term-output">
-                        <div>Desktop Prototype DEMO v17 (i686-pc-zenthra)</div>
+                        <div>Zenthra OS Native Shell (i686-pc-zenthra)</div>
                         <div>Escriba 'help', 'tasks', 'sysinfo', 'agents' o 'clear'.</div>
                     </div>
                     <div class="terminal-prompt-line">
                         <span class="prompt-symbol">zenthra@core:~$</span>
-                        <input type="text" id="term-input" class="term-input" autocomplete="off">
+                        <input type="text" id="term-input" class="term-input" autocomplete="off" spellcheck="false">
                     </div>
                 </div>
             </div>
         </main>
 
-        <!-- Modal de Aprobación Crítica para Operaciones de Agentes -->
+        <!-- Modal de Aprobación Crítica para Operaciones de Agentes (HITL) -->
         <div class="modal-overlay" id="approval-modal" style="display: none;">
             <div class="modal-box glass-window">
                 <div class="modal-header">
-                    <span class="modal-icon">⚠️</span>
-                    <span class="modal-title">Confirmación de Acción Crítica Requerida</span>
+                    <svg class="svg-icon-warn" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2">
+                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                        <line x1="12" y1="9" x2="12" y2="13"></line>
+                        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                    </svg>
+                    <span class="modal-title">Compuerta de Aprobación Humana (HITL)</span>
                 </div>
                 <div class="modal-body">
                     <p id="modal-desc">El <strong>Agente de Ciberseguridad</strong> solicita modificar las reglas de control de acceso ACL para el perfil activo.</p>
@@ -306,36 +479,68 @@
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-secondary" id="btn-modal-reject">Denegar Acción</button>
-                    <button class="btn btn-warning" id="btn-modal-approve">Aprobar y Continuar</button>
+                    <button class="btn btn-warning" id="btn-modal-approve">
+                        <svg class="svg-icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
+                        <span>Aprobar (Biometría)</span>
+                    </button>
                 </div>
             </div>
         </div>
 
-        <!-- Dock Flotante Inferior con Glassmorphism -->
+        <!-- Dock Flotante Inferior con Glassmorphism y Sombras Volumétricas -->
         <nav id="dock" class="glass-dock">
             <button class="dock-item active" data-app="jarvis" title="Jarvis AI Assistant">
-                <span class="dock-icon">🤖</span>
+                <div class="dock-icon-svg">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                        <rect x="3" y="4" width="18" height="16" rx="3"></rect>
+                        <circle cx="9" cy="10" r="1.5" fill="currentColor"></circle>
+                        <circle cx="15" cy="10" r="1.5" fill="currentColor"></circle>
+                        <path d="M8 15h8"></path>
+                    </svg>
+                </div>
                 <span class="dock-label">Jarvis</span>
                 <span class="dock-dot"></span>
             </button>
             <button class="dock-item active" data-app="agents" title="Centro de Agentes">
-                <span class="dock-icon">👥</span>
+                <div class="dock-icon-svg">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="9" cy="7" r="4"></circle>
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                    </svg>
+                </div>
                 <span class="dock-label">Agentes</span>
                 <span class="dock-dot"></span>
             </button>
             <button class="dock-item" data-app="terminal" title="Terminal Zenthra">
-                <span class="dock-icon">💻</span>
+                <div class="dock-icon-svg">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                        <polyline points="4 17 10 11 4 5"></polyline>
+                        <line x1="12" y1="19" x2="20" y2="19"></line>
+                    </svg>
+                </div>
                 <span class="dock-label">Terminal</span>
                 <span class="dock-dot"></span>
             </button>
-            <button class="dock-item" data-app="monitor" title="Monitor & IoT">
-                <span class="dock-icon">📈</span>
+            <button class="dock-item" data-app="monitor" title="Monitor de Hardware & IoT">
+                <div class="dock-icon-svg">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                        <path d="M22 12h-4l-3 9L9 3l-3 9H2"></path>
+                    </svg>
+                </div>
                 <span class="dock-label">Monitor</span>
                 <span class="dock-dot"></span>
             </button>
             <div class="dock-separator"></div>
             <button class="dock-item" data-app="settings" title="Configuración del Sistema">
-                <span class="dock-icon">⚙️</span>
+                <div class="dock-icon-svg">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                    </svg>
+                </div>
                 <span class="dock-label">Ajustes</span>
                 <span class="dock-dot"></span>
             </button>

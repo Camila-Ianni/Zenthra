@@ -589,4 +589,24 @@ Gráficos: VESA LFB 32 bpp con Double Buffering`;
         }
         termOutput.appendChild(out);
     }
+
+    // Interacción con los chips de agentes especialistas en Jarvis
+    const agentChips = document.querySelectorAll('.agent-chip');
+    const jarvisPromptInput = document.getElementById('jarvis-prompt');
+    agentChips.forEach(chip => {
+        chip.addEventListener('click', () => {
+            agentChips.forEach(c => c.classList.remove('active'));
+            chip.classList.add('active');
+            const target = chip.getAttribute('data-agent-target');
+            if (jarvisPromptInput) {
+                if (target !== 'all') {
+                    jarvisPromptInput.value = `@${target} `;
+                } else {
+                    jarvisPromptInput.value = '';
+                }
+                jarvisPromptInput.focus();
+            }
+        });
+    });
 });
+

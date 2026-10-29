@@ -1,0 +1,118 @@
+/* ==========================================================================
+   ZENTHRA OS — DESIGN TOKENS SYSTEM (Fase 3: Professional UI Tokens)
+   Sistema de Tokens de 3 Niveles: Primitivos, Semánticos y de Componentes
+   ========================================================================== */
+
+:root {
+    /* ----------------------------------------------------------------------
+       1. TOKENS PRIMITIVOS (CORE PALETTE & SCALES)
+       ---------------------------------------------------------------------- */
+    /* Cosmic & Slate Scales */
+    --zt-primitives-color-slate-950: #020617;
+    --zt-primitives-color-slate-900: #0f172a;
+    --zt-primitives-color-slate-850: #131b2e;
+    --zt-primitives-color-slate-800: #1e293b;
+    --zt-primitives-color-slate-700: #334155;
+    --zt-primitives-color-slate-600: #475569;
+    --zt-primitives-color-slate-400: #94a3b8;
+    --zt-primitives-color-slate-200: #e2e8f0;
+    --zt-primitives-color-slate-50:  #f8fafc;
+
+    /* Cosmic Glow Accents */
+    --zt-primitives-color-indigo-600: #4f46e5;
+    --zt-primitives-color-indigo-500: #6366f1;
+    --zt-primitives-color-indigo-400: #818cf8;
+    --zt-primitives-color-cyan-500:   #06b6d4;
+    --zt-primitives-color-cyan-400:   #38bdf8;
+    --zt-primitives-color-purple-500: #a855f7;
+    --zt-primitives-color-emerald-500:#10b981;
+    --zt-primitives-color-emerald-400:#34d399;
+    --zt-primitives-color-amber-500:  #f59e0b;
+    --zt-primitives-color-rose-500:   #f43f5e;
+
+    /* Spacing Scale (4px Base Grid) */
+    --zt-space-1: 4px;
+    --zt-space-2: 8px;
+    --zt-space-3: 12px;
+    --zt-space-4: 16px;
+    --zt-space-5: 20px;
+    --zt-space-6: 24px;
+    --zt-space-8: 32px;
+    --zt-space-10: 40px;
+
+    /* Radii Scale */
+    --zt-radius-xs: 4px;
+    --zt-radius-sm: 8px;
+    --zt-radius-md: 12px;
+    --zt-radius-lg: 18px;
+    --zt-radius-xl: 24px;
+    --zt-radius-full: 9999px;
+
+    /* Typography Fonts */
+    --zt-font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --zt-font-mono: 'Fira Code', 'JetBrains Mono', Menlo, Consolas, monospace;
+
+    /* ----------------------------------------------------------------------
+       2. TOKENS SEMÁNTICOS (MODO OSCURO / DEFAULT)
+       ---------------------------------------------------------------------- */
+    --bg-desktop: radial-gradient(circle at 15% 15%, #1e1b4b 0%, #0f172a 45%, #020617 100%);
+    --bg-mesh-glow: radial-gradient(circle at 80% 20%, rgba(99, 102, 241, 0.15) 0%, transparent 40%),
+                    radial-gradient(circle at 20% 80%, rgba(56, 189, 248, 0.12) 0%, transparent 40%);
+
+    --surface-glass-acrylic: rgba(15, 23, 42, 0.72);
+    --surface-glass-subtle:  rgba(255, 255, 255, 0.05);
+    --surface-glass-card:    rgba(19, 27, 46, 0.65);
+    --surface-glass-hover:   rgba(255, 255, 255, 0.09);
+    --surface-glass-active:  rgba(255, 255, 255, 0.14);
+
+    --border-glass-subtle:   rgba(255, 255, 255, 0.12);
+    --border-glass-focused:  rgba(99, 102, 241, 0.65);
+    --border-glass-accent:   rgba(56, 189, 248, 0.5);
+
+    --text-primary:          var(--zt-primitives-color-slate-50);
+    --text-secondary:        var(--zt-primitives-color-slate-400);
+    --text-muted:            var(--zt-primitives-color-slate-600);
+    --text-accent:           var(--zt-primitives-color-indigo-400);
+    --text-cyan:             var(--zt-primitives-color-cyan-400);
+    --text-success:          var(--zt-primitives-color-emerald-400);
+
+    /* Elevation & Volumetric Lighting */
+    --elevation-window-inactive: 0 16px 36px -8px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    --elevation-window-focused:  0 28px 60px -12px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(99, 102, 241, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.25);
+    --elevation-dock:            0 20px 40px 0 rgba(0, 0, 0, 0.6), inset 0 1px 1px rgba(255, 255, 255, 0.2);
+    --elevation-modal:           0 36px 80px -16px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(245, 158, 11, 0.5);
+
+    --blur-backdrop:             blur(24px) saturate(180%);
+
+    /* ----------------------------------------------------------------------
+       3. TOKENS DE COMPONENTE
+       ---------------------------------------------------------------------- */
+    --topbar-height: 42px;
+    --dock-height:   56px;
+    --traffic-btn-size: 12px;
+    --btn-primary-bg: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+    --btn-primary-hover: linear-gradient(135deg, #818cf8 0%, #6366f1 100%);
+}
+
+/* Tokens Semánticos para Tema Claro */
+[data-theme="light"] {
+    --bg-desktop: radial-gradient(circle at 15% 15%, #e0e7ff 0%, #f1f5f9 45%, #cbd5e1 100%);
+    --bg-mesh-glow: radial-gradient(circle at 80% 20%, rgba(99, 102, 241, 0.1) 0%, transparent 40%),
+                    radial-gradient(circle at 20% 80%, rgba(14, 165, 233, 0.1) 0%, transparent 40%);
+
+    --surface-glass-acrylic: rgba(255, 255, 255, 0.78);
+    --surface-glass-subtle:  rgba(255, 255, 255, 0.5);
+    --surface-glass-card:    rgba(255, 255, 255, 0.65);
+    --surface-glass-hover:   rgba(255, 255, 255, 0.85);
+
+    --border-glass-subtle:   rgba(15, 23, 42, 0.12);
+    --border-glass-focused:  rgba(99, 102, 241, 0.7);
+
+    --text-primary:          var(--zt-primitives-color-slate-950);
+    --text-secondary:        var(--zt-primitives-color-slate-600);
+    --text-muted:            var(--zt-primitives-color-slate-400);
+
+    --elevation-window-inactive: 0 12px 30px -4px rgba(15, 23, 42, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    --elevation-window-focused:  0 20px 48px -6px rgba(15, 23, 42, 0.22), 0 0 0 1px rgba(99, 102, 241, 0.6), inset 0 1px 1px rgba(255, 255, 255, 0.9);
+    --elevation-dock:            0 16px 36px 0 rgba(15, 23, 42, 0.15), inset 0 1px 1px rgba(255, 255, 255, 0.9);
+}
