@@ -15,5 +15,7 @@ void kfree(void* ptr);
 /* Consulta de estadísticas del heap */
 size_t kheap_get_used(void);
 size_t kheap_get_free(void);
+size_t kheap_get_max_free_block(void);
 
 #endif
+

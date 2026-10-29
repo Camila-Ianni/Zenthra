@@ -69,7 +69,8 @@ SRCS_C = kernel/kernel.c \
          kernel/drivers/mouse.c \
          kernel/drivers/window_manager.c \
          kernel/lib/klib.c \
-         kernel/lib/kheap.c
+         kernel/lib/kheap.c \
+         kernel/lib/slab.c
 
 SRCS_S = boot/boot.s \
          kernel/arch/x86/interrupts.s
@@ -190,7 +191,7 @@ endif
 # Ejecutar suite de pruebas unitarias y de subsistemas
 test:
 	@echo "=== Compilando y ejecutando Test Suite de Zenthra OS ==="
-	$(CC_HOST) -Wall -Wextra -Ikernel/include tests/mocks/mock_hw.c kernel/lib/klib.c kernel/lib/kheap.c kernel/arch/x86/syscall.c kernel/drivers/keyboard.c kernel/drivers/task.c kernel/drivers/acl_security.c kernel/drivers/ramfs.c kernel/drivers/rules_engine.c kernel/drivers/pkg_manager.c kernel/drivers/pmm.c kernel/drivers/vmm.c kernel/drivers/page_fault.c kernel/drivers/gfx.c kernel/drivers/mouse.c kernel/drivers/window_manager.c tests/unit/test_suite.c -o bin_test
+	$(CC_HOST) -Wall -Wextra -Ikernel/include tests/mocks/mock_hw.c kernel/lib/klib.c kernel/lib/kheap.c kernel/lib/slab.c kernel/arch/x86/syscall.c kernel/drivers/keyboard.c kernel/drivers/task.c kernel/drivers/acl_security.c kernel/drivers/ramfs.c kernel/drivers/rules_engine.c kernel/drivers/pkg_manager.c kernel/drivers/pmm.c kernel/drivers/vmm.c kernel/drivers/page_fault.c kernel/drivers/gfx.c kernel/drivers/mouse.c kernel/drivers/window_manager.c tests/unit/test_suite.c -o bin_test
 	./bin_test
 
 # Verificación 1: Prueba de finalización estricta (test-complete)

@@ -16,6 +16,11 @@ static uint32_t uptime_ticks = 0;
 static uint32_t last_clock_sec = 0xFFFFFFFF;
 static bool prev_left_btn = false;
 static bool needs_redraw = true;
+static bool dirty_full = true;
+static int32_t dirty_min_x = 0;
+static int32_t dirty_min_y = 0;
+static int32_t dirty_max_x = 1024;
+static int32_t dirty_max_y = 768;
 static bool launcher_open = false;
 
 static bool eco_mode = false;
@@ -49,10 +54,35 @@ static char term_input[TERM_LINE_LEN] = {0};
 static size_t term_input_len = 0;
 
 void wm_request_redraw(void) {
+    dirty_full = true;
     needs_redraw = true;
 }
 
 bool wm_needs_redraw(void) {
+    return needs_redraw;
+}
+
+void wm_mark_all_dirty(void) {
+    dirty_full = true;
+    needs_redraw = true;
+}
+
+void wm_mark_dirty(int32_t x, int32_t y, uint32_t w, uint32_t h) {
+    if (w == 0 || h == 0) return;
+    if (dirty_full) {
+        needs_redraw = true;
+        return;
+    }
+    int32_t x2 = x + (int32_t)w;
+    int32_t y2 = y + (int32_t)h;
+    if (x < dirty_min_x) dirty_min_x = x;
+    if (y < dirty_min_y) dirty_min_y = y;
+    if (x2 > dirty_max_x) dirty_max_x = x2;
+    if (y2 > dirty_max_y) dirty_max_y = y2;
+    needs_redraw = true;
+}
+
+bool wm_has_dirty_region(void) {
     return needs_redraw;
 }
 
@@ -959,7 +989,18 @@ void wm_render_desktop(void) {
     // 6. Dibujar Cursor del Ratón
     mouse_draw_cursor();
 
-    // 7. Volcar búfer de composición a pantalla
-    gfx_flip();
+    // 7. Volcar búfer de composición a pantalla (soporte Dirty Rectangles Fase 2)
+    if (dirty_full || dirty_max_x <= dirty_min_x || dirty_max_y <= dirty_min_y) {
+        gfx_flip();
+    } else {
+        gfx_flush_dirty_region(dirty_min_x, dirty_min_y,
+                               (uint32_t)(dirty_max_x - dirty_min_x),
+                               (uint32_t)(dirty_max_y - dirty_min_y));
+    }
+    dirty_full = false;
+    dirty_min_x = (int32_t)sw;
+    dirty_min_y = (int32_t)sh;
+    dirty_max_x = 0;
+    dirty_max_y = 0;
     needs_redraw = false;
 }

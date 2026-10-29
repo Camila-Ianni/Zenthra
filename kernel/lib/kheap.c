@@ -82,3 +82,17 @@ size_t kheap_get_used(void) {
 size_t kheap_get_free(void) {
     return (heap_total_size > heap_used_size) ? (heap_total_size - heap_used_size) : 0;
 }
+
+size_t kheap_get_max_free_block(void) {
+    if (heap_head == NULL) return 0;
+    size_t max_block = 0;
+    struct block_header* curr = heap_head;
+    while (curr != NULL) {
+        if (curr->is_free && curr->size > max_block) {
+            max_block = curr->size;
+        }
+        curr = curr->next;
+    }
+    return max_block;
+}
+

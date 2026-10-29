@@ -63,6 +63,11 @@ void wm_handle_keyboard(char c);
 void wm_request_redraw(void);
 bool wm_needs_redraw(void);
 
+/* Soporte de Regiones Sucias (Dirty Rectangles) para optimizar el bus VESA LFB */
+void wm_mark_dirty(int32_t x, int32_t y, uint32_t w, uint32_t h);
+void wm_mark_all_dirty(void);
+bool wm_has_dirty_region(void);
+
 /* Renderizar la escena completa (fondo, ventanas con glassmorphism, dock, barra de tareas, cursor) */
 void wm_render_desktop(void);
 

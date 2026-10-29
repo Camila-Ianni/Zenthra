@@ -426,3 +426,35 @@ void gfx_flip(void) {
     size_t total_bytes = current_fb.height * current_fb.pitch;
     k_memcpy(current_fb.address, current_fb.backbuffer, total_bytes);
 }
+
+void gfx_flush_dirty_region(int32_t x, int32_t y, uint32_t w, uint32_t h) {
+    if (!current_fb.is_active) return;
+    if (!current_fb.address || !current_fb.backbuffer || current_fb.address == current_fb.backbuffer) {
+        return;
+    }
+
+    // Recorte estricto contra los límites de pantalla
+    if (x < 0) {
+        if ((int32_t)w <= -x) return;
+        w += x;
+        x = 0;
+    }
+    if (y < 0) {
+        if ((int32_t)h <= -y) return;
+        h += y;
+        y = 0;
+    }
+    if ((uint32_t)x >= current_fb.width || (uint32_t)y >= current_fb.height) return;
+    if ((uint32_t)(x + w) > current_fb.width) w = current_fb.width - x;
+    if ((uint32_t)(y + h) > current_fb.height) h = current_fb.height - y;
+    if (w == 0 || h == 0) return;
+
+    size_t bytes_per_line = w * sizeof(uint32_t);
+    uint32_t pixels_per_pitch = current_fb.pitch / sizeof(uint32_t);
+
+    for (uint32_t row = 0; row < h; row++) {
+        uint32_t line_idx = (y + row) * pixels_per_pitch + x;
+        k_memcpy(&current_fb.address[line_idx], &current_fb.backbuffer[line_idx], bytes_per_line);
+    }
+}
+

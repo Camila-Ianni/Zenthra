@@ -24,6 +24,8 @@
 #include "window_manager.h"
 #include "keyboard.h"
 #include "errno.h"
+#include "spinlock.h"
+#include "slab.h"
 
 // Variables y stubs requeridos por drivers en host
 void vga_putc(char c) {
@@ -115,7 +117,10 @@ void test_kheap_allocator(void) {
 
     kfree(ptr2);
     TEST_ASSERT(kheap_get_free() == initial_free, "Coalescencia de bloques contiguos restaura el espacio original");
+    TEST_ASSERT(kheap_get_max_free_block() >= initial_free - 32 && kheap_get_max_free_block() <= initial_free, "kheap_get_max_free_block reporta el bloque maximo disponible tras coalescencia");
 }
+
+
 
 /* Test 3: Validación Robusta de Punteros y Copias en Syscalls */
 void test_syscall_security_checks(void) {
@@ -1248,7 +1253,14 @@ void test_gfx_2d_primitives_and_double_buffer(void) {
     gfx_flip();
     TEST_ASSERT(front[200 * (pitch / 4) + 150] == 0xFFAABBCC, "gfx_flip vuelca backbuffer completo a frontbuffer");
 
+    // Verificación de Dirty Rectangles (Fase 2)
+    front[50 * (pitch / 4) + 50] = 0;
+    back[50 * (pitch / 4) + 50] = 0xFF112233;
+    gfx_flush_dirty_region(40, 40, 20, 20);
+    TEST_ASSERT(front[50 * (pitch / 4) + 50] == 0xFF112233, "gfx_flush_dirty_region transfiere la region sucia especifica al frontbuffer");
+
     // Verificación de Fallback Directo (Auditoría v11: backbuffer == frontbuffer no debe copiar sobre sí mismo)
+
     gfx_init_custom(front, front, width, height, pitch, 32);
     gfx_flip(); // No crashea ni realiza memcpy recursivo
     TEST_ASSERT(true, "gfx_flip maneja de forma segura y sin redundancia el modo de dibujo directo (backbuffer == frontbuffer)");
@@ -1622,6 +1634,63 @@ void test_native_glassmorphism_jarvis_and_agents(void) {
     free(front);
 }
 
+/* Test 24: Fase 2 — Asignador SLAB, Primitivas Spinlock SMP y Dirty Rectangles */
+void test_phase2_slab_spinlocks_and_dirty_rectangles(void) {
+    printf("[*] Ejecutando: test_phase2_slab_spinlocks_and_dirty_rectangles...\n");
+
+    // 1. Verificación de Spinlocks (SMP-ready)
+    spinlock_t lock = SPINLOCK_INIT;
+    TEST_ASSERT(lock.lock == 0, "Spinlock inicializado en estado desbloqueado");
+
+    TEST_ASSERT(spin_trylock(&lock) == true, "spin_trylock adquiere el cerrojo cuando esta libre");
+    TEST_ASSERT(lock.lock == 1, "Spinlock marcado como retenido");
+    TEST_ASSERT(spin_trylock(&lock) == false, "spin_trylock falla limpiamente si el cerrojo ya esta retenido");
+
+    spin_unlock(&lock);
+    TEST_ASSERT(lock.lock == 0, "spin_unlock libera el cerrojo");
+
+    uint32_t flags = spin_lock_irqsave(&lock);
+    TEST_ASSERT(lock.lock == 1, "spin_lock_irqsave bloquea cerrojo guardando flags de interrupcion");
+    spin_unlock_irqrestore(&lock, flags);
+    TEST_ASSERT(lock.lock == 0, "spin_unlock_irqrestore libera cerrojo restaurando flags");
+
+    // 2. Verificación de SLAB Allocator (kmem_cache)
+    slab_init();
+    kmem_cache_t* task_cache = kmem_cache_create("task_struct", 64);
+    TEST_ASSERT(task_cache != NULL, "kmem_cache_create crea cache SLAB para objetos de 64 bytes");
+    TEST_ASSERT(task_cache->obj_size >= 64, "kmem_cache alinea obj_size a multiplo de palabra");
+    TEST_ASSERT(kmem_cache_get_active(task_cache) == 0, "Cache SLAB recien creada no tiene asignaciones activas");
+
+    void* obj1 = kmem_cache_alloc(task_cache);
+    TEST_ASSERT(obj1 != NULL, "kmem_cache_alloc asigna objeto en O(1)");
+    TEST_ASSERT(kmem_cache_get_active(task_cache) == 1, "kmem_cache_get_active reporta 1 objeto activo");
+    TEST_ASSERT(kmem_cache_get_total(task_cache) == 1, "kmem_cache_get_total reporta 1 asignacion total");
+
+    void* obj2 = kmem_cache_alloc(task_cache);
+    TEST_ASSERT(obj2 != NULL && obj2 != obj1, "kmem_cache_alloc asigna segundo objeto independiente");
+    TEST_ASSERT(kmem_cache_get_active(task_cache) == 2, "kmem_cache_get_active reporta 2 objetos activos");
+
+    // Liberación y reciclaje O(1)
+    kmem_cache_free(task_cache, obj1);
+    TEST_ASSERT(kmem_cache_get_active(task_cache) == 1, "kmem_cache_free decrementa objetos activos");
+
+    void* obj3 = kmem_cache_alloc(task_cache);
+    TEST_ASSERT(obj3 == obj1, "kmem_cache_alloc recicla inmediatamente el bloque recien liberado O(1)");
+
+    kmem_cache_free(task_cache, obj2);
+    kmem_cache_free(task_cache, obj3);
+    TEST_ASSERT(kmem_cache_get_active(task_cache) == 0, "Todos los objetos devueltos al pool libre");
+
+    kmem_cache_destroy(task_cache);
+
+    // 3. Verificación de Dirty Rectangles en Window Manager
+    wm_mark_all_dirty();
+    TEST_ASSERT(wm_has_dirty_region() == true, "wm_mark_all_dirty marca la escena completa como sucia");
+
+    wm_mark_dirty(50, 100, 200, 150);
+    TEST_ASSERT(wm_needs_redraw() == true, "wm_mark_dirty solicita actualizacion del gestor de ventanas");
+}
+
 int main(void) {
     printf("====================================================\n");
     printf("    ZENTHRA OS — SUITE DE PRUEBAS AUTOMATIZADAS     \n");
@@ -1650,6 +1719,7 @@ int main(void) {
     test_window_manager_and_desktop();
     test_ps2_keyboard_driver();
     test_native_glassmorphism_jarvis_and_agents();
+    test_phase2_slab_spinlocks_and_dirty_rectangles();
 
     printf("\n----------------------------------------------------\n");
     printf("Resultados: %d Aprobados | %d Fallidos\n", tests_passed, tests_failed);
