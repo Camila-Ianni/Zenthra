@@ -17,3 +17,5 @@ __pycache__/
 *.pyo
 .pytest_cache/
 *.zip
+.agents/
+skills-lock.json

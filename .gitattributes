@@ -1,0 +1,15 @@
+# GitHub Linguist Overrides para Zenthra OS
+# Asegura que el Kernel Bare-Metal (C y Assembly) se reconozca como el lenguaje primario del repositorio
+
+# Submódulos de IA, herramientas de evaluación y prototipos web marcados como vendored
+Jarvis-MK37-main/** linguist-vendored
+desktop_prototype/** linguist-vendored
+scripts/** linguist-vendored
+
+# Documentación formal y especificaciones
+docs/** linguist-documentation
+
+# Forzar detección explícita de código de núcleo bare-metal y tests
+kernel/** linguist-detectable=true
+tests/** linguist-detectable=true
+boot/** linguist-detectable=true
