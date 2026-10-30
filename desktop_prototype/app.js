@@ -608,5 +608,117 @@ Gráficos: VESA LFB 32 bpp con Double Buffering`;
             }
         });
     });
+
+    // 8. Fase 4: Zenthra Setup Wizard (Asistente OOBE de 3 Pasos)
+    const wizardModal = document.getElementById('wizard-modal');
+    const btnWizardSidebar = document.getElementById('btn-wizard-sidebar');
+    const sovereigntyBadge = document.querySelector('.sovereignty-badge');
+    const btnWizardPrev = document.getElementById('btn-wizard-prev');
+    const btnWizardNext = document.getElementById('btn-wizard-next');
+    const btnWizardFinish = document.getElementById('btn-wizard-finish');
+    let currentWizardStep = 1;
+
+    function showWizardStep(step) {
+        currentWizardStep = step;
+        for (let s = 1; s <= 3; s++) {
+            const stepEl = document.getElementById(`wizard-step-${s}`);
+            const dot = document.querySelector(`.step-dot[data-step="${s}"]`);
+            if (stepEl) stepEl.style.display = (s === step) ? 'block' : 'none';
+            if (dot) dot.classList.toggle('active', s === step);
+        }
+
+        if (btnWizardPrev) btnWizardPrev.style.display = (step > 1) ? 'inline-block' : 'none';
+        if (btnWizardNext) btnWizardNext.style.display = (step < 3) ? 'inline-block' : 'none';
+        if (btnWizardFinish) btnWizardFinish.style.display = (step === 3) ? 'inline-block' : 'none';
+    }
+
+    function openWizard() {
+        if (wizardModal) {
+            wizardModal.style.display = 'flex';
+            showWizardStep(1);
+        }
+    }
+
+    function closeWizard() {
+        if (wizardModal) wizardModal.style.display = 'none';
+        localStorage.setItem('zenthra_oobe_completed', 'true');
+    }
+
+    if (btnWizardSidebar) btnWizardSidebar.addEventListener('click', openWizard);
+    if (sovereigntyBadge) sovereigntyBadge.addEventListener('click', openWizard);
+
+    if (btnWizardNext) {
+        btnWizardNext.addEventListener('click', () => {
+            if (currentWizardStep < 3) showWizardStep(currentWizardStep + 1);
+        });
+    }
+
+    if (btnWizardPrev) {
+        btnWizardPrev.addEventListener('click', () => {
+            if (currentWizardStep > 1) showWizardStep(currentWizardStep - 1);
+        });
+    }
+
+    if (btnWizardFinish) {
+        btnWizardFinish.addEventListener('click', closeWizard);
+    }
+
+    // Selección de perfil de usuario en el asistente
+    const profileCards = document.querySelectorAll('.profile-card');
+    profileCards.forEach(card => {
+        card.addEventListener('click', () => {
+            profileCards.forEach(c => c.classList.remove('active'));
+            card.classList.add('active');
+            const prof = card.getAttribute('data-profile');
+            const userRoleMini = document.querySelector('.user-role-mini');
+            if (userRoleMini) {
+                if (prof === 'dev') userRoleMini.textContent = 'Ring 0 Admin (Dev)';
+                else if (prof === 'sec') userRoleMini.textContent = 'Security Auditor (ACL)';
+                else if (prof === 'edu') userRoleMini.textContent = 'Student (Sandboxed)';
+            }
+        });
+    });
+
+    // Abrir automáticamente en la primera visita
+    if (!localStorage.getItem('zenthra_oobe_completed')) {
+        setTimeout(openWizard, 600);
+    }
+
+    // 9. Fase 4: Telemetría de Soberanía y Conexión Backend Jarvis MK37
+    let localTokensCount = 1024;
+    function incrementSovereignTokens(amount) {
+        localTokensCount += amount;
+        const tokensEl = document.getElementById('wizard-local-tokens');
+        if (tokensEl) tokensEl.textContent = localTokensCount.toLocaleString('es-ES');
+    }
+
+    async function checkJarvisBackendHealth() {
+        const statusLabel = document.querySelector('.status-indicator .status-label');
+        const statusDot = document.querySelector('.status-indicator .status-dot');
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 1200);
+            const res = await fetch('http://127.0.0.1:8000/api/health', { signal: controller.signal });
+            clearTimeout(timeoutId);
+            if (res.ok) {
+                if (statusLabel) statusLabel.textContent = 'Jarvis: Ollama Online';
+                if (statusDot) {
+                    statusDot.className = 'status-dot online';
+                    statusDot.style.background = '#10b981';
+                }
+                return;
+            }
+        } catch (e) {
+            // Standalone sin backend activo
+        }
+        if (statusLabel) statusLabel.textContent = 'Soberano (Offline)';
+        if (statusDot) {
+            statusDot.className = 'status-dot online';
+            statusDot.style.background = '#38bdf8';
+        }
+    }
+
+    checkJarvisBackendHealth();
+    setInterval(checkJarvisBackendHealth, 10000);
 });
 

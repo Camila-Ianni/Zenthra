@@ -56,6 +56,10 @@
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"></path></svg>
                     <span>Archivos</span>
                 </button>
+                <button class="nav-item" id="btn-wizard-sidebar" title="Asistente OOBE">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg>
+                    <span>Bienvenida</span>
+                </button>
             </nav>
 
             <div class="sidebar-footer">
@@ -486,6 +490,95 @@
                     <div class="modal-footer">
                         <button class="btn btn-secondary" id="btn-modal-reject">Denegar</button>
                         <button class="btn btn-warning" id="btn-modal-approve">Aprobar (Biometría)</button>
+                    </div>
+                </div>
+            <!-- Zenthra Setup Wizard (Asistente OOBE de 3 Pasos - Fase 4) -->
+            <div class="modal-overlay" id="wizard-modal" style="display: none;">
+                <div class="modal-box glass-window wizard-modal-box">
+                    <div class="modal-header wizard-header">
+                        <div class="wizard-brand">
+                            <span class="zenthra-logo-glow">Z</span>
+                            <span class="modal-title">Asistente de Bienvenida · Zenthra OS</span>
+                        </div>
+                        <div class="wizard-steps-indicator">
+                            <span class="step-dot active" data-step="1">1</span>
+                            <span class="step-line"></span>
+                            <span class="step-dot" data-step="2">2</span>
+                            <span class="step-line"></span>
+                            <span class="step-dot" data-step="3">3</span>
+                        </div>
+                    </div>
+                    <div class="modal-body wizard-body">
+                        <!-- Paso 1: Perfil de Trabajo -->
+                        <div class="wizard-step" id="wizard-step-1">
+                            <h3 class="wizard-step-title">1. Selecciona tu Perfil de Operación</h3>
+                            <p class="wizard-step-desc">Configura las políticas del kernel, permisos ACL en Ring 3 y modelos de IA optimizados.</p>
+                            <div class="profile-cards-grid">
+                                <div class="profile-card active" data-profile="dev">
+                                    <div class="pcard-icon">⚡</div>
+                                    <div class="pcard-info">
+                                        <div class="pcard-name">Desarrollador / Kernel</div>
+                                        <div class="pcard-desc">Acceso total a memoria, depurador VMM, compiladores y Ring 0.</div>
+                                    </div>
+                                </div>
+                                <div class="profile-card" data-profile="sec">
+                                    <div class="pcard-icon">🛡️</div>
+                                    <div class="pcard-info">
+                                        <div class="pcard-name">Ciberseguridad</div>
+                                        <div class="pcard-desc">Políticas ACL estrictas, auditoría de Page Faults y aislamiento total.</div>
+                                    </div>
+                                </div>
+                                <div class="profile-card" data-profile="edu">
+                                    <div class="pcard-icon">🎓</div>
+                                    <div class="pcard-info">
+                                        <div class="pcard-name">Estudiante / Académico</div>
+                                        <div class="pcard-desc">Entorno guiado, telemetría visual de sensores IoT y sandbox asistido.</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Paso 2: Centro de 6 Especialistas -->
+                        <div class="wizard-step" id="wizard-step-2" style="display: none;">
+                            <h3 class="wizard-step-title">2. Enjambre Cognitivo de 6 Agentes</h3>
+                            <p class="wizard-step-desc">Cada especialista cuenta con un modelo open-source ajustado para su dominio.</p>
+                            <div class="wizard-agents-list">
+                                <div class="wagent-row"><span class="wagent-badge">BACKEND</span><strong>Qwen 2.5 Coder</strong> <span class="wagent-status text-success">4.1s · Listo</span></div>
+                                <div class="wagent-row"><span class="wagent-badge">SEGURIDAD</span><strong>DeepSeek-R1 Distill</strong> <span class="wagent-status text-success">5.9s · Armado</span></div>
+                                <div class="wagent-row"><span class="wagent-badge">KERNEL</span><strong>Kimi K2 Instruct</strong> <span class="wagent-status text-success">4.1s · Activo</span></div>
+                                <div class="wagent-row"><span class="wagent-badge">DATOS/IA</span><strong>Gemma 4 Instruct</strong> <span class="wagent-status text-success">26.9s · Listo</span></div>
+                                <div class="wagent-row"><span class="wagent-badge">CREATIVO</span><strong>Mistral Small 4</strong> <span class="wagent-status text-success">3.5s · Sincronizado</span></div>
+                                <div class="wagent-row"><span class="wagent-badge">AUTOMACIÓN</span><strong>GLM-4.5-Air Flow</strong> <span class="wagent-status text-success">27.0s · Standby</span></div>
+                            </div>
+                        </div>
+
+                        <!-- Paso 3: Escudo Soberano & Enlace Móvil -->
+                        <div class="wizard-step" id="wizard-step-3" style="display: none;">
+                            <h3 class="wizard-step-title">3. Soberanía de Datos 100% Offline</h3>
+                            <p class="wizard-step-desc">Toda la computación reside en tu máquina. Ningún dato sale de tu hardware.</p>
+                            <div class="sovereignty-showcase">
+                                <div class="sovereignty-metric-box">
+                                    <div class="metric-huge text-emerald" id="wizard-cloud-bytes">0 B</div>
+                                    <div class="metric-label">Enviados a la Nube</div>
+                                </div>
+                                <div class="sovereignty-metric-box">
+                                    <div class="metric-huge text-sky" id="wizard-local-tokens">1,024</div>
+                                    <div class="metric-label">Tokens Locales en CPU/GPU</div>
+                                </div>
+                            </div>
+                            <div class="pairing-box">
+                                <div class="pairing-info">
+                                    <strong>Enlace Móvil Zenthra Companion:</strong>
+                                    <span>Escanea con tu teléfono para autorizar permisos biométricos HITL remotamente.</span>
+                                </div>
+                                <div class="qr-mock">QR: ZENTHRA-PAIR-7749</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer wizard-footer">
+                        <button class="btn btn-secondary" id="btn-wizard-prev" style="display: none;">Anterior</button>
+                        <button class="btn btn-primary" id="btn-wizard-next">Siguiente &rarr;</button>
+                        <button class="btn btn-success" id="btn-wizard-finish" style="display: none;">Iniciar Zenthra OS</button>
                     </div>
                 </div>
             </div>

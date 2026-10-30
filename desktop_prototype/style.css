@@ -1178,3 +1178,262 @@ body {
     background: var(--border-glass-subtle);
     margin: 0 4px;
 }
+
+/* ==========================================================================
+   FASE 4: ZENTHRA SETUP WIZARD & SOBERANÍA SHOWCASE
+   ========================================================================== */
+.sovereignty-badge {
+    cursor: pointer;
+    transition: transform 0.2s, background 0.2s;
+}
+
+.sovereignty-badge:hover {
+    transform: scale(1.04);
+    background: rgba(16, 185, 129, 0.22);
+}
+
+.wizard-modal-box {
+    width: 580px;
+    max-width: 95vw;
+}
+
+.wizard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.wizard-brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.zenthra-logo-glow {
+    font-size: 15px;
+    font-weight: 800;
+    color: #38bdf8;
+    background: rgba(56, 189, 248, 0.2);
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    border: 1px solid rgba(56, 189, 248, 0.4);
+}
+
+.wizard-steps-indicator {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.step-dot {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: rgba(30, 41, 59, 0.8);
+    border: 1px solid var(--border-glass-subtle);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.25s ease;
+}
+
+.step-dot.active {
+    background: linear-gradient(135deg, #6366f1 0%, #38bdf8 100%);
+    color: #ffffff;
+    border-color: #38bdf8;
+    box-shadow: 0 0 12px rgba(56, 189, 248, 0.5);
+}
+
+.step-line {
+    width: 16px;
+    height: 2px;
+    background: var(--border-glass-subtle);
+}
+
+.wizard-step-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0 0 4px 0;
+}
+
+.wizard-step-desc {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin: 0 0 16px 0;
+}
+
+.profile-cards-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.profile-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    background: rgba(15, 23, 42, 0.5);
+    border: 1px solid var(--border-glass-subtle);
+    border-radius: var(--zt-radius-md);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.profile-card:hover {
+    background: rgba(30, 41, 59, 0.7);
+    border-color: rgba(99, 102, 241, 0.5);
+}
+
+.profile-card.active {
+    background: rgba(99, 102, 241, 0.15);
+    border-color: #6366f1;
+    box-shadow: 0 0 16px rgba(99, 102, 241, 0.25);
+}
+
+.pcard-icon {
+    font-size: 24px;
+}
+
+.pcard-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.pcard-desc {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+}
+
+.wizard-agents-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.wagent-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: rgba(2, 6, 23, 0.4);
+    border: 1px solid var(--border-glass-subtle);
+    border-radius: var(--zt-radius-sm);
+    font-size: 12px;
+}
+
+.wagent-badge {
+    font-size: 9px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: rgba(56, 189, 248, 0.15);
+    color: #38bdf8;
+    letter-spacing: 0.5px;
+    width: 80px;
+}
+
+.sovereignty-showcase {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.sovereignty-metric-box {
+    background: rgba(2, 6, 23, 0.6);
+    border: 1px solid var(--border-glass-subtle);
+    border-radius: var(--zt-radius-md);
+    padding: 14px;
+    text-align: center;
+}
+
+.metric-huge {
+    font-size: 28px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+}
+
+.pairing-box {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid var(--border-glass-subtle);
+    border-radius: var(--zt-radius-md);
+    padding: 12px 14px;
+    font-size: 12px;
+}
+
+.pairing-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.pairing-info strong {
+    color: var(--text-primary);
+}
+
+.pairing-info span {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.qr-mock {
+    padding: 8px 12px;
+    background: #020617;
+    border: 1px dashed #38bdf8;
+    color: #38bdf8;
+    font-family: monospace;
+    font-size: 10px;
+    border-radius: 6px;
+    white-space: nowrap;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+    border: none;
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 8px 16px;
+    border-radius: var(--zt-radius-sm);
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+    transition: transform 0.15s;
+}
+
+.btn-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(99, 102, 241, 0.4);
+}
+
+.btn-success {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    border: none;
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 8px 18px;
+    border-radius: var(--zt-radius-sm);
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+    transition: transform 0.15s;
+}
+
+.btn-success:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
+}
