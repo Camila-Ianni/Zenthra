@@ -22,7 +22,7 @@
 #define POST_VESA_GUI_OK    0x10
 
 static inline void hal_outb(uint16_t port, uint8_t val) {
-#if defined(__i386__) || defined(__x86_64__)
+#if defined(__KERNEL__) && (defined(__i386__) || defined(__x86_64__))
     __asm__ volatile ("outb %0, %1" : : "a"(val), "Nd"(port));
 #else
     (void)port; (void)val;
@@ -30,7 +30,7 @@ static inline void hal_outb(uint16_t port, uint8_t val) {
 }
 
 static inline uint8_t hal_inb(uint16_t port) {
-#if defined(__i386__) || defined(__x86_64__)
+#if defined(__KERNEL__) && (defined(__i386__) || defined(__x86_64__))
     uint8_t ret;
     __asm__ volatile ("inb %1, %0" : "=a"(ret) : "Nd"(port));
     return ret;
@@ -41,7 +41,7 @@ static inline uint8_t hal_inb(uint16_t port) {
 }
 
 static inline void hal_outw(uint16_t port, uint16_t val) {
-#if defined(__i386__) || defined(__x86_64__)
+#if defined(__KERNEL__) && (defined(__i386__) || defined(__x86_64__))
     __asm__ volatile ("outw %0, %1" : : "a"(val), "Nd"(port));
 #else
     (void)port; (void)val;
@@ -49,7 +49,7 @@ static inline void hal_outw(uint16_t port, uint16_t val) {
 }
 
 static inline uint16_t hal_inw(uint16_t port) {
-#if defined(__i386__) || defined(__x86_64__)
+#if defined(__KERNEL__) && (defined(__i386__) || defined(__x86_64__))
     uint16_t ret;
     __asm__ volatile ("inw %1, %0" : "=a"(ret) : "Nd"(port));
     return ret;
@@ -64,26 +64,26 @@ static inline void hal_post_code(uint8_t code) {
 }
 
 static inline void hal_disable_interrupts(void) {
-#if defined(__i386__) || defined(__x86_64__)
+#if defined(__KERNEL__) && (defined(__i386__) || defined(__x86_64__))
     __asm__ volatile ("cli" ::: "memory");
 #endif
 }
 
 static inline void hal_enable_interrupts(void) {
-#if defined(__i386__) || defined(__x86_64__)
+#if defined(__KERNEL__) && (defined(__i386__) || defined(__x86_64__))
     __asm__ volatile ("sti" ::: "memory");
 #endif
 }
 
 static inline void hal_cpu_halt(void) {
-#if defined(__i386__) || defined(__x86_64__)
+#if defined(__KERNEL__) && (defined(__i386__) || defined(__x86_64__))
     __asm__ volatile ("hlt");
 #endif
 }
 
 /* Verificación de CPUID x86 mediante conmuta del bit 21 en EFLAGS */
 static inline bool hal_has_cpuid(void) {
-#if defined(__i386__) || defined(__x86_64__)
+#if defined(__KERNEL__) && defined(__i386__)
     uint32_t original_flags, modified_flags;
     __asm__ volatile (
         "pushfl\n\t"
